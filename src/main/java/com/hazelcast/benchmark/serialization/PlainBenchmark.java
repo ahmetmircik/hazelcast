@@ -28,7 +28,6 @@ import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.*;
 
 import java.io.*;
-import java.util.Random;
 
 public class PlainBenchmark {
 
@@ -45,9 +44,12 @@ public class PlainBenchmark {
 
             System.out.println();
             System.out.println();
-            System.gc();
-            Thread.sleep(1000);
         }
+    }
+
+    private static void gc() throws InterruptedException {
+        System.gc();
+        Thread.sleep(1000);
     }
 
     private static void testJDK() throws Exception {
@@ -198,7 +200,6 @@ public class PlainBenchmark {
     }
 
     private static void test(Serializer serializer, String type, int count, Factory factory) throws Exception {
-        long total = 0L;
         long start = System.currentTimeMillis();
         for (int i = 0; i < count; i++) {
             Object so = factory.createAndSetValues(i);
@@ -213,8 +214,9 @@ public class PlainBenchmark {
             }
         }
         long end = System.currentTimeMillis();
-        total += (end - start);
+        long total = (end - start);
         System.out.println(type + ":: " + total + " ms");
+        gc();
     }
 
     interface Serializer {
@@ -222,41 +224,6 @@ public class PlainBenchmark {
         byte[] write(Object o) throws IOException;
 
         Object read(byte[] data) throws IOException, ClassNotFoundException;
-    }
-
-    static abstract class Factory {
-        final Random rand = new Random();
-
-        protected Object createAndSetValues(int id) {
-            final long offset = rand.nextLong();
-            final double multiplier = rand.nextDouble();
-
-            SampleObject object = create(id);
-            object.shortVal = (short) offset;
-            object.floatVal = (float) (multiplier * offset);
-
-            byte[] byteArr = new byte[4096];
-            rand.nextBytes(byteArr);
-            object.byteArr = byteArr;
-
-            long[] longArr = new long[3000];
-            for (int i = 0; i < longArr.length; i++) {
-                longArr[i] = i + offset;
-            }
-            object.longArr = longArr;
-
-            double[] dblArr = new double[3000];
-            for (int i = 0; i < dblArr.length; i++) {
-                dblArr[i] = multiplier * (i + offset);
-            }
-            object.dblArr = dblArr;
-
-            object.str = offset + " sample " + object.floatVal + " string " + object.intVal + " object";
-
-            return object;
-        }
-
-        abstract SampleObject create(int intVal);
     }
 }
 
