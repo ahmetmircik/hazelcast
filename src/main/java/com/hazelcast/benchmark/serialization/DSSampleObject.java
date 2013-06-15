@@ -17,6 +17,7 @@
 
 package com.hazelcast.benchmark.serialization;
 
+import com.hazelcast.nio.IOUtil;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.DataSerializable;
@@ -37,16 +38,20 @@ public class DSSampleObject extends SampleObject implements DataSerializable {
         out.writeInt(intVal);
         out.writeShort(shortVal);
         out.writeFloat(floatVal);
-        out.writeInt(dblArr.length);
 
+        IOUtil.writeByteArray(out, byteArr);
+
+        out.writeInt(dblArr.length);
         for (int i = 0; i < dblArr.length; i++) {
             out.writeDouble(dblArr[i]);
         }
+
         out.writeInt(longArr.length);
         for (int i = 0; i < longArr.length; i++) {
-            out.writeDouble(longArr[i]);
+            out.writeLong(longArr[i]);
         }
 
+        out.writeUTF(str);
     }
 
     @Override
@@ -54,13 +59,19 @@ public class DSSampleObject extends SampleObject implements DataSerializable {
         intVal = in.readInt();
         shortVal = in.readShort();
         floatVal = in.readFloat();
+
+        byteArr = IOUtil.readByteArray(in);
+
         dblArr = new double[in.readInt()];
         for (int i = 0; i < dblArr.length; i++) {
             dblArr[i] = in.readDouble();
         }
+
         longArr = new long[in.readInt()];
         for (int i = 0; i < longArr.length; i++) {
             longArr[i] = in.readLong();
         }
+
+        str = in.readUTF();
     }
 }

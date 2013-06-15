@@ -22,18 +22,18 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.util.Arrays;
 
-public class SampleObject
-        implements java.io.Serializable, KryoSerializable {
+public class SampleObject implements java.io.Serializable, KryoSerializable {
+
     public int intVal;
     public float floatVal;
-    public Short shortVal;
+    public short shortVal;
+    public byte[] byteArr;
     public long[] longArr;
     public double[] dblArr;
-//    public SampleObject selfRef;
+    public String str;
+
 
     public SampleObject() {
     }
@@ -42,44 +42,15 @@ public class SampleObject
         this.intVal = intVal;
     }
 
-    SampleObject(int intVal, float floatVal, Short shortVal,
-                 long[] longArr, double[] dblArr) {
-        this.intVal = intVal;
-        this.floatVal = floatVal;
-        this.shortVal = shortVal;
-        this.longArr = longArr;
-        this.dblArr = dblArr;
-//        selfRef = this;
-    }
-    // Required by Java Externalizable.
-
-        public void writeExternal(ObjectOutput out)
-            throws IOException {
-        out.writeInt(intVal);
-        out.writeFloat(floatVal);
-        out.writeShort(shortVal);
-        out.writeObject(longArr);
-        out.writeObject(dblArr);
-    }
-
-    // Required by Java Externalizable.
-    public void readExternal(ObjectInput in)
-            throws IOException, ClassNotFoundException {
-        intVal = in.readInt();
-        floatVal = in.readFloat();
-        shortVal = in.readShort();
-        longArr = (long[]) in.readObject();
-        dblArr = (double[]) in.readObject();
-    }
-
     // Required by Kryo serialization.
     public void write(Kryo kryo, Output out) {
         kryo.writeObject(out, intVal);
         kryo.writeObject(out, floatVal);
         kryo.writeObject(out, shortVal);
+        kryo.writeObject(out, byteArr);
         kryo.writeObject(out, longArr);
         kryo.writeObject(out, dblArr);
-//        kryo.writeObject(out, selfRef);
+        kryo.writeObject(out, str);
         out.flush();
     }
 
@@ -88,8 +59,39 @@ public class SampleObject
         intVal = kryo.readObject(in, Integer.class);
         floatVal = kryo.readObject(in, Float.class);
         shortVal = kryo.readObject(in, Short.class);
+        byteArr = kryo.readObject(in, byte[].class);
         longArr = kryo.readObject(in, long[].class);
         dblArr = kryo.readObject(in, double[].class);
-//        selfRef = kryo.readObject(in, SampleObject.class);
+        str = kryo.readObject(in, String.class);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        SampleObject that = (SampleObject) o;
+
+        if (Float.compare(that.floatVal, floatVal) != 0) return false;
+        if (intVal != that.intVal) return false;
+        if (shortVal != that.shortVal) return false;
+        if (!Arrays.equals(byteArr, that.byteArr)) return false;
+        if (!Arrays.equals(dblArr, that.dblArr)) return false;
+        if (!Arrays.equals(longArr, that.longArr)) return false;
+        if (str != null ? !str.equals(that.str) : that.str != null) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = intVal;
+        result = 31 * result + (floatVal != +0.0f ? Float.floatToIntBits(floatVal) : 0);
+        result = 31 * result + (int) shortVal;
+        result = 31 * result + (byteArr != null ? Arrays.hashCode(byteArr) : 0);
+        result = 31 * result + (longArr != null ? Arrays.hashCode(longArr) : 0);
+        result = 31 * result + (dblArr != null ? Arrays.hashCode(dblArr) : 0);
+        result = 31 * result + (str != null ? str.hashCode() : 0);
+        return result;
     }
 }

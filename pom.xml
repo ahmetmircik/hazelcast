@@ -4,23 +4,15 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>com.hazelcast</groupId>
-        <artifactId>hazelcast-root</artifactId>
-        <version>3.0-SNAPSHOT</version>
-        <relativePath>../../../git/pom.xml</relativePath>
-    </parent>
-
     <groupId>hazelcast-serialization-benchmark</groupId>
     <artifactId>hazelcast-serialization-benchmark</artifactId>
     <version>1.0-SNAPSHOT</version>
-
 
     <dependencies>
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast</artifactId>
-            <version>${project.parent.version}</version>
+            <version>3.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>
@@ -34,21 +26,10 @@
             <artifactId>jackson-mapper-asl</artifactId>
             <version>1.9.12</version>
         </dependency>
-
-
         <dependency>
             <groupId>com.esotericsoftware.kryo</groupId>
             <artifactId>kryo</artifactId>
             <version>2.22-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/kryo-2.22-SNAPSHOT.jar</systemPath>
-        </dependency>
-        <dependency>
-            <groupId>com.esotericsoftware.kryo</groupId>
-            <artifactId>kryo-shaded</artifactId>
-            <version>2.22-SNAPSHOT</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/kryo-2.22-SNAPSHOT-shaded.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.ow2.asm</groupId>
@@ -70,8 +51,6 @@
             <artifactId>objenesis</artifactId>
             <version>1.2</version>
         </dependency>
-
-
 
     </dependencies>
 

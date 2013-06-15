@@ -46,8 +46,10 @@ public class PortableSampleObject extends SampleObject implements Portable {
         writer.writeInt("intV", intVal);
         writer.writeFloat("floatV", floatVal);
         writer.writeShort("shortV", shortVal);
+        writer.writeByteArray("byteArr", byteArr);
         writer.writeLongArray("longArr", longArr);
         writer.writeDoubleArray("dblArr", dblArr);
+        writer.writeUTF("str", str);
     }
 
     @Override
@@ -55,7 +57,9 @@ public class PortableSampleObject extends SampleObject implements Portable {
         intVal = reader.readInt("intV");
         floatVal = reader.readFloat("floatV");
         shortVal = reader.readShort("shortV");
+        byteArr = reader.readByteArray("byteArr");
         longArr = reader.readLongArray("longArr");
         dblArr = reader.readDoubleArray("dblArr");
+        str = reader.readUTF("str");
     }
 }
