@@ -107,7 +107,7 @@ public class Benchmark {
     }
 
     private static void test(SerializationConfig config, String type, int count, int iteration, Factory factory) throws Exception {
-        SerializationService ss = new SerializationServiceBuilder().setConfig(config).build();
+        SerializationService ss = new SerializationServiceBuilder().setConfig(config).setUseNativeByteOrder(true).build();
         int bufferSize = iterate(500, factory, ss, true);
         System.gc();
         Thread.sleep(100);

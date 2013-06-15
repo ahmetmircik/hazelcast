@@ -78,7 +78,8 @@ public class PlainBenchmark {
 
     private static void testDS() throws Exception {
         final Serializer serializer = new Serializer() {
-            final SerializationService ss = new SerializationServiceBuilder().build();
+            final SerializationService ss = new SerializationServiceBuilder()
+                    .setUseNativeByteOrder(true).build();
 
             public byte[] write(Object o) throws IOException {
                 BufferObjectDataOutput out = ss.createObjectDataOutput(BUFFER_SIZE);
@@ -111,7 +112,9 @@ public class PlainBenchmark {
 
     private static void testIDS() throws Exception {
         final Serializer serializer = new Serializer() {
-            final SerializationService ss = new SerializationServiceBuilder().build();
+            final SerializationService ss = new SerializationServiceBuilder()
+                    .setUseNativeByteOrder(true).build();
+
             final DataSerializableFactory f = new DataSerializableFactory() {
                 public IdentifiedDataSerializable create(int typeId) {
                     return new IDSSampleObject();
