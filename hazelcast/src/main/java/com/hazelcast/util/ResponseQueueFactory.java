@@ -37,6 +37,7 @@ public class ResponseQueueFactory {
         private final static Object NULL = new Object();
 
         public Object take() throws InterruptedException {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 //noinspection WhileLoopSpinsOnField
@@ -56,6 +57,7 @@ public class ResponseQueueFactory {
         public Object poll(long timeout, TimeUnit unit) throws InterruptedException {
             if (timeout < 0) throw new IllegalArgumentException();
             long remaining = unit.toMillis(timeout);
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 while (response == null && remaining > 0) {
@@ -77,6 +79,7 @@ public class ResponseQueueFactory {
             if (obj == null) {
                 obj = NULL;
             }
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 if (response != null) {
@@ -92,6 +95,7 @@ public class ResponseQueueFactory {
         }
 
         public Object poll() {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 return getAndRemoveResponse();
@@ -124,6 +128,7 @@ public class ResponseQueueFactory {
         }
 
         public void clear() {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 response = null;
@@ -139,6 +144,7 @@ public class ResponseQueueFactory {
 
         @Override
         public int size() {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 return (response == null) ? 0 : 1;
@@ -148,6 +154,7 @@ public class ResponseQueueFactory {
         }
 
         public Object peek() {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 return response;

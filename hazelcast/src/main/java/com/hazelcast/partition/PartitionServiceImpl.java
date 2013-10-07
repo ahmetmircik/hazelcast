@@ -190,6 +190,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private void notifyMasterToAssignPartitions() {
+        final Lock lock = this.lock;
         if (lock.tryLock()) {
             try {
                 if (!initialized && !node.isMaster() && node.getMasterAddress() != null && node.joined()) {
@@ -210,6 +211,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             return;
         }
         if (!initialized) {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 if (initialized) {
@@ -249,6 +251,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             updateMemberGroupsSize();
         }
         if (node.isMaster() && node.isActive()) {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 clearMigrationQueue();
@@ -266,6 +269,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         if (deadAddress == null || deadAddress.equals(thisAddress)) {
             return;
         }
+        final Lock lock = this.lock;
         lock.lock();
         try {
             clearMigrationQueue();
@@ -308,6 +312,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private void rollbackActiveMigrationsFromPreviousMaster(final String currentMasterUuid) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (!activeMigrations.isEmpty()) {
@@ -338,6 +343,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             return;
         }
         final Collection<MemberImpl> members = node.clusterService.getMemberList();
+        final Lock lock = this.lock;
         lock.lock();
         try {
             final long clusterTime = node.getClusterService().getClusterTime();
@@ -359,6 +365,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     void processPartitionRuntimeState(PartitionRuntimeState partitionState) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (!node.isActive() || !node.joined()) {
@@ -438,6 +445,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
 
     private void finalizeActiveMigration(final MigrationInfo migrationInfo) {
         if (activeMigrations.containsKey(migrationInfo.getPartitionId())) {
+            final Lock lock = this.lock;
             lock.lock();
             try {
                 if (activeMigrations.containsValue(migrationInfo)) {
@@ -481,6 +489,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     void addActiveMigration(MigrationInfo migrationInfo) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             final int partitionId = migrationInfo.getPartitionId();
@@ -541,6 +550,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private void addCompletedMigration(MigrationInfo migrationInfo) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (completedMigrations.size() > 25) {
@@ -553,6 +563,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private void evictCompletedMigrations() {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (!completedMigrations.isEmpty()) {
@@ -996,7 +1007,8 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             if (node.isMaster() && node.isActive()) {
                 final PartitionStateGenerator psg = partitionStateGenerator;
                 final Set<Member> members = node.getClusterService().getMembers();
-                lock.lock();
+                final Lock _lock = lock;
+                _lock.lock();
                 try {
                     if (!initialized) {
                         return;
@@ -1039,7 +1051,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                         logger.info("Partition balance is ok, no need to re-partition cluster data... ");
                     }
                 } finally {
-                    lock.unlock();
+                    _lock.unlock();
                 }
             }
         }
@@ -1053,14 +1065,15 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         }
 
         public void run() {
-            lock.lock();
+            final Lock _lock = lock;
+            _lock.lock();
             try {
                 final PartitionImpl currentPartition = partitions[newPartition.getPartitionId()];
                 for (int index = 1; index < PartitionView.MAX_REPLICA_COUNT; index++) {
                     currentPartition.setReplicaAddress(index, newPartition.getReplicaAddress(index));
                 }
             } finally {
-                lock.unlock();
+                _lock.unlock();
             }
         }
 
@@ -1139,19 +1152,21 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
 
         private void migrationTaskFailed() {
             systemLogService.logPartition("Migration failed: " + migrationInfo);
-            lock.lock();
+            final Lock _lock = lock;
+            _lock.lock();
             try {
                 addCompletedMigration(migrationInfo);
                 finalizeActiveMigration(migrationInfo);
                 sendPartitionRuntimeState();
             } finally {
-                lock.unlock();
+                _lock.unlock();
             }
             sendMigrationEvent(migrationInfo, MigrationStatus.FAILED);
         }
 
         private void processMigrationResult() {
-            lock.lock();
+            final Lock _lock = lock;
+            _lock.lock();
             try {
                 final int partitionId = migrationInfo.getPartitionId();
                 Address newOwner = migrationInfo.getDestination();
@@ -1164,7 +1179,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                 }
                 sendPartitionRuntimeState();
             } finally {
-                lock.unlock();
+                _lock.unlock();
             }
             sendMigrationEvent(migrationInfo, MigrationStatus.COMPLETED);
         }
@@ -1283,6 +1298,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         clearMigrationQueue();
         replicaSyncRequests.clear();
         replicaSyncScheduler.cancelAll();
+        final Lock lock = this.lock;
         lock.lock();
         try {
             initialized = false;

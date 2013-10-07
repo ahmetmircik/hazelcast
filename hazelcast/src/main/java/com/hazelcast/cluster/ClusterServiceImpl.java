@@ -142,6 +142,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     public boolean isJoinInProgress() {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             return joinInProgress || !setJoins.isEmpty();
@@ -361,6 +362,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         if (deadAddress.equals(thisAddress)) {
             return;
         }
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (deadAddress.equals(node.getMasterAddress())) {
@@ -418,6 +420,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     void handleJoinRequest(JoinRequestOperation joinRequest) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             final JoinRequest joinMessage = joinRequest.getMessage();
@@ -517,6 +520,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     void handleMaster(Address masterAddress) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             if (!node.joined() && !node.getThisAddress().equals(masterAddress)) {
@@ -602,6 +606,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     private void joinReset() {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             joinInProgress = false;
@@ -614,6 +619,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     public void reset() {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             joinInProgress = false;
@@ -628,6 +634,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
     void startJoin() {
         logger.finest( "Starting Join.");
+        final Lock lock = this.lock;
         lock.lock();
         try {
             joinInProgress = true;
@@ -676,6 +683,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     void updateMembers(Collection<MemberInfo> members) {
+        final Lock lock = this.lock;
         lock.lock();
         try {
             Map<Address, MemberImpl> oldMemberMap = membersRef.get();
@@ -757,6 +765,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     private void setMembers(MemberImpl... members) {
         if (members == null || members.length == 0) return;
         logger.finest( "Updating members -> " + Arrays.toString(members));
+        final Lock lock = this.lock;
         lock.lock();
         try {
             Map<Address, MemberImpl> oldMemberMap = membersRef.get();
@@ -797,6 +806,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
     private void removeMember(MemberImpl deadMember) {
         logger.info("Removing " + deadMember);
+        final Lock lock = this.lock;
         lock.lock();
         try {
             final Map<Address, MemberImpl> members = membersRef.get();
