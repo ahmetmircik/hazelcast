@@ -106,6 +106,9 @@ public class QueueContainer implements IdentifiedDataSerializable {
     public QueueItem txnPollReserve(long reservedOfferId, String transactionId) {
         QueueItem item = getItemQueue().poll();
         if (item == null) {
+            if ( reservedOfferId == -1 ){
+                return null;
+            }
             TxQueueItem txItem = txMap.remove(reservedOfferId);
             if (txItem == null){
                 return null;
