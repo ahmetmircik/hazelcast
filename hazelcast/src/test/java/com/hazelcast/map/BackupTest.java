@@ -207,6 +207,7 @@ public class BackupTest extends HazelcastTestSupport {
         testBackupMigrationAndRecovery(4, 1, 50000);
     }
 
+
     /**
      * Fix for the issue 395.
      */
