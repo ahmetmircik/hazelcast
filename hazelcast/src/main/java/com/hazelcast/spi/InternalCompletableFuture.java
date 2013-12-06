@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package com.hazelcast.test;
+package com.hazelcast.spi;
 
-public abstract class AssertTask {
+import com.hazelcast.core.CompletableFuture;
 
-    public abstract void run();
+public interface InternalCompletableFuture<E> extends CompletableFuture<E> {
+
+    E getSafely();
 }
