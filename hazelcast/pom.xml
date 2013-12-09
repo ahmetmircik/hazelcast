@@ -187,7 +187,6 @@
             <scope>test</scope>
         </dependency>
 
-
         <!--OSGi dep-->
         <dependency>
             <groupId>org.osgi</groupId>
