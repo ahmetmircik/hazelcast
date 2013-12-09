@@ -23,19 +23,19 @@ import com.carrotsearch.junitbenchmarks.annotation.BenchmarkMethodChart;
 import com.carrotsearch.junitbenchmarks.annotation.LabelType;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.IMap;
+import com.hazelcast.core.IAtomicLong;
 import org.junit.*;
 import org.junit.rules.TestRule;
 
 @AxisRange(min = 0, max = 1)
-@BenchmarkMethodChart(filePrefix = "benchmark-map")
-@BenchmarkHistoryChart(filePrefix = "benchmark-map-history", labelWith = LabelType.CUSTOM_KEY, maxRuns = 20)
-public class MapBenchmark {
+@BenchmarkMethodChart(filePrefix = "benchmark-atomiclong")
+@BenchmarkHistoryChart(filePrefix = "benchmark-atomiclong-history", labelWith = LabelType.CUSTOM_KEY, maxRuns = 20)
+public class AtomicLongBenchmark {
     @Rule
     public TestRule benchmarkRun = new BenchmarkRule();
 
     private static HazelcastInstance hazelcastInstance;
-    private IMap<Object, Object> map;
+    private IAtomicLong atomicLong;
 
     @BeforeClass
     public static void beforeClass() {
@@ -44,12 +44,12 @@ public class MapBenchmark {
 
     @Before
     public void before(){
-        map = hazelcastInstance.getMap("exampleMap");
+        atomicLong = hazelcastInstance.getAtomicLong("atomicLong");
     }
 
     @After
     public void after(){
-        map.destroy();
+        atomicLong.destroy();
     }
 
     @AfterClass
@@ -60,34 +60,31 @@ public class MapBenchmark {
     @Test
     public void get() throws Exception {
         long startMs = System.currentTimeMillis();
-        int iterations = 10000000;
-
-        map.put("foo","");
-        for(int k=0;k<iterations;k++){
-            if(k%1000000==0){
-                System.out.println("At: "+k);
+        int iterations = 1000000;
+        for(int k=0;k< iterations;k++){
+            atomicLong.get();
+            if(k%100000==0){
+                System.out.println("at "+k);
             }
-            map.get("foo");
         }
         long durationMs = System.currentTimeMillis()-startMs;
         double performance = (iterations*1000d)/durationMs;
-        System.out.println("Performance: " + performance);
+        System.out.println("Performance: "+performance);
+    }
+
+    public static void main(String[] args)throws Exception{
+        AtomicLongBenchmark.beforeClass();
+        AtomicLongBenchmark benchmark = new AtomicLongBenchmark();
+        benchmark.before();
+        benchmark.get();
+        benchmark.after();
+        AtomicLongBenchmark.afterClass();
     }
 
     @Test
-    public void put() throws Exception {
-        long startMs = System.currentTimeMillis();
-        int iterations = 10000000;
-
-        map.put("foo","");
-        for(int k=0;k<iterations;k++){
-            if(k%1000000==0){
-                System.out.println("At: "+k);
-            }
-            map.put("foo","");
+    public void set() throws Exception {
+        for(int k=0;k<500000;k++){
+            atomicLong.set(k);
         }
-        long durationMs = System.currentTimeMillis()-startMs;
-        double performance = (iterations*1000d)/durationMs;
-        System.out.println("Performance: " + performance);
     }
 }
