@@ -32,6 +32,7 @@ class MMappedFile<K, V> implements PersistencyUnit<MappedByteBuffer>, Storage<K,
             theUnsafe.setAccessible(true);
             UNSAFE = (Unsafe) theUnsafe.get(null);
             BYTES_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
+            System.out.println("BYTES_OFFSET " + BYTES_OFFSET);
 
         } catch (Exception e) {
             throw new AssertionError(e);

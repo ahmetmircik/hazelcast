@@ -94,7 +94,7 @@ class Directory implements Closeable {
 
 
     }
-
+    // todo murmurhash3??ba
     private static final Hasher<Data, Integer> HASHER = new Hasher<Data, Integer>() {
         @Override
         public Integer hash(Data s) {

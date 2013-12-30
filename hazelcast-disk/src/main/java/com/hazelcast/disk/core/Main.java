@@ -8,6 +8,8 @@ import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.nio.serialization.SerializationServiceBuilder;
 import com.hazelcast.nio.serialization.StreamSerializer;
 
+import javax.swing.filechooser.FileSystemView;
+import java.io.File;
 import java.io.IOException;
 
 /**
@@ -68,10 +70,46 @@ public class Main {
     }
 
 
+    static void test(){
+        System.out.println("File system roots returned byFileSystemView.getFileSystemView():");
+        FileSystemView fsv = FileSystemView.getFileSystemView();
+        File[] roots = fsv.getRoots();
+        for (int i = 0; i < roots.length; i++) {
+            System.out.println("Root: " + roots[i]);
+        }
+
+        System.out.println("Home directory: " + fsv.getHomeDirectory());
+
+        System.out.println("File system roots returned by File.listRoots():");
+        File[] f = File.listRoots();
+        for (int i = 0; i < f.length; i++) {
+            System.out.println("Drive: " + f[i]);
+            System.out.println("Display name: " + fsv.getSystemDisplayName(f[i]));
+            System.out.println("Is drive: " + fsv.isDrive(f[i]));
+            System.out.println("Is floppy: " + fsv.isFloppyDrive(f[i]));
+            System.out.println("Readable: " + f[i].canRead());
+            System.out.println("Writable: " + f[i].canWrite());
+            System.out.println("Total space: " + f[i].getTotalSpace());
+            System.out.println("Usable space: " + f[i].getUsableSpace());
+        }
+    }
+
     public static void main(String[] args) throws IOException {
+        //test();
+        final long start = System.nanoTime();
+        System.out.println(1<<32);
+        final long diff = System.nanoTime() - start;
+        System.out.println("diff1 " + diff);
+
+        final long start2 = System.nanoTime();
+        System.out.println((int)Math.pow(2,32));
+
+        final long diff2 = System.nanoTime() - start2;
+        System.out.println("diff2 " + diff2);
+//          Storages.createMMap("",0,0);
 
 
-        testWR();
+//        testWR();
 //        Directory directory = new Directory("1vhazel");
 //        directory.createFiles();
 //
@@ -87,7 +125,7 @@ public class Main {
         directory.createFiles();
 
        // directory.testWrite();
-        directory.loadLastIndexFilePosition();
+//        directory.loadLastIndexFilePosition();
 
         directory.close();
 
