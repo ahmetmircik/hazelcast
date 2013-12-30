@@ -1,6 +1,8 @@
 package com.hazelcast.disk.core;
 
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.util.ConcurrencyUtil;
+import com.hazelcast.util.ConstructorFunction;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -12,6 +14,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * @author: ahmetmircik
@@ -64,18 +68,72 @@ public class IndexDir {
     }
 
 
+    public void preallocate(int depth) {
+        this.depth = depth;
+        int slots = (int) Math.pow(2, depth);
+        final int size =  slots * 8 + 8;
+        MappedByteBuffer buffer = getIndexFile(0, size);
+        buffer.putInt(depth);//depth
+        buffer.putInt(0);//number of records.
+        System.out.println(buffer.capacity());
+        int last = 0;
+          try{
+
+        for (int i = 0; i < slots; i++) {
+            last = i;
+            buffer.putInt(i);
+            buffer.putInt(getAddress(i));
+
+
+//            MappedByteBuffer newBucket = getOrCreateNewBucket(i);
+//            newBucket.putInt(depth);
+        }
+
+          }   catch (Exception e){
+              System.out.println("last--" + last);
+              throw new RuntimeException(e);
+          }
+    }
+
+
+    ConcurrentMap map = new ConcurrentHashMap<Integer, MappedByteBuffer>();
+    ConcurrentMap map2 = new ConcurrentHashMap<Integer, MappedByteBuffer>();
+
+    ConstructorFunction<Integer, MappedByteBuffer> function = new ConstructorFunction<Integer, MappedByteBuffer>() {
+
+        @Override
+        public MappedByteBuffer createNew(Integer depth) {
+
+            int acquireSize = (int) (Math.pow(2, depth) * 8);
+            return getIndexFile(0, acquireSize + 8);
+        }
+    };
+
+    ConstructorFunction<Integer, MappedByteBuffer> function2 = new ConstructorFunction<Integer, MappedByteBuffer>() {
+
+        @Override
+        public MappedByteBuffer createNew(Integer address) {
+            return getBucketByAddress(address);
+        }
+    };
+
+
+
     public void insert(Data key, Data record) {
         final int index = makeAddress(key, depth);
 
-        int acquireSize = (int) (Math.pow(2, depth) * 8);
-        final MappedByteBuffer indexFile = getIndexFile(0, acquireSize + 8);
+//        int acquireSize = (int) (Math.pow(2, depth) * 8);
+//        final MappedByteBuffer indexFile = getIndexFile(0, acquireSize + 8);
+        final MappedByteBuffer indexFile = ConcurrencyUtil.getOrPutIfAbsent(map,depth,function);
         indexFile.position((index * 8) + 8 + 4);
         int bucketAddress = indexFile.getInt();
-        final MappedByteBuffer bucket = getBucketByAddress(bucketAddress);
-        if( checkExists(key,bucket) ){
-            System.out.println("exist.....");
-            return;
-        }
+//        final MappedByteBuffer bucket = getBucketByAddress(bucketAddress);
+        final MappedByteBuffer bucket = ConcurrencyUtil.getOrPutIfAbsent(map2, bucketAddress, function2);
+        bucket.position(0);
+//        if (checkExists(key, bucket)) {
+//            System.out.println("exist.....");
+//            return;
+//        }
 
         int depthOfBucket = bucket.getInt();
         int numberOfElementsInBucket = bucket.getInt();
@@ -129,13 +187,25 @@ public class IndexDir {
                 position = bucket.position();
                 bucket.position(position + recordLen);
             }
+//            System.out.println(key.hashCode() + " " + key.getBuffer().length);
+
             bucket.putInt(key.getBuffer().length);
             bucket.put(key.getBuffer());
             bucket.putInt(record.getBuffer().length);//rec len
             bucket.put(record.getBuffer());//rec
 
+
+//            bucket.position(bucket.position() - (8+key.getBuffer().length+record.getBuffer().length));
+//            int key_len = bucket.getInt();
+//            byte[] tmp = new byte[key_len];
+//            bucket.get(tmp);
+//            Data data = new Data(0,tmp);
+//            System.out.println("R=>" + data.hashCode() + " " + data.getBuffer().length);
+
+
             bucket.position(4);//skip depth.
             bucket.putInt(++numberOfElementsInBucket);
+
 
             //write total count.
             indexFile.position(4);
@@ -173,18 +243,15 @@ public class IndexDir {
         int i = -1;
         String gen = "";
         while (++i < length) {
-            int t = Character.digit(s.charAt(i),2);
-            if(i==0){
-                gen += (t == 0 ? "1" : t) ;
-            }
-            else {
-                gen += ""+t;
+            int t = Character.digit(s.charAt(i), 2);
+            if (i == 0) {
+                gen += (t == 0 ? "1" : t);
+            } else {
+                gen += "" + t;
             }
         }
         return gen;
     }
-
-
 
 
     private void split(int index) {
@@ -245,7 +312,7 @@ public class IndexDir {
         }
     }
 
-    private boolean checkExists(Data key,MappedByteBuffer bucket) {
+    private boolean checkExists(Data key, MappedByteBuffer bucket) {
         final int bucketDepth = bucket.getInt();
         final int numberOfElements = bucket.getInt();
         for (int i = 0; i < numberOfElements; i++) {
@@ -253,7 +320,7 @@ public class IndexDir {
             byte[] bytes = new byte[keyLen];
             bucket.get(bytes);
             Data keyGot = new Data(0, bytes);
-            if(key.equals(keyGot)){
+            if (key.equals(keyGot)) {
                 bucket.position(0);
                 return true;
             }
@@ -264,7 +331,9 @@ public class IndexDir {
     }
 
     private void redistributeKeysByAddress(int address) {
-        final MappedByteBuffer bucket = getBucketByAddress(address);
+//        final MappedByteBuffer bucket = getBucketByAddress(address);
+        final MappedByteBuffer bucket = ConcurrencyUtil.getOrPutIfAbsent(map2, address, function2);
+        bucket.position(0);
         final Data[][] keyValuePairs = getKeyValuePairs(bucket);
         bucket.position(4);
         bucket.putInt(0);
@@ -341,20 +410,25 @@ public class IndexDir {
 
     private MappedByteBuffer getOrCreateNewBucket(int index) {
 
-        //depth of bucket
+        final MappedByteBuffer bucket = ConcurrencyUtil.getOrPutIfAbsent(map2, BUCKET_LENGTH * index, function2);
+        bucket.position(0);
 
-        MappedByteBuffer bucket = null;
-        try {
-            bucket = dataFileChannel.map(FileChannel.MapMode.READ_WRITE,
-                    BUCKET_LENGTH * index,
-                    BUCKET_LENGTH);
-            bucket.order(ByteOrder.nativeOrder());
-        } catch (Exception e) {
-            log("negative position ", index + " " + BUCKET_LENGTH + " depth " + depth);
-            e.printStackTrace();
-        }
+        return  bucket;
 
-        return bucket;
+//        //depth of bucket
+//
+//        MappedByteBuffer bucket = null;
+//        try {
+//            bucket = dataFileChannel.map(FileChannel.MapMode.READ_WRITE,
+//                    BUCKET_LENGTH * index,
+//                    BUCKET_LENGTH);
+//            bucket.order(ByteOrder.nativeOrder());
+//        } catch (Exception e) {
+//            log("negative position ", index + " BUCKET_LENGTH " + BUCKET_LENGTH + " depth " + depth);
+//            e.printStackTrace();
+//        }
+//
+//        return bucket;
     }
 
     private MappedByteBuffer getBucketByAddress(int address) {
@@ -402,6 +476,8 @@ public class IndexDir {
 
 
     public void close() throws IOException {
+
+        System.out.println("depth--->" + depth);
         dataFileChannel.close();
         dataFile.close();
         indexFileChannel.close();
@@ -416,7 +492,6 @@ public class IndexDir {
             return s.hashCode() % 19997;
         }
     };
-
 
 
     private int makeAddress(Data key, int depth) {

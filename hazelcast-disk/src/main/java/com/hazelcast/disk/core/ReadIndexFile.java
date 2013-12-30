@@ -42,7 +42,7 @@ public class ReadIndexFile {
         init();
     }
 
-    void init(){
+    void init() {
         fileLen = 0;
         try {
             fileLen = indexFile.length();
@@ -52,6 +52,7 @@ public class ReadIndexFile {
         final MappedByteBuffer indexFile = getIndexFile(0, fileLen);
         globalDepth = indexFile.getInt();
         globalCount = indexFile.getInt();
+        System.out.println("TOTAL------->" + globalCount);
     }
 
     private void createFiles() {
@@ -105,7 +106,7 @@ public class ReadIndexFile {
         System.out.println("depth " + globalDepth);
         System.out.println("count " + globalCount);
         final MappedByteBuffer indexFile = getIndexFile(0, fileLen);
-         int length = (int)fileLen;
+        int length = (int) fileLen;
         length -= 8;
         System.out.println("hash\t---\taddress");
         while (length > 0) {
@@ -127,17 +128,17 @@ public class ReadIndexFile {
 
     }
 
-    public void getValue(Data key){
+    public void getValue(Data key) {
         final int index = makeAddress(key, globalDepth);
         final MappedByteBuffer indexFile = ConcurrencyUtil.getOrPutIfAbsent(map, globalDepth, function);
         indexFile.position((index * 8) + 8 + 4);
         final int bucketAddress = indexFile.getInt();
-        MappedByteBuffer bucketByAddress = getBucketByAddress(bucketAddress);
-        if( checkExists(key,bucketByAddress) ){
-            System.out.println("TRUE");
-        }
-        else {
-            System.out.println("FALSE");
+//        MappedByteBuffer bucketByAddress = getBucketByAddress(bucketAddress);
+        MappedByteBuffer bucketByAddress = ConcurrencyUtil.getOrPutIfAbsent(map2, bucketAddress, function2);
+        if (checkExists(key, bucketByAddress)) {
+           // System.out.println("TRUE");
+        } else {
+           // System.out.println("FALSE");
         }
     }
 
@@ -158,15 +159,24 @@ public class ReadIndexFile {
         return bucket;
     }
 
-    ConcurrentMap map = new ConcurrentHashMap<Integer,MappedByteBuffer>();
+    ConcurrentMap map = new ConcurrentHashMap<Integer, MappedByteBuffer>();
+    ConcurrentMap map2 = new ConcurrentHashMap<Integer, MappedByteBuffer>();
 
-    ConstructorFunction<Integer,MappedByteBuffer> function = new ConstructorFunction<Integer,MappedByteBuffer>(){
+    ConstructorFunction<Integer, MappedByteBuffer> function = new ConstructorFunction<Integer, MappedByteBuffer>() {
 
         @Override
         public MappedByteBuffer createNew(Integer depth) {
 
             int acquireSize = (int) (Math.pow(2, depth) * 8);
             return getIndexFile(0, acquireSize + 8);
+        }
+    };
+
+    ConstructorFunction<Integer, MappedByteBuffer> function2 = new ConstructorFunction<Integer, MappedByteBuffer>() {
+
+        @Override
+        public MappedByteBuffer createNew(Integer address) {
+            return getBucketByAddress(address);
         }
     };
 
@@ -194,7 +204,7 @@ public class ReadIndexFile {
     }
 
 
-    private boolean checkExists(Data key,MappedByteBuffer bucket) {
+    private boolean checkExists(Data key, MappedByteBuffer bucket) {
         final int bucketDepth = bucket.getInt();
         final int numberOfElements = bucket.getInt();
         for (int i = 0; i < numberOfElements; i++) {
@@ -202,10 +212,12 @@ public class ReadIndexFile {
             byte[] bytes = new byte[keyLen];
             bucket.get(bytes);
             Data keyGot = new Data(0, bytes);
-            if(key.equals(keyGot)){
+            if (key.equals(keyGot)) {
                 bucket.position(0);
                 return true;
             }
+            int recordLen = bucket.getInt();
+            bucket.position(bucket.position() + recordLen);
         }
         bucket.position(0);
         return false;
