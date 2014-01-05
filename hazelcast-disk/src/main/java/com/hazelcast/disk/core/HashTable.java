@@ -15,7 +15,7 @@ import java.util.Queue;
 public class HashTable implements Closeable {
 
     private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
-    public static final int NUMBER_OF_RECORDS = 1;
+    public static final int NUMBER_OF_RECORDS = 20;
     public static final int BLOCK_SIZE = 1024;//KVP
     public static final int SIZE_OF_RECORD = 8 + BLOCK_SIZE;
     public static final int BUCKET_LENGTH = 4 +
@@ -65,9 +65,8 @@ public class HashTable implements Closeable {
             if (bucketDepth < globalDepth) {
                 final int[] addressList = newRange(slot, bucketDepth);
                 ++bucketDepth;
-//                System.out.println(slot+ "--"+bucketDepth);
                 //write buckets new depth.
-                data.writeInt(getAddress(slot), bucketDepth);
+                data.writeInt(bucketAddress, bucketDepth);
                 // create new bucket.
                 final int createIndexAt = addressList[0];
                 data.writeInt(getAddress(createIndexAt), bucketDepth);
@@ -148,7 +147,8 @@ public class HashTable implements Closeable {
                 //old bucket
                 data.writeInt(getAddress(slot), globalDepth);
                 //new bucket
-                data.writeInt(getAddress(siblingSlot), globalDepth);
+                final int address1 = getAddress(siblingSlot);
+                data.writeInt(address1, globalDepth);
                 data.writeInt(getAddress(siblingSlot) + 4, 0);
                 //update index file.
                 index.writeInt(getAddressPositionFromIndexFile(siblingSlot), getAddress(siblingSlot));
@@ -239,7 +239,6 @@ public class HashTable implements Closeable {
     }
 
     private Data[][] getKeyValuePairs(final int bucketOffset) {
-        final int depth = data.getInt(bucketOffset);
         final int numberOfElements = data.getInt(bucketOffset + 4);
         final Data[][] dataObjects = new Data[numberOfElements][2];
         int tmpBucketOffset = bucketOffset;
@@ -260,8 +259,6 @@ public class HashTable implements Closeable {
         }
         //reset number of elements in this bucket.
         data.writeInt(bucketOffset + 4, 0);
-        final int depth2 = data.getInt(bucketOffset);
-        if(depth != depth2)System.out.println("sdasad");
         return dataObjects;
     }
 

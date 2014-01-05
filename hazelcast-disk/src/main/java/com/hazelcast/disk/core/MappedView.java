@@ -16,7 +16,7 @@ import java.util.Arrays;
  * @author: ahmetmircik
  * Date: 1/1/14
  */
-class MappedView implements Storage {
+public class MappedView implements Storage {
 
     private final String path;
     private final RandomAccessFile file;
@@ -207,7 +207,7 @@ public static final int CHUNK_SIZE = 1 << CHUNK_SHIFT;
 
 public static final int CHUNK_SIZE_MOD_MASK = CHUNK_SIZE - 1;
 
-public static final int VIEW_CHUNK_SIZE = 1 << 16;
+public static final int VIEW_CHUNK_SIZE = 1 << 30;
 
     public final boolean tryAvailable(long offset) {
         final int pos = (int) offset / VIEW_CHUNK_SIZE;

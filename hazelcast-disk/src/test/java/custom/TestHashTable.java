@@ -29,7 +29,7 @@ public class TestHashTable extends AbstractTest {
         System.out.println("Filename ---> " + path);
         final HashTable hashTable = new HashTable(path);
 
-        for (int i = 0; i < 800; i++) {
+        for (int i = 0; i < 100000; i++) {
 
             final Data key = getKey();
             final Data value = getValue();
