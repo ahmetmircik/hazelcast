@@ -129,16 +129,16 @@ public class ReadIndexFile {
     }
 
     public void getValue(Data key) {
-        final int index = makeAddress(key, globalDepth);
+        final int index = findSlot(key, globalDepth);
         final MappedByteBuffer indexFile = ConcurrencyUtil.getOrPutIfAbsent(map, globalDepth, function);
         indexFile.position((index * 8) + 8 + 4);
         final int bucketAddress = indexFile.getInt();
 //        MappedByteBuffer bucketByAddress = getBucketByAddress(bucketAddress);
         MappedByteBuffer bucketByAddress = ConcurrencyUtil.getOrPutIfAbsent(map2, bucketAddress, function2);
         if (checkExists(key, bucketByAddress)) {
-           // System.out.println("TRUE");
+//           System.out.println("TRUE");
         } else {
-           // System.out.println("FALSE");
+//            System.out.println("FALSE");
         }
     }
 
@@ -179,29 +179,53 @@ public class ReadIndexFile {
             return getBucketByAddress(address);
         }
     };
+    private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
 
-    private int makeAddress(Data key, int depth) {
+    private int findSlot(Data key, int depth) {
         if (depth == 0) {
             return 0;
         }
-        byte[] buffer = key.getBuffer();
-        final long hash = MurmurHash3.murmurhash3x8632(buffer, 0, buffer.length, 129);
+        long hash = hasher.hash(key);
 
         String s = Long.toBinaryString(hash);
-        //log("s",s);
-        int length = 0;
+        int length;
         while ((length = s.length()) < depth) {
             s = "0" + s;
         }
-        int i = 0;
+        int i;
         try {
             i = Integer.parseInt(s.substring(length - depth < 0 ? length : length - depth), 2);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
 
         }
-        return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+        return i;
+        //return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+
     }
+
+//    private int makeAddress(Data key, int depth) {
+//        if (depth == 0) {
+//            return 0;
+//        }
+//        byte[] buffer = key.getBuffer();
+//        final long hash = MurmurHash3.murmurhash3x8632(buffer, 0, buffer.length, 129);
+//
+//        String s = Long.toBinaryString(hash);
+//        //log("s",s);
+//        int length = 0;
+//        while ((length = s.length()) < depth) {
+//            s = "0" + s;
+//        }
+//        int i = 0;
+//        try {
+//            i = Integer.parseInt(s.substring(length - depth < 0 ? length : length - depth), 2);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//
+//        }
+//        return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+//    }
 
 
     private boolean checkExists(Data key, MappedByteBuffer bucket) {

@@ -120,7 +120,7 @@ public class IndexDir {
 
 
     public void insert(Data key, Data record) {
-        final int index = makeAddress(key, depth);
+        final int index = findSlot(key, depth);
 
 //        int acquireSize = (int) (Math.pow(2, depth) * 8);
 //        final MappedByteBuffer indexFile = getIndexFile(0, acquireSize + 8);
@@ -402,11 +402,7 @@ public class IndexDir {
         System.out.println(name + "::" + o);
     }
 
-    private static final int BUCKET_LENGTH = 4 +
-            // bucket size info. bits
-            4 +
-            // key + value sizes
-            (Bucket.NUMBER_OF_RECORDS * Bucket.SIZE_OF_RECORD);
+    private static final int BUCKET_LENGTH = Bucket.BUCKET_LENGTH;
 
     private MappedByteBuffer getOrCreateNewBucket(int index) {
 
@@ -493,28 +489,29 @@ public class IndexDir {
         }
     };
 
+    private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
 
-    private int makeAddress(Data key, int depth) {
+    private int findSlot(Data key, int depth) {
         if (depth == 0) {
             return 0;
         }
-        byte[] buffer = key.getBuffer();
-        final long hash = MurmurHash3.murmurhash3x8632(buffer, 0, buffer.length, 129);
+        long hash = hasher.hash(key);
 
         String s = Long.toBinaryString(hash);
-        //log("s",s);
-        int length = 0;
+        int length;
         while ((length = s.length()) < depth) {
             s = "0" + s;
         }
-        int i = 0;
+        int i;
         try {
             i = Integer.parseInt(s.substring(length - depth < 0 ? length : length - depth), 2);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
 
         }
-        return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+        return i;
+        //return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+
     }
 
 }

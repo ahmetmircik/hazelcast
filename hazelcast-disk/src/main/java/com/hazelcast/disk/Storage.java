@@ -1,21 +1,18 @@
 package com.hazelcast.disk;
 
+import java.io.Closeable;
+
 /**
  * @author: ahmetmircik
  * Date: 12/19/13
  */
-public interface Storage<K,V> {
+public interface Storage extends Closeable{
 
-    void put(K key, V value);
+    int getInt(long offset);
 
-    V get(K key);
+    void getBytes(long offset, byte[] value);
 
-    V remove(K key);
+    void writeInt(long offset,int value);
 
-    void close();
-
-    long getPosition();
-
-    long getSize();
-
+    void writeBytes(long offset, byte[] value);
 }

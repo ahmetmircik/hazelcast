@@ -95,6 +95,8 @@ public class Main {
     }
 
     public static void main(String[] args) throws IOException {
+
+        System.out.println( ~(-41));
         //test();
         final long start = System.nanoTime();
         System.out.println(1<<32);
