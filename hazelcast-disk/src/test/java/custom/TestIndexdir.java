@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * @author: ahmetmircik
  * Date: 12/26/13
  */
-public class TestIndexDir extends AbstractTest{
+class TestIndexDir extends AbstractTest{
 
     public static final String TMP = System.getProperty("java.io.tmpdir");
     public static final String ROOT_DIR = TMP;

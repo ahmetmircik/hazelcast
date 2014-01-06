@@ -16,13 +16,10 @@ public class HashTable implements Closeable {
 
     private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
     public static final int NUMBER_OF_RECORDS = 20;
-    public static final int BLOCK_SIZE = 16;//KVP
-    public static final int SIZE_OF_RECORD = 8 + BLOCK_SIZE;
-    public static final int BUCKET_LENGTH = 4 +
-            // bucket size info. bits
-            4 +
-            // key + value sizes
-            (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
+    public static final int KVP_TOTAL_SIZE = 3072;//KVP
+    public static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
+    public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
+
 
     private Storage data;
     private Storage index;
@@ -91,7 +88,7 @@ public class HashTable implements Closeable {
             //todo remove recursions.
             put(key, value);
         } else {
-            final int blockSize = BLOCK_SIZE;
+            final int blockSize = KVP_TOTAL_SIZE;
             if (blockSize > SIZE_OF_RECORD) {
                 throw new IllegalArgumentException(blockSize + " is bigger than allowed record size "
                         + SIZE_OF_RECORD);
@@ -99,8 +96,10 @@ public class HashTable implements Closeable {
             long tmpBucketAddress = bucketAddress;
             tmpBucketAddress += 8;
             for (int i = 0; i < bucketElementsCount; i++) {
-                //todo fix this
-                tmpBucketAddress += 2 * 8 + 8;
+                final int keyLength = data.getInt(tmpBucketAddress);
+                tmpBucketAddress += (keyLength + 4);
+                final int valueLength = data.getInt(tmpBucketAddress);
+                tmpBucketAddress += (valueLength + 4);
             }
             final int keyLength = key.getBuffer().length;
             data.writeInt(tmpBucketAddress, keyLength);
@@ -115,8 +114,6 @@ public class HashTable implements Closeable {
             //write total count.
             int totalCount = index.getInt(4);
             index.writeInt(4, ++totalCount);
-
-            //logRecord(logAddress, "p1 ("+bucketElementsCount + ") ("+key.hashCode()+") ");
         }
     }
 
@@ -153,8 +150,6 @@ public class HashTable implements Closeable {
                 //if no need to create bucket, just point old bucket.
                 index.writeLong(bucketAddressOffsetInIndexFile(siblingSlot), address);
             }
-
-//            System.out.println(hash + "--" + address + " | " + siblingSlot + "--" + newAddress(siblingSlot));
         }
         //update index file.
         index.writeInt(0L, globalDepth);
