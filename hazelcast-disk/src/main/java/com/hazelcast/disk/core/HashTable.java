@@ -11,30 +11,49 @@ import java.util.Queue;
 /**
  * @author: ahmetmircik
  * Date: 12/31/13
+ * <p/>
+ * <p/>
+ * <p/>
+ * IndexFile Format
+ * -------------------------
+ * Position : 0 --> depth
+ * Position : 4 --> number of records
+ * Position : 8 --> hash (32 bit) & address (64 bit)
+ * Position : 20 -->hash (32 bit) & address (64 bit)
+ * Position : 32 -->hash (32 bit) & address (64 bit)
+ * ...
+ * ...
+ * ...
+ * <p/>
+ * DataFile Format
+ * -------------------------
+ * Position : 0 --> 1st Bucket : bucket depth (32 bit) & number of records (32 bit) & KVP & KVP &...
+ * Position : BUCKET_LENGTH --> 2nd Bucket : bucket depth (32 bit) & number of records (32 bit) & KVP & KVP &...
+ * Position : 2 * BUCKET_LENGTH --> 3rd Bucket : bucket depth (32 bit) & number of records (32 bit) & KVP & KVP &...
+ * Position : 3 * BUCKET_LENGTH --> 3rd Bucket : bucket depth (32 bit) & number of records (32 bit) & KVP & KVP &...
+ * ...
+ * ...
+ * ...
  */
 public class HashTable implements Closeable {
 
-    private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
+    private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     public static final int NUMBER_OF_RECORDS = 20;
     public static final int KVP_TOTAL_SIZE = 3072;//KVP
     public static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
     public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
 
 
-    private Storage data;
-    private Storage index;
     private final String path;
+    private final Storage data;
+    private final Storage index;
     private int globalDepth;
 
     public HashTable(String path) {
         this.path = path;
-        createStores();
+        data = new MappedView(this.path + ".data", 1 << 16);
+        index = new MappedView(this.path + ".index", 1 << 8);
         init();
-    }
-
-    private void createStores() {
-        data = new MappedView(path + ".data", 1 << 30);
-        index = new MappedView(path + ".index", 1 << 8);
     }
 
     private void init() {
@@ -47,10 +66,6 @@ public class HashTable implements Closeable {
             index.writeInt(8, 0);  //hash
             index.writeLong(12, 0L); //address
         }
-    }
-
-    private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 12L) + 8 + 4;
     }
 
     public void put(Data key, Data value) {
@@ -162,7 +177,7 @@ public class HashTable implements Closeable {
         if (depth == 0) {
             return 0;
         }
-        long hash = hasher.hash(key);
+        long hash = HASHER.hash(key);
 
         String s = Long.toBinaryString(hash);
         int length;
@@ -236,7 +251,7 @@ public class HashTable implements Closeable {
         tmpBucketOffset += 8;
         for (int i = 0; i < numberOfElements; i++) {
             final int keyLen = data.getInt(tmpBucketOffset);
-            if(keyLen<0){
+            if (keyLen < 0) {
                 System.out.println("keylen");
             }
             byte[] bytes = new byte[keyLen];
@@ -245,7 +260,7 @@ public class HashTable implements Closeable {
             tmpBucketOffset += keyLen;
             dataObjects[i][0] = new Data(0, bytes);
             final int recordLen = data.getInt(tmpBucketOffset);
-            if(recordLen<0){
+            if (recordLen < 0) {
                 System.out.println("keylen");
             }
             bytes = new byte[recordLen];
@@ -267,6 +282,9 @@ public class HashTable implements Closeable {
         }
     }
 
+    private long bucketAddressOffsetInIndexFile(int slot) {
+        return (slot * 12L) + 8 + 4;
+    }
 
     @Override
     public void close() throws IOException {

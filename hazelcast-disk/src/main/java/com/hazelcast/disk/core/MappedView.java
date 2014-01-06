@@ -34,7 +34,7 @@ public class MappedView implements Storage {
             this.fileChannel = file.getChannel();
             this.views = new MappedByteBuffer[1];
             this.blockSize = blockSize;
-            VIEW_CHUNK_SIZE = blockSize;
+            VIEW_CHUNK_SIZE = this.blockSize;
         } catch (IOException e) {
             throw new Error(e);
         }

@@ -31,7 +31,7 @@ public class TestMapDB extends AbstractTest{
         DB db = DBMaker.newFileDB(new File(path)).closeOnJvmShutdown().make();
         Map<Data, Data> map = db.getHashMap(getDirName());
         long wDiff = 0;
-        int size = 20000;
+        int size = 10000000;
         for (int i = 0; i < size; i++) {
             final Data key = getKey();
             final Data value = getValue();
