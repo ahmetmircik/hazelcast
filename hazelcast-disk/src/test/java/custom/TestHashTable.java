@@ -15,6 +15,7 @@ public class TestHashTable extends AbstractTest {
 
     public static void main(String[] args) throws IOException {
         test();
+
     }
 //count-->50000000 write avg--> 3241
 
