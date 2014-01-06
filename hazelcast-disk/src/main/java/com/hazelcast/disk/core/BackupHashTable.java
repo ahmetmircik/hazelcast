@@ -12,11 +12,11 @@ import java.util.Queue;
  * @author: ahmetmircik
  * Date: 12/31/13
  */
-public class HashTable implements Closeable {
+public class BackupHashTable implements Closeable {
 
     private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
     public static final int NUMBER_OF_RECORDS = 20;
-    public static final int BLOCK_SIZE = 16;//KVP
+    public static final int BLOCK_SIZE = 1024;//KVP
     public static final int SIZE_OF_RECORD = 8 + BLOCK_SIZE;
     public static final int BUCKET_LENGTH = 4 +
             // bucket size info. bits
@@ -29,15 +29,15 @@ public class HashTable implements Closeable {
     private final String path;
     private int globalDepth;
 
-    public HashTable(String path) {
+    public BackupHashTable(String path) {
         this.path = path;
         createStores();
         init();
     }
 
     private void createStores() {
-        data = new MappedView(path + ".data", 1 << 30);
-        index = new MappedView(path + ".index", 1 << 8);
+        data = new MappedView(path + ".data", BUCKET_LENGTH);
+        index = new MappedView(path + ".index", 8);
     }
 
     private void init() {
@@ -48,17 +48,17 @@ public class HashTable implements Closeable {
             index.writeInt(0, globalDepth);  //depth
             index.writeInt(4, 0);  //count
             index.writeInt(8, 0);  //hash
-            index.writeLong(12, 0L); //address
+            index.writeInt(12, 0); //address
         }
     }
 
-    private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 12L) + 8 + 4;
+    private int getAddressPositionFromIndexFile(int slot) {
+        return (slot * 8) + 8 + 4;
     }
 
     public void put(Data key, Data value) {
         final int slot = findSlot(key, globalDepth);
-        final long bucketAddress = index.getLong(bucketAddressOffsetInIndexFile(slot));
+        final int bucketAddress = index.getInt(getAddressPositionFromIndexFile(slot));
         int bucketDepth = data.getInt(bucketAddress);
         int bucketElementsCount = data.getInt(bucketAddress + 4);
         if (bucketElementsCount == NUMBER_OF_RECORDS) {
@@ -69,14 +69,13 @@ public class HashTable implements Closeable {
                 data.writeInt(bucketAddress, bucketDepth);
                 // create new bucket.
                 final int createIndexAt = addressList[0];
-                final long newBucketAddress = newAddress(createIndexAt);
-                data.writeInt(newBucketAddress, bucketDepth);
-                data.writeInt(newBucketAddress + 4, 0); //number of records.
+                data.writeInt(getAddress(createIndexAt), bucketDepth);
+                data.writeInt(getAddress(createIndexAt) + 4, 0); //number of records.
                 //find old address
-                final long oldAddress = bucketAddress;
+                final int oldAddress = index.getInt(getAddressPositionFromIndexFile(slot));
                 //update buddies.
                 for (final int asIndex : addressList) {
-                    index.writeLong(bucketAddressOffsetInIndexFile(asIndex), newBucketAddress);
+                    index.writeInt(getAddressPositionFromIndexFile(asIndex), getAddress(createIndexAt));
                 }
                 redistributeKeys(oldAddress);
                 //update index file.
@@ -84,9 +83,10 @@ public class HashTable implements Closeable {
                 int totCount = index.getInt(4);
                 totCount -= NUMBER_OF_RECORDS;
                 index.writeInt(4, totCount);
-            } else {
+            }
+            else {
                 split(slot);
-                redistributeKeys(bucketAddress);
+                redistributeKeys(getAddress(slot));
             }
             //todo remove recursions.
             put(key, value);
@@ -96,11 +96,21 @@ public class HashTable implements Closeable {
                 throw new IllegalArgumentException(blockSize + " is bigger than allowed record size "
                         + SIZE_OF_RECORD);
             }
-            long tmpBucketAddress = bucketAddress;
+            int tmpBucketAddress = bucketAddress;
             tmpBucketAddress += 8;
             for (int i = 0; i < bucketElementsCount; i++) {
-                //todo fix this
-                tmpBucketAddress += 2 * 8 + 8;
+                final int keyLen = data.getInt(tmpBucketAddress);
+                if(keyLen < 0){
+                    System.out.println("key000");
+                }
+                tmpBucketAddress += keyLen;
+                tmpBucketAddress += 4;
+                final int recordLen = data.getInt(tmpBucketAddress);
+                if(recordLen < 0){
+                    System.out.println("rec000");
+                }
+                tmpBucketAddress += recordLen;
+                tmpBucketAddress += 4;
             }
             final int keyLength = key.getBuffer().length;
             data.writeInt(tmpBucketAddress, keyLength);
@@ -116,16 +126,10 @@ public class HashTable implements Closeable {
             int totalCount = index.getInt(4);
             index.writeInt(4, ++totalCount);
 
-            //logRecord(logAddress, "p1 ("+bucketElementsCount + ") ("+key.hashCode()+") ");
+//            System.out.println("totalCount\t" + totalCount);
+//            System.out.println("globalDepth\t"+globalDepth);
         }
-    }
 
-    void logRecord(long address, String x) {
-        final int keyLen = data.getInt(address);
-        address += keyLen;
-        address += 4;
-        final int recordLen = data.getInt(address);
-        System.out.println(x + "log record\t" + keyLen + "---" + recordLen + "[" + address + "]");
 
     }
 
@@ -135,32 +139,29 @@ public class HashTable implements Closeable {
         //double index file by copy.
         final int numberOfSlots = (int) Math.pow(2, globalDepth);
         for (int i = 0; i < numberOfSlots / 2; i++) {
-            final int hash = index.getInt((i * 12L) + 8);
-            final long address = index.getLong(bucketAddressOffsetInIndexFile(i));
+            final int hash = index.getInt((i * 8) + 8);
+            final int address = index.getInt(getAddressPositionFromIndexFile(i));
             final int siblingSlot = globalDepth == 1 ? 1 : Integer.valueOf("1" + toBinary(hash, globalDepth - 1), 2);
-            index.writeInt((siblingSlot * 12L) + 8, siblingSlot);
+            index.writeInt((siblingSlot * 8) + 8, siblingSlot);
             if (hash == slot) {
                 //old bucket
-                data.writeInt(address, globalDepth);
-                //new buckets  depth
-                final long newBucketsAddress = newAddress(siblingSlot);
-                data.writeInt(newBucketsAddress, globalDepth);
-                //new buckets  number of records.
-                data.writeInt(newBucketsAddress + 4L, 0);
+                data.writeInt(getAddress(slot), globalDepth);
+                //new bucket
+                data.writeInt(getAddress(siblingSlot), globalDepth);
+                data.writeInt(getAddress(siblingSlot) + 4, 0);
                 //update index file.
-                index.writeLong(bucketAddressOffsetInIndexFile(siblingSlot), newBucketsAddress);
+                index.writeInt(getAddressPositionFromIndexFile(siblingSlot), getAddress(siblingSlot));
             } else {
                 //if no need to create bucket, just point old bucket.
-                index.writeLong(bucketAddressOffsetInIndexFile(siblingSlot), address);
+                index.writeInt(getAddressPositionFromIndexFile(siblingSlot), address);
             }
-
-//            System.out.println(hash + "--" + address + " | " + siblingSlot + "--" + newAddress(siblingSlot));
+            //System.out.println("siblingSlot\t"+siblingSlot + " globalDepth\t"+globalDepth);
         }
         //update index file.
-        index.writeInt(0L, globalDepth);
-        int totCount = index.getInt(4L);
+        index.writeInt(0, globalDepth);
+        int totCount = index.getInt(4);
         totCount -= NUMBER_OF_RECORDS;
-        index.writeInt(4L, totCount);
+        index.writeInt(4, totCount);
     }
 
     private int findSlot(Data key, int depth) {
@@ -182,6 +183,8 @@ public class HashTable implements Closeable {
 
         }
         return i;
+        //return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
+
     }
 
     private int[] newRange(int index, final int bucketDepth) {
@@ -230,29 +233,23 @@ public class HashTable implements Closeable {
         return s;
     }
 
-    private long newAddress(int slot) {
-        return 1L * slot * BUCKET_LENGTH;
+    private int getAddress(int slot) {
+        return slot * BUCKET_LENGTH;
     }
 
-    private Data[][] getKeyValuePairs(final long bucketStartOffset) {
-        final int numberOfElements = data.getInt(bucketStartOffset + 4);
+    private Data[][] getKeyValuePairs(final int bucketOffset) {
+        final int numberOfElements = data.getInt(bucketOffset + 4);
         final Data[][] dataObjects = new Data[numberOfElements][2];
-        long tmpBucketOffset = bucketStartOffset;
+        int tmpBucketOffset = bucketOffset;
         tmpBucketOffset += 8;
         for (int i = 0; i < numberOfElements; i++) {
             final int keyLen = data.getInt(tmpBucketOffset);
-            if(keyLen<0){
-                System.out.println("keylen");
-            }
             byte[] bytes = new byte[keyLen];
             tmpBucketOffset += 4;
             data.getBytes(tmpBucketOffset, bytes);
             tmpBucketOffset += keyLen;
             dataObjects[i][0] = new Data(0, bytes);
             final int recordLen = data.getInt(tmpBucketOffset);
-            if(recordLen<0){
-                System.out.println("keylen");
-            }
             bytes = new byte[recordLen];
             tmpBucketOffset += 4;
             data.getBytes(tmpBucketOffset, bytes);
@@ -260,12 +257,12 @@ public class HashTable implements Closeable {
             dataObjects[i][1] = new Data(0, bytes);
         }
         //reset number of elements in this bucket.
-        data.writeInt(bucketStartOffset + 4, 0);
+        data.writeInt(bucketOffset + 4, 0);
         return dataObjects;
     }
 
 
-    private void redistributeKeys(long address) {
+    private void redistributeKeys(int address) {
         final Data[][] keyValuePairs = getKeyValuePairs(address);
         for (int i = 0; i < keyValuePairs.length; i++) {
             put(keyValuePairs[i][0], keyValuePairs[i][1]);
@@ -275,6 +272,7 @@ public class HashTable implements Closeable {
 
     @Override
     public void close() throws IOException {
+        System.out.println("Depth--->"+globalDepth);
         index.close();
         data.close();
     }

@@ -1,14 +1,9 @@
 package custom;
 
 import com.hazelcast.disk.core.HashTable;
-import com.hazelcast.disk.core.ReadIndexFile;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.IOException;
-import java.security.SecureRandom;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * @author: ahmetmircik
@@ -16,36 +11,33 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class TestHashTable extends AbstractTest {
 
-    private static ConcurrentMap<Data, Data> mapData = new ConcurrentHashMap<Data, Data>();
+//    private static ConcurrentMap<Data, Data> mapData = new ConcurrentHashMap<Data, Data>();
 
     public static void main(String[] args) throws IOException {
-           test();
+        test();
     }
+//count-->50000000 write avg--> 3241
 
     public static void test() throws IOException {
-        final SecureRandom secureRandom = new SecureRandom();
-        final int dirName = secureRandom.nextInt();
-        final String path = String.valueOf(dirName);
+        final String path = getDirName();
         System.out.println("Filename ---> " + path);
         final HashTable hashTable = new HashTable(path);
-
-        for (int i = 0; i < 100000; i++) {
-
+        long wDiff = 0;
+        final int size = 1000000 * 50;
+        for (int i = 0; i < size; i++) {
             final Data key = getKey();
             final Data value = getValue();
+            long l1 = System.nanoTime();
             hashTable.put(key, value);
-            mapData.put(key, value);
+            wDiff += System.nanoTime() - l1;
+
         }
+        System.out.println("count-->" + size + " write avg--> " + (wDiff / size));
 
         hashTable.close();
 
-
-        final ReadIndexFile readIndexFile = new ReadIndexFile(path);
-        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
-            readIndexFile.getValue(entry.getKey());
-
-        }
-
-         readIndexFile.close();
+//        final ReadIndexFile readIndexFile = new ReadIndexFile("-1480649617");
+//
+//         readIndexFile.close();
     }
 }

@@ -52,7 +52,7 @@ public class ReadIndexFile {
         final MappedByteBuffer indexFile = getIndexFile(0, fileLen);
         globalDepth = indexFile.getInt();
         globalCount = indexFile.getInt();
-        System.out.println("TOTAL------->" + globalCount);
+        System.out.println("TOTAL------->" + globalCount + " Depth---->"+globalDepth);
     }
 
     private void createFiles() {
@@ -81,7 +81,7 @@ public class ReadIndexFile {
         return bucket;
     }
 
-    private MappedByteBuffer getDataFile(int offset, long size) {
+    private MappedByteBuffer getDataFile(long offset, long size) {
         MappedByteBuffer bucket = null;
         try {
             bucket = dataFileChannel.map(FileChannel.MapMode.READ_WRITE,
@@ -98,7 +98,7 @@ public class ReadIndexFile {
     static final int BUCKET_LENGTH = 4 +
             4 +
             Bucket.NUMBER_OF_RECORDS * Bucket.SIZE_OF_RECORD;
-    Set<Integer> s = new HashSet<Integer>();
+    Set<Long> s = new HashSet<Long>();
 
     public void print() throws IOException {
 
@@ -111,7 +111,7 @@ public class ReadIndexFile {
         System.out.println("hash\t---\taddress");
         while (length > 0) {
             final int hash = indexFile.getInt();
-            final int address = indexFile.getInt();
+            final long address = indexFile.getLong();
             if (s.add(address)) {
                 final MappedByteBuffer dataFile = getDataFile(address, BUCKET_LENGTH);
 
@@ -131,7 +131,7 @@ public class ReadIndexFile {
     public void getValue(Data key) {
         final int index = findSlot(key, globalDepth);
         final MappedByteBuffer indexFile = ConcurrencyUtil.getOrPutIfAbsent(map, globalDepth, function);
-        indexFile.position((index * 8) + 8 + 4);
+        indexFile.position((index * 12) + 8 + 4);
         final int bucketAddress = indexFile.getInt();
 //        MappedByteBuffer bucketByAddress = getBucketByAddress(bucketAddress);
         MappedByteBuffer bucketByAddress = ConcurrencyUtil.getOrPutIfAbsent(map2, bucketAddress, function2);
@@ -167,7 +167,7 @@ public class ReadIndexFile {
         @Override
         public MappedByteBuffer createNew(Integer depth) {
 
-            int acquireSize = (int) (Math.pow(2, depth) * 8);
+            int acquireSize = (int) (Math.pow(2, depth) * 12);
             return getIndexFile(0, acquireSize + 8);
         }
     };

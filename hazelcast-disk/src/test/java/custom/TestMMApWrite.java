@@ -13,31 +13,33 @@ import java.io.IOException;
 public class TestMMApWrite extends AbstractTest {
 
     public static void main(String[] args) throws IOException {
-        Storage storage = new MappedView("test33", 1111);
+        Storage storage = new MappedView(getDirName(), 1<<7);
         final Data key = getKey();
-        final Data key2 = getKey();
 
-        int y =key.getBuffer().length;
-        storage.writeInt(0, key.getBuffer().length);
-        storage.writeBytes(4, key.getBuffer());
-        storage.writeInt(4 + key.getBuffer().length, key2.getBuffer().length);
-        storage.writeBytes(4 + key.getBuffer().length + key2.getBuffer().length, key2.getBuffer());
-
-        int keyLen = storage.getInt(0);
-
-        byte[] bytes = new byte[keyLen];
-        storage.getBytes(4,bytes );
-
-        for (int i = 0; i < keyLen; i++) {
-            if(bytes[i] != key.getBuffer()[i]){
-                System.out.println("asadadsadd");
-            }
+        long a = 0;
+        for (int i = 0; i < 20000; i++) {
+            storage.writeBytes(a, key.getBuffer());
+            a += 512;
         }
 
 
-        System.out.println(storage.getInt(0));
-        System.out.println(storage.getInt(4));
-        System.out.println(storage.getInt(8));
+        a = 0;
+        for (int i = 0; i < 20000; i++) {
+            final byte[] bytes = new byte[512];
+            storage.getBytes(a, bytes);
+            for (int j = 0; j < 512; j++) {
+                if(bytes[j] != key.getBuffer()[j]){
+                    throw new RuntimeException();
+                }
+            }
+            a += 512;
+        }
+
+
+
+
+//        System.out.println(storage.getLong(0));
+//        System.out.println(storage.getLong(100));
         storage.close();
     }
 }

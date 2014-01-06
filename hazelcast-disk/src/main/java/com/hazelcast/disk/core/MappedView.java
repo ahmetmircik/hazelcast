@@ -2,11 +2,9 @@ package com.hazelcast.disk.core;
 
 import com.hazelcast.disk.Storage;
 
-import java.io.IOError;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -18,6 +16,8 @@ import java.util.Arrays;
  */
 public class MappedView implements Storage {
 
+    private ByteOrder NATIVE = ByteOrder.nativeOrder();
+    public  final int VIEW_CHUNK_SIZE ;
     private final String path;
     private final RandomAccessFile file;
     private final FileChannel fileChannel;
@@ -34,6 +34,7 @@ public class MappedView implements Storage {
             this.fileChannel = file.getChannel();
             this.views = new MappedByteBuffer[1];
             this.blockSize = blockSize;
+            VIEW_CHUNK_SIZE = blockSize;
         } catch (IOException e) {
             throw new Error(e);
         }
@@ -42,33 +43,93 @@ public class MappedView implements Storage {
     @Override
     public int getInt(long offset) {
         acquire(offset);
-        int viewIndex = (int) offset / VIEW_CHUNK_SIZE;
-        long startPositionInViewChunk = offset - (VIEW_CHUNK_SIZE * viewIndex);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
         try {
             byte b0 = views[viewIndex].get((int) startPositionInViewChunk++);
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             byte b1 = views[viewIndex].get((int) startPositionInViewChunk++);
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             byte b2 = views[viewIndex].get((int) startPositionInViewChunk++);
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             byte b3 = views[viewIndex].get((int) startPositionInViewChunk++);
-            return NATIVE == ByteOrder.BIG_ENDIAN ? makeInt(b0,b1,b2,b3) : makeInt(b3,b2,b1,b0);
+            return NATIVE == ByteOrder.BIG_ENDIAN ? makeInt(b0, b1, b2, b3) : makeInt(b3, b2, b1, b0);
 
+        } catch (Throwable t) {
+            System.out.println("offset\t" + offset + " startPositionInViewChunk\t" + startPositionInViewChunk + " view index\t" + viewIndex);
+            throw new Error(t);
         }
-        catch(Throwable t)
-        {
+    }
+
+    @Override
+    public long getLong(long offset) {
+        acquire(offset);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
+        try {
+            byte b0 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b1 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b2 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b3 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b4 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b5 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b6 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            byte b7 = views[viewIndex].get((int) startPositionInViewChunk++);
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            return NATIVE == ByteOrder.BIG_ENDIAN ? makeLong(b0, b1, b2, b3, b4, b5, b6, b7) : makeLong(b7, b6, b5, b4, b3, b2, b1, b0);
+
+        } catch (Throwable t) {
             System.out.println("offset\t" + offset + " startPositionInViewChunk\t" + startPositionInViewChunk + " view index\t" + viewIndex);
             throw new Error(t);
         }
@@ -77,15 +138,15 @@ public class MappedView implements Storage {
     @Override
     public void getBytes(long offset, byte[] value) {
         acquire(offset);
-        int viewIndex = (int) offset / VIEW_CHUNK_SIZE;
-        long startPositionInViewChunk = offset - (VIEW_CHUNK_SIZE * viewIndex);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
         try {
             for (int i = 0; i < value.length; i++) {
                 value[i] = views[viewIndex].get((int) startPositionInViewChunk++);
                 if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                     viewIndex++;
                     startPositionInViewChunk = 0;
-                    acquire(viewIndex * VIEW_CHUNK_SIZE);
+                    acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
                 }
             }
         } catch (Throwable t) {
@@ -97,15 +158,15 @@ public class MappedView implements Storage {
     @Override
     public void writeBytes(long offset, byte[] value) {
         acquire(offset);
-        int viewIndex = (int) offset / VIEW_CHUNK_SIZE;
-        long startPositionInViewChunk = offset - (VIEW_CHUNK_SIZE * viewIndex);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
         try {
             for (int i = 0; i < value.length; i++) {
                 views[viewIndex].put((int) startPositionInViewChunk++, value[i]);
                 if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                     viewIndex++;
                     startPositionInViewChunk = 0;
-                    acquire(viewIndex * VIEW_CHUNK_SIZE);
+                    acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
                 }
             }
         } catch (Throwable t) {
@@ -114,39 +175,97 @@ public class MappedView implements Storage {
         }
     }
 
-    ByteOrder NATIVE = ByteOrder.nativeOrder();
+
     @Override
     public void writeInt(long offset, int value) {
         acquire(offset);
-        int viewIndex = (int) offset / VIEW_CHUNK_SIZE;
-        long startPositionInViewChunk = offset - (VIEW_CHUNK_SIZE * viewIndex);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
         try {
             views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? int3(value) : int0(value));
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? int2(value) : int1(value));
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? int1(value) : int2(value));
             if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
                 viewIndex++;
                 startPositionInViewChunk = 0;
-                acquire(viewIndex * VIEW_CHUNK_SIZE);
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
             }
             views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? int0(value) : int3(value));
-        }
-        catch(Throwable t)
-        {
+        } catch (Throwable t) {
             System.out.println("offset\t" + offset + " startPositionInViewChunk\t" + startPositionInViewChunk + " view index\t" + viewIndex);
             throw new Error(t);
         }
-}
+    }
+
+    @Override
+    public void writeLong(long offset, long value) {
+        acquire(offset);
+        int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
+        long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
+        try {
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long7(value) : long0(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long6(value) : long1(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long5(value) : long2(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long4(value) : long3(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long3(value) : long4(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long2(value) : long5(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long1(value) : long6(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+            views[viewIndex].put((int) startPositionInViewChunk++, NATIVE == ByteOrder.BIG_ENDIAN ? long0(value) : long7(value));
+            if (startPositionInViewChunk + 1 > views[viewIndex].capacity()) {
+                viewIndex++;
+                startPositionInViewChunk = 0;
+                acquire(1L * viewIndex * VIEW_CHUNK_SIZE);
+            }
+        } catch (Throwable t) {
+            System.out.println("offset\t" + offset + " startPositionInViewChunk\t" + startPositionInViewChunk + " view index\t" + viewIndex);
+            throw new Error(t);
+        }
+    }
 
     private static byte int3(int x) {
         return (byte) (x >> 24);
@@ -164,13 +283,56 @@ public class MappedView implements Storage {
         return (byte) (x >> 0);
     }
 
-    private static int makeInt(byte b3, byte b2, byte b1, byte b0) {
-        return (int)((((b3 & 0xff) << 24) |
-                ((b2 & 0xff) << 16) |
-                ((b1 & 0xff) <<  8) |
-                ((b0 & 0xff) <<  0)));
+    private static byte long7(long x) {
+        return (byte) (x >> 56);
     }
 
+    private static byte long6(long x) {
+        return (byte) (x >> 48);
+    }
+
+    private static byte long5(long x) {
+        return (byte) (x >> 40);
+    }
+
+    private static byte long4(long x) {
+        return (byte) (x >> 32);
+    }
+
+    private static byte long3(long x) {
+        return (byte) (x >> 24);
+    }
+
+    private static byte long2(long x) {
+        return (byte) (x >> 16);
+    }
+
+    private static byte long1(long x) {
+        return (byte) (x >> 8);
+    }
+
+    private static byte long0(long x) {
+        return (byte) (x >> 0);
+    }
+
+    private static int makeInt(byte b3, byte b2, byte b1, byte b0) {
+        return (int) ((((b3 & 0xff) << 24) |
+                ((b2 & 0xff) << 16) |
+                ((b1 & 0xff) << 8) |
+                ((b0 & 0xff) << 0)));
+    }
+
+    private static long makeLong(byte b7, byte b6, byte b5, byte b4,
+                                 byte b3, byte b2, byte b1, byte b0) {
+        return ((((long) b7 & 0xff) << 56) |
+                (((long) b6 & 0xff) << 48) |
+                (((long) b5 & 0xff) << 40) |
+                (((long) b4 & 0xff) << 32) |
+                (((long) b3 & 0xff) << 24) |
+                (((long) b2 & 0xff) << 16) |
+                (((long) b1 & 0xff) << 8) |
+                (((long) b0 & 0xff) << 0));
+    }
 
     //todo unmap is independent from filechannel close.reference queue
     @Override
@@ -201,16 +363,8 @@ public class MappedView implements Storage {
 
     }
 
-public static final int CHUNK_SHIFT = 30;
-
-public static final int CHUNK_SIZE = 1 << CHUNK_SHIFT;
-
-public static final int CHUNK_SIZE_MOD_MASK = CHUNK_SIZE - 1;
-
-public static final int VIEW_CHUNK_SIZE = 1 << 30;
-
     public final boolean tryAvailable(long offset) {
-        final int pos = (int) offset / VIEW_CHUNK_SIZE;
+        final int pos = (int) (offset / VIEW_CHUNK_SIZE);
 
         try {
             if (pos >= views.length) {
@@ -229,86 +383,6 @@ public static final int VIEW_CHUNK_SIZE = 1 << 30;
 
         return true;
     }
-
-//    public final boolean tryAvailable(long offset) {
-//
-//        int chunkPos = (int) (offset >>> CHUNK_SHIFT);
-//
-//        //check for most common case, this is already mapped
-//        if (chunkPos < views.length && views[chunkPos] != null &&
-//                views[chunkPos].capacity() >= (offset & CHUNK_SIZE_MOD_MASK)) {
-//            return true;
-//        }
-//
-//        try {
-//            //check second time
-//            if (chunkPos < views.length && views[chunkPos] != null &&
-//                    views[chunkPos].capacity() >= (offset & CHUNK_SIZE_MOD_MASK))
-//                return true;
-//
-//            ByteBuffer[] chunks2 = views;
-//
-//            //grow array if necessary
-//            if (chunkPos >= chunks2.length) {
-//                chunks2 = Arrays.copyOf(chunks2, Math.max(chunkPos + 1, chunks2.length * 2));
-//            }
-//
-//
-//            //just remap file buffer
-//            if (chunks2[chunkPos] == null) {
-//                //make sure previous buffer is fully expanded
-//                if (chunkPos > 0) {
-//                    ByteBuffer oldPrev = chunks2[chunkPos - 1];
-//                    if (oldPrev == null || oldPrev.capacity() != CHUNK_SIZE) {
-//                        chunks2[chunkPos - 1] = makeNewBuffer(1L * chunkPos * CHUNK_SIZE - 1, chunks2);
-//                    }
-//                }
-//            }
-//
-//
-//            ByteBuffer newChunk = makeNewBuffer(offset, chunks2);
-//
-//            chunks2[chunkPos] = newChunk;
-//
-//            views = chunks2;
-//        } finally {
-//        }
-//        return true;
-//    }
-
-static final int BUF_SIZE_INC = 1024 * 1024;
-
-
-    protected ByteBuffer makeNewBuffer(long offset, ByteBuffer[] buffers2) {
-        try {
-            //create new chunk
-            long newChunkSize = offset & CHUNK_SIZE_MOD_MASK;
-            int round = offset < BUF_SIZE_INC ? BUF_SIZE_INC / 16 : BUF_SIZE_INC;
-
-            //round newBufSize to multiple of BUF_SIZE_INC
-            long rest = newChunkSize % round;
-            if (rest != 0)
-                newChunkSize += round - rest;
-
-            /**
-             *
-             *  newChunkSize must be <= Integer.MAX_VALUE
-             *
-             * */
-            final MappedByteBuffer buf = fileChannel.map(FileChannel.MapMode.READ_WRITE,
-                    offset - (offset & CHUNK_SIZE_MOD_MASK), newChunkSize);
-
-
-            return buf;
-        } catch (IOException e) {
-            if (e.getCause() != null && e.getCause() instanceof OutOfMemoryError) {
-                throw new RuntimeException("File could not be mapped to memory, common problem on 32bit JVM. Use `DBMaker.newRandomAccessFileDB()` as workaround", e);
-            }
-
-            throw new IOError(e);
-        }
-    }
-
 
     private MappedByteBuffer createBuffer(long offset, int size) {
         MappedByteBuffer bucket = null;
@@ -354,16 +428,16 @@ static final int BUF_SIZE_INC = 1024 * 1024;
         }
     }
 
-private static boolean unmapHackSupported = true;
+    private static boolean unmapHackSupported = true;
 
-static{
-        try{
-        unmapHackSupported=
-        Class.forName("sun.nio.ch.DirectBuffer")!=null;
-        }catch(Exception e){
-        unmapHackSupported=false;
+    static {
+        try {
+            unmapHackSupported =
+                    Class.forName("sun.nio.ch.DirectBuffer") != null;
+        } catch (Exception e) {
+            unmapHackSupported = false;
         }
-        }
+    }
 
 
-        }
+}

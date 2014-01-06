@@ -96,6 +96,9 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
 
+        int x = 1<<30;
+
+        System.out.println(1L + Integer.MAX_VALUE);
         System.out.println( ~(-41));
         //test();
         final long start = System.nanoTime();
