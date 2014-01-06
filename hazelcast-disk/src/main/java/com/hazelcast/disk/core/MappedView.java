@@ -4,11 +4,17 @@ import com.hazelcast.disk.Storage;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * @author: ahmetmircik
@@ -17,7 +23,7 @@ import java.util.Arrays;
 public class MappedView implements Storage {
 
     private ByteOrder NATIVE = ByteOrder.nativeOrder();
-    public  final int VIEW_CHUNK_SIZE ;
+    public final int VIEW_CHUNK_SIZE;
     private final String path;
     private final RandomAccessFile file;
     private final FileChannel fileChannel;
@@ -334,15 +340,50 @@ public class MappedView implements Storage {
                 (((long) b0 & 0xff) << 0));
     }
 
+    protected ReferenceQueue<MappedByteBuffer> unreleasedQueue = new ReferenceQueue<MappedByteBuffer>();
+    protected Set<Reference<MappedByteBuffer>> unreleasedChunks = new LinkedHashSet<Reference<MappedByteBuffer>>();
+
     //todo unmap is independent from filechannel close.reference queue
     @Override
     public void close() throws IOException {
         fileChannel.close();
         file.close();
+
+        forceBuffers();
+
+        for (Reference<MappedByteBuffer> rb : unreleasedChunks) {
+            MappedByteBuffer b = rb.get();
+            if (b == null) continue;
+            unmap(b);
+        }
+
         //unmap & close
         for (int i = 0; i < views.length; i++) {
             if (views[i] != null) {
-                unmap((MappedByteBuffer) views[i]);
+                unmap(views[i]);
+            }
+        }
+
+        unreleasedChunks = null;
+        unreleasedQueue = null;
+
+        views = null;
+    }
+
+    public void forceBuffers() {
+        //clear GC references
+        for (Reference ref = unreleasedQueue.poll(); ref != null; ref = unreleasedQueue.poll()) {
+            unreleasedChunks.remove(ref);
+        }
+
+        for (Reference<MappedByteBuffer> rb : unreleasedChunks) {
+            MappedByteBuffer b = rb.get();
+            if (b == null) continue;
+            b.force();
+        }
+        for (ByteBuffer b : views) {
+            if (b != null && (b instanceof MappedByteBuffer)) {
+                ((MappedByteBuffer) b).force();
             }
         }
     }
@@ -364,19 +405,20 @@ public class MappedView implements Storage {
     }
 
     public final boolean tryAvailable(long offset) {
-        final int pos = (int) (offset / VIEW_CHUNK_SIZE);
+        final int viewIndex = (int) (offset / VIEW_CHUNK_SIZE);
 
         try {
-            if (pos >= views.length) {
-                views = Arrays.copyOf(views, Math.max(pos + 1, views.length * 2));
+            if (viewIndex >= views.length) {
+                views = Arrays.copyOf(views, Math.max(viewIndex + 1, views.length * 2));
             }
 
-            if (views[pos] == null) {
-                views[pos] = createBuffer(offset, VIEW_CHUNK_SIZE);
+            if (views[viewIndex] == null) {
+                views[viewIndex] = createBuffer(offset, VIEW_CHUNK_SIZE);
+//                System.out.println(path +" --> viewIndex = " +viewIndex);
             }
 
         } catch (Exception e) {
-            System.out.println("offset " + offset + " pos " + pos + " views length " + views.length);
+            System.out.println("offset " + offset + " pos " + viewIndex + " views length " + views.length);
             throw new Error(e);
         }
 
@@ -391,6 +433,13 @@ public class MappedView implements Storage {
                     offset,
                     size);
             bucket.order(ByteOrder.nativeOrder());
+
+            unreleasedChunks.add(new WeakReference<MappedByteBuffer>(bucket, unreleasedQueue));
+
+            for(Reference ref=unreleasedQueue.poll();ref!=null; ref=unreleasedQueue.poll()){
+                unreleasedChunks.remove(ref);
+            }
+
         } catch (Exception e) {
             System.out.println("negative position-->" + offset + "\tsize -->" + size);
             new Error(e);

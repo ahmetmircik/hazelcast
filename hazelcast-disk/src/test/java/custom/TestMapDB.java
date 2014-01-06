@@ -5,7 +5,6 @@ import org.mapdb.DB;
 import org.mapdb.DBMaker;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -25,13 +24,12 @@ public class TestMapDB extends AbstractTest{
 //    count-->100000 write avg--> 10805
 //    count-->100000 read avg--> 400
     public static void test() {
-        final SecureRandom secureRandom = new SecureRandom();
-        final int dirName = secureRandom.nextInt();
-        final String path = String.valueOf(dirName);
+        final String path = getDirName();
+        System.out.println("Filename ---> " + path);
         DB db = DBMaker.newFileDB(new File(path)).closeOnJvmShutdown().make();
         Map<Data, Data> map = db.getHashMap(getDirName());
         long wDiff = 0;
-        int size = 10000000;
+        int size = 100000;
         for (int i = 0; i < size; i++) {
             final Data key = getKey();
             final Data value = getValue();

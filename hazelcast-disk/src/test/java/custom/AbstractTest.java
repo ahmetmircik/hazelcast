@@ -11,14 +11,17 @@ import java.security.SecureRandom;
 public abstract class AbstractTest {
     public static final SecureRandom RANDOM = new SecureRandom();
 
+    private static final int K = 1024;
+
     public static Data getKey() {
-        byte[] pop = new byte[72];
+        byte[] pop = new byte[16];
         RANDOM.nextBytes(pop);
         return new Data(0, pop);
     }
 
+
     public static Data getValue() {
-        byte[] pop = new byte[3000];
+        byte[] pop = new byte[10*K];
         RANDOM.nextBytes(pop);
         return new Data(0, pop);
     }

@@ -38,10 +38,12 @@ import java.util.Queue;
 public class HashTable implements Closeable {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
-    public static final int NUMBER_OF_RECORDS = 20;
-    public static final int KVP_TOTAL_SIZE = 3072;//KVP
-    public static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
-    public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
+    private static final int NUMBER_OF_RECORDS = 20;
+    private static final int KVP_TOTAL_SIZE = 1024*10+16;//KVP
+    private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
+    private static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
+    private static final int INDEX_BLOCK_LENGTH =  1 << 3;
+    private static final int DATA_BLOCK_LENGTH =  1 << 30;
 
 
     private final String path;
@@ -51,9 +53,10 @@ public class HashTable implements Closeable {
 
     public HashTable(String path) {
         this.path = path;
-        data = new MappedView(this.path + ".data", 1 << 16);
-        index = new MappedView(this.path + ".index", 1 << 8);
+        data = new MappedView(this.path + ".data", DATA_BLOCK_LENGTH);
+        index = new MappedView(this.path + ".index", INDEX_BLOCK_LENGTH);
         init();
+        System.out.println(BUCKET_LENGTH);
     }
 
     private void init() {
@@ -96,7 +99,8 @@ public class HashTable implements Closeable {
                 int totCount = index.getInt(4);
                 totCount -= NUMBER_OF_RECORDS;
                 index.writeInt(4, totCount);
-            } else {
+            }
+            else {
                 split(slot);
                 redistributeKeys(bucketAddress);
             }
@@ -111,9 +115,9 @@ public class HashTable implements Closeable {
             long tmpBucketAddress = bucketAddress;
             tmpBucketAddress += 8;
             for (int i = 0; i < bucketElementsCount; i++) {
-                final int keyLength = data.getInt(tmpBucketAddress);
+                int keyLength = data.getInt(tmpBucketAddress);
                 tmpBucketAddress += (keyLength + 4);
-                final int valueLength = data.getInt(tmpBucketAddress);
+                int valueLength = data.getInt(tmpBucketAddress);
                 tmpBucketAddress += (valueLength + 4);
             }
             final int keyLength = key.getBuffer().length;
@@ -132,16 +136,6 @@ public class HashTable implements Closeable {
         }
     }
 
-    void logRecord(long address, String x) {
-        final int keyLen = data.getInt(address);
-        address += keyLen;
-        address += 4;
-        final int recordLen = data.getInt(address);
-        System.out.println(x + "log record\t" + keyLen + "---" + recordLen + "[" + address + "]");
-
-    }
-
-    // 20640
     private void split(int slot) {
         globalDepth++;
         //double index file by copy.
@@ -158,7 +152,7 @@ public class HashTable implements Closeable {
                 final long newBucketsAddress = newAddress(siblingSlot);
                 data.writeInt(newBucketsAddress, globalDepth);
                 //new buckets  number of records.
-                data.writeInt(newBucketsAddress + 4L, 0);
+                data.writeInt(newBucketsAddress + 4, 0);
                 //update index file.
                 index.writeLong(bucketAddressOffsetInIndexFile(siblingSlot), newBucketsAddress);
             } else {
@@ -248,29 +242,23 @@ public class HashTable implements Closeable {
         final int numberOfElements = data.getInt(bucketStartOffset + 4);
         final Data[][] dataObjects = new Data[numberOfElements][2];
         long tmpBucketOffset = bucketStartOffset;
-        tmpBucketOffset += 8;
+        tmpBucketOffset += 8L;
         for (int i = 0; i < numberOfElements; i++) {
-            final int keyLen = data.getInt(tmpBucketOffset);
-            if (keyLen < 0) {
-                System.out.println("keylen");
-            }
+            int keyLen = data.getInt(tmpBucketOffset);
             byte[] bytes = new byte[keyLen];
-            tmpBucketOffset += 4;
+            tmpBucketOffset += 4L;
             data.getBytes(tmpBucketOffset, bytes);
             tmpBucketOffset += keyLen;
             dataObjects[i][0] = new Data(0, bytes);
-            final int recordLen = data.getInt(tmpBucketOffset);
-            if (recordLen < 0) {
-                System.out.println("keylen");
-            }
+            int recordLen = data.getInt(tmpBucketOffset);
             bytes = new byte[recordLen];
-            tmpBucketOffset += 4;
+            tmpBucketOffset += 4L;
             data.getBytes(tmpBucketOffset, bytes);
             tmpBucketOffset += recordLen;
             dataObjects[i][1] = new Data(0, bytes);
         }
         //reset number of elements in this bucket.
-        data.writeInt(bucketStartOffset + 4, 0);
+        data.writeInt(bucketStartOffset + 4L, 0);
         return dataObjects;
     }
 

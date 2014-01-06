@@ -24,7 +24,7 @@ public class TestHashTable extends AbstractTest {
         System.out.println("Filename ---> " + path);
         final HashTable hashTable = new HashTable(path);
         long wDiff = 0;
-        final int size = 10000000;
+        final int size = 100000;
                 //= 1000000 * 50;
         for (int i = 0; i < size; i++) {
             final Data key = getKey();
