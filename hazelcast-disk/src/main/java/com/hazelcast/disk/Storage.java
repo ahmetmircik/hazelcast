@@ -14,9 +14,17 @@ public interface Storage extends Closeable{
 
     void getBytes(long offset, byte[] value);
 
+    byte getByte(long offset);
+
     void writeInt(long offset,int value);
 
     void writeLong(long offset,long value);
 
     void writeBytes(long offset, byte[] value);
+
+    void writeByte(long offset, byte value);
+
+    long size();
+
+    long getFileID();
 }

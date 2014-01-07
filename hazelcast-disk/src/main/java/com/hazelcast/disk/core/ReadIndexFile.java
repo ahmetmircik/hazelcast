@@ -1,19 +1,10 @@
 package com.hazelcast.disk.core;
 
+import com.hazelcast.disk.Storage;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.util.ConcurrencyUtil;
-import com.hazelcast.util.ConstructorFunction;
 
-import java.io.FileNotFoundException;
+import java.io.IOError;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * @author: ahmetmircik
@@ -21,266 +12,116 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class ReadIndexFile {
 
+    private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
+
     private String path;
 
-    private RandomAccessFile indexFile;
-    private FileChannel indexFileChannel;
+    private Storage index;
+    private Storage data;
 
-    private RandomAccessFile dataFile;
-    private FileChannel dataFileChannel;
-
-    private int total;
     int globalDepth;
 
-    int globalCount;
-    long fileLen;
-
+    int count;
 
     public ReadIndexFile(String path) {
         this.path = path;
-        createFiles();
+        index = new MappedView(this.path + ".index", HashTable.INDEX_BLOCK_LENGTH);
+        data = new MappedView(this.path + ".data", HashTable.DATA_BLOCK_LENGTH);
         init();
     }
 
     void init() {
-        fileLen = 0;
-        try {
-            fileLen = indexFile.length();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        final MappedByteBuffer indexFile = getIndexFile(0, fileLen);
-        globalDepth = indexFile.getInt();
-        globalCount = indexFile.getInt();
-        System.out.println("TOTAL------->" + globalCount + " Depth---->"+globalDepth);
+        globalDepth = index.getInt(0);
+        count = index.getInt(4);
+        System.out.println("TOTAL------->" + count + " Depth---->" + globalDepth);
+
+        final int d = data.getInt(0L);
+        final int s = data.getInt(4L);
+
+        System.out.println("d=" + d + " s" + s);
+
     }
 
-    private void createFiles() {
-        try {
-            // index file.
-            this.indexFile = new RandomAccessFile(path + ".index", "rw");
-            this.indexFileChannel = indexFile.getChannel();
-            // data file.
-            this.dataFile = new RandomAccessFile(path + ".data", "rw");
-            this.dataFileChannel = dataFile.getChannel();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-    }
+    public int keyCount = 0;
 
-    private MappedByteBuffer getIndexFile(int offset, long size) {
-        MappedByteBuffer bucket = null;
-        try {
-            bucket = indexFileChannel.map(FileChannel.MapMode.READ_WRITE,
-                    offset, size);
-            bucket.order(ByteOrder.nativeOrder());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return bucket;
-    }
-
-    private MappedByteBuffer getDataFile(long offset, long size) {
-        MappedByteBuffer bucket = null;
-        try {
-            bucket = dataFileChannel.map(FileChannel.MapMode.READ_WRITE,
-                    offset, size);
-            bucket.order(ByteOrder.nativeOrder());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return bucket;
-    }
-
-    //depth of bucket
-    static final int BUCKET_LENGTH = 4 +
-            4 +
-            Bucket.NUMBER_OF_RECORDS * Bucket.SIZE_OF_RECORD;
-    Set<Long> s = new HashSet<Long>();
-
-    public void print() throws IOException {
-
-        System.out.println("-----------" + path + "-----------------------");
-        System.out.println("depth " + globalDepth);
-        System.out.println("count " + globalCount);
-        final MappedByteBuffer indexFile = getIndexFile(0, fileLen);
-        int length = (int) fileLen;
-        length -= 8;
-        System.out.println("hash\t---\taddress");
-        while (length > 0) {
-            final int hash = indexFile.getInt();
-            final long address = indexFile.getLong();
-            if (s.add(address)) {
-                final MappedByteBuffer dataFile = getDataFile(address, BUCKET_LENGTH);
-
-                getRecord(dataFile);
+    public void readSequentially() throws IOException {
+        int x = 0;
+        long size = data.size();
+        final long bucketCount = size / HashTable.BUCKET_LENGTH;
+        for (int i = 0; i < bucketCount; i++) {
+            long address = 1L * i * HashTable.BUCKET_LENGTH;
+            final int bucketDepth = data.getInt(address);
+            final int bucketSize = data.getInt(address += 4);
+            x += bucketSize;
+            for (int j = 0; j < bucketSize; j++) {
+                final int keyLen = data.getInt(address);
+                keyCount++;
+                byte[] arr = new byte[keyLen];
+                data.getBytes(address += 4, arr);
+                final Data keyRead = new Data(0, arr);
+                final int recordLen = data.getInt(address += keyLen);
+                arr = new byte[recordLen];
+                data.getBytes(address += 4, arr);
+                final Data valueRead = new Data(0, arr);
+                address += recordLen;
             }
-
-            System.out.println(hash + "\t---\t" + address);
-            length -= 8;
         }
-        System.out.println("-----------" + path + "-----------------------");
-        System.out.println("total = " + total);
-
-        System.out.println("x = " + s.size());
-
+        System.out.println("bs="+x);
     }
 
-    public void getValue(Data key) {
-        final int index = findSlot(key, globalDepth);
-        final MappedByteBuffer indexFile = ConcurrencyUtil.getOrPutIfAbsent(map, globalDepth, function);
-        indexFile.position((index * 12) + 8 + 4);
-        final int bucketAddress = indexFile.getInt();
-//        MappedByteBuffer bucketByAddress = getBucketByAddress(bucketAddress);
-        MappedByteBuffer bucketByAddress = ConcurrencyUtil.getOrPutIfAbsent(map2, bucketAddress, function2);
-        if (checkExists(key, bucketByAddress)) {
-//           System.out.println("TRUE");
-        } else {
-//            System.out.println("FALSE");
-        }
-    }
-
-    private MappedByteBuffer getBucketByAddress(int address) {
-
-        //depth of bucket
-
-        MappedByteBuffer bucket = null;
-        try {
-            bucket = dataFileChannel.map(FileChannel.MapMode.READ_WRITE,
-                    address,
-                    BUCKET_LENGTH);
-            bucket.order(ByteOrder.nativeOrder());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return bucket;
-    }
-
-    ConcurrentMap map = new ConcurrentHashMap<Integer, MappedByteBuffer>();
-    ConcurrentMap map2 = new ConcurrentHashMap<Integer, MappedByteBuffer>();
-
-    ConstructorFunction<Integer, MappedByteBuffer> function = new ConstructorFunction<Integer, MappedByteBuffer>() {
-
-        @Override
-        public MappedByteBuffer createNew(Integer depth) {
-
-            int acquireSize = (int) (Math.pow(2, depth) * 12);
-            return getIndexFile(0, acquireSize + 8);
-        }
-    };
-
-    ConstructorFunction<Integer, MappedByteBuffer> function2 = new ConstructorFunction<Integer, MappedByteBuffer>() {
-
-        @Override
-        public MappedByteBuffer createNew(Integer address) {
-            return getBucketByAddress(address);
-        }
-    };
-    private static final Hasher<Data, Integer> hasher = Hasher.DATA_HASHER;
-
-    private int findSlot(Data key, int depth) {
-        if (depth == 0) {
-            return 0;
-        }
-        long hash = hasher.hash(key);
-
-        String s = Long.toBinaryString(hash);
-        int length;
-        while ((length = s.length()) < depth) {
-            s = "0" + s;
-        }
-        int i;
-        try {
-            i = Integer.parseInt(s.substring(length - depth < 0 ? length : length - depth), 2);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-
-        }
-        return i;
-        //return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
-
-    }
-
-//    private int makeAddress(Data key, int depth) {
-//        if (depth == 0) {
-//            return 0;
-//        }
-//        byte[] buffer = key.getBuffer();
-//        final long hash = MurmurHash3.murmurhash3x8632(buffer, 0, buffer.length, 129);
-//
-//        String s = Long.toBinaryString(hash);
-//        //log("s",s);
-//        int length = 0;
-//        while ((length = s.length()) < depth) {
-//            s = "0" + s;
-//        }
-//        int i = 0;
-//        try {
-//            i = Integer.parseInt(s.substring(length - depth < 0 ? length : length - depth), 2);
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//
-//        }
-//        return i >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.abs(i);
-//    }
-
-
-    private boolean checkExists(Data key, MappedByteBuffer bucket) {
-        final int bucketDepth = bucket.getInt();
-        final int numberOfElements = bucket.getInt();
-        for (int i = 0; i < numberOfElements; i++) {
-            final int keyLen = bucket.getInt();
-            byte[] bytes = new byte[keyLen];
-            bucket.get(bytes);
-            Data keyGot = new Data(0, bytes);
-            if (key.equals(keyGot)) {
-                bucket.position(0);
-                return true;
+    public Data getData(Data key) {
+        final int slot = findSlot(key, globalDepth);
+        long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
+        final int bucketDepth = data.getInt(0L);
+//        System.out.println("[d\t:"+bucketDepth+"]" +slot + "[" +key.hashCode()+"]" + "["+globalDepth+"]");
+        final int bucketSize = data.getInt(address += 4L);
+//        System.out.println("bucketSize\t"+bucketSize);
+        address += 4;
+        for (int j = 0; j < bucketSize; j++) {
+            final int keyLen = data.getInt(address);
+//            System.out.println("keyLen\t"+keyLen);
+            byte[] arr = new byte[keyLen];
+            data.getBytes(address += 4, arr);
+            final Data keyRead = new Data(0, arr);
+            final int recordLen = data.getInt(address += keyLen);
+//            System.out.println("recordLen\t"+recordLen);
+            if (key.equals(keyRead)) {
+                arr = new byte[recordLen];
+                address += 4;
+                data.getBytes(address, arr);
+                return new Data(0, arr);
+            } else {
+                address += (recordLen + 4);
             }
-            int recordLen = bucket.getInt();
-            bucket.position(bucket.position() + recordLen);
         }
-        bucket.position(0);
-        return false;
 
+        return null;
     }
 
-    private void getRecord(MappedByteBuffer bucket) {
-        final int bucketDepth = bucket.getInt();
-        final int numberOfElements = bucket.getInt();
-        //System.out.println(numberOfElements);
-        total += numberOfElements;
-        for (int i = 0; i < numberOfElements; i++) {
-            final int keyLen = bucket.getInt();
-            byte[] bytes = new byte[keyLen];
-            bucket.get(bytes);
-            Data keyGot = new Data(0, bytes);
-            final int recordLen = bucket.getInt();
-            bytes = new byte[recordLen];
-            bucket.get(bytes);
-            Data recordGot = new Data(0, bytes);
-//            System.out.println("keyGot "+keyGot.getBuffer().length);
-//            System.out.println("recordGot "+recordGot.getBuffer().length);
-        }
+    private long bucketAddressOffsetInIndexFile(int slot) {
+        return (slot * 12L) + 8 + 4;
+    }
 
-
+    public int getCount() {
+        return count;
     }
 
     public void close() {
         try {
-            indexFileChannel.close();
-            indexFile.close();
+            index.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new IOError(e);
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        final ReadIndexFile readIndexFile = new ReadIndexFile("293959660");
-        readIndexFile.print();
+    //todo what if depth > 0?
+    private int findSlot(Data key, int depth) {
+        if (depth == 0) {
+            return 0;
+        }
+        final int hash = HASHER.hash(key);
+        return ((hash & (0xFFFFFFFF >>> (32 - depth))));
+
     }
 
 }
