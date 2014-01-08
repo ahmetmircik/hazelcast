@@ -171,8 +171,6 @@ public class HashTable2 implements Closeable {
                 //if no need to create bucket, just point old bucket.
                 index.writeLong(bucketAddressOffsetInIndexFile, address);
             }
-
-
         }
     }
 
