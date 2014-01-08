@@ -38,7 +38,7 @@ public class HashTable2 implements Closeable {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     private static final int NUMBER_OF_RECORDS = 20;
-    private static final int KVP_TOTAL_SIZE = 512 + 16;//KVP
+    private static final int KVP_TOTAL_SIZE = 1024 + 16;//KVP
     private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
     public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
     public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);
