@@ -25,7 +25,8 @@ public class TestHashTable extends AbstractTest {
 
         final String path = getDirName();
         test(path);
-        read(path);
+//        read(path);
+        readCompare(path);
 //        read("191744149");
 
     }
@@ -35,7 +36,7 @@ public class TestHashTable extends AbstractTest {
 
         final HashTable2 hashTable = new HashTable2(path);
         long wDiff = 0;
-        final int size = 7;
+        final int size = 1000000;
         for (int i = 0; i < size; i++) {
             final Data key = getKey();
             final Data value = getValue();

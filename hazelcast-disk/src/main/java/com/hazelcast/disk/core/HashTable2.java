@@ -40,8 +40,8 @@ import java.util.Queue;
 public class HashTable2 implements Closeable {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
-    private static final int NUMBER_OF_RECORDS = 2;
-    private static final int KVP_TOTAL_SIZE = 1024 + 16;//KVP
+    private static final int NUMBER_OF_RECORDS = 20;
+    private static final int KVP_TOTAL_SIZE = 512 + 16;//KVP
     private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
     public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
     public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 10);
@@ -70,8 +70,7 @@ public class HashTable2 implements Closeable {
             data.writeInt(4, 0);
             index.writeInt(0, globalDepth);  //depth
             index.writeInt(4, 0);  //count
-            index.writeInt(8, 0);  //hash
-            index.writeLong(12, 0L); //address
+            index.writeLong(8, 0L); //address
         }
     }
 
@@ -160,7 +159,6 @@ public class HashTable2 implements Closeable {
         for (int i = 0; i < numberOfSlots; i++) {
             final long address = index.getLong(bucketAddressOffsetInIndexFile(i));
             final int siblingSlot = globalDepth == 1 ? 1 : Integer.valueOf("1" + toBinary(i, globalDepth - 1), 2);
-            index.writeInt((siblingSlot * 12L) + 8, siblingSlot);
             if (i == slot) {
                 //old bucket
                 data.writeInt(address, globalDepth);
@@ -178,8 +176,9 @@ public class HashTable2 implements Closeable {
         }
     }
 
-    //todo what if depth > 0?
+    //todo what if depth > 31?
     private int findSlot(Data key, int depth) {
+        if(depth > 31) throw new IllegalArgumentException("depth is not supported\t:" + depth);
         if (depth == 0) {
             return 0;
         }
@@ -262,7 +261,7 @@ public class HashTable2 implements Closeable {
 
 
     private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 12L) + 8 + 4;
+        return (slot * 8L) + 8;
     }
 
     @Override

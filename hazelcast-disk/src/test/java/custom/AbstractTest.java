@@ -18,7 +18,7 @@ public abstract class AbstractTest {
     }
 
     public static Data getValue() {
-        return getKey(1024);
+        return getKey(512);
     }
 
     public static Data getKey(int size) {
