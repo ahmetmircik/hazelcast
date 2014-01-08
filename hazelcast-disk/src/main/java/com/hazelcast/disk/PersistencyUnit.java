@@ -1,13 +1,19 @@
 package com.hazelcast.disk;
 
-import java.io.IOException;
+import com.hazelcast.nio.serialization.Data;
+
+import java.io.Closeable;
 
 /**
  * @author: ahmetmircik
  * Date: 12/20/13
  */
-public interface PersistencyUnit<Unit> {
+public abstract class PersistencyUnit implements Closeable {
 
-    Unit createNew() throws IOException;
+    public abstract Data put(Data key, Data value);
+
+    public abstract Data get(Data key);
+
+    public abstract Data remove(Data key);
 
 }

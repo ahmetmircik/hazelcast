@@ -1,11 +1,14 @@
 package com.hazelcast.disk.core;
 
+import com.hazelcast.disk.PersistencyUnit;
 import com.hazelcast.disk.Storage;
 import com.hazelcast.nio.serialization.Data;
 
-import java.io.Closeable;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.Queue;
 
 /**
  * @author: ahmetmircik
@@ -34,7 +37,7 @@ import java.util.*;
  * ...
  * ...
  */
-public class HashTable2 implements Closeable {
+public class HashTable2 extends PersistencyUnit {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     private static final int NUMBER_OF_RECORDS = 20;
@@ -71,8 +74,9 @@ public class HashTable2 implements Closeable {
         }
     }
 
-    public void put(Data keyIn, Data valueIn) {
-        //todo what is most appropriate here?
+    @Override
+    public Data put(Data keyIn, Data valueIn) {
+        //todo what is most appropriate data structure here?
         final Deque<Data> stack = new LinkedList<Data>();
         stack.offerFirst(valueIn);
         stack.offerFirst(keyIn);
@@ -89,7 +93,7 @@ public class HashTable2 implements Closeable {
 
             if (bucketElementsCount == NUMBER_OF_RECORDS) {
                 if (bucketDepth < globalDepth) {
-                    final int[] addressList = newRange0(slot, bucketDepth);
+                    final int[] addressList = newRange2(slot, bucketDepth);
                     ++bucketDepth;
                     //write buckets new depth.
                     data.writeInt(bucketAddress, bucketDepth);
@@ -146,6 +150,67 @@ public class HashTable2 implements Closeable {
                 totalCount += 1;
             }
         }
+
+        // todo should return previous???
+        return null;
+    }
+
+
+    @Override
+    public Data get(Data key) {
+        final int slot = findSlot(key, globalDepth);
+        long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
+        final int bucketSize = data.getInt(address += 4);
+        address += 4;
+        for (int j = 0; j < bucketSize; j++) {
+            final int keyLen = data.getInt(address);
+            byte[] arr = new byte[keyLen];
+            data.getBytes(address += 4, arr);
+            final Data keyRead = new Data(0, arr);
+            final int recordLen = data.getInt(address += keyLen);
+            if(key.equals(keyRead)){
+                arr = new byte[recordLen];
+                data.getBytes(address += 4, arr);
+                final Data valueRead = new Data(0, arr);
+                address += recordLen;
+                return valueRead;
+            }
+            else {
+                address += 4;
+                address += recordLen;
+
+            }
+
+        }
+        return null;
+    }
+
+    @Override
+    public Data remove(Data key) {
+        final int slot = findSlot(key, globalDepth);
+        long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
+        final int bucketSize = data.getInt(address += 4);
+        address += 4;
+        for (int j = 0; j < bucketSize; j++) {
+            final int keyLen = data.getInt(address);
+            byte[] arr = new byte[keyLen];
+            data.getBytes(address += 4, arr);
+            final Data keyRead = new Data(0, arr);
+            final int recordLen = data.getInt(address += keyLen);
+            if(key.equals(keyRead)){
+                arr = new byte[recordLen];
+                data.getBytes(address += 4, arr);
+                final Data valueRead = new Data(0, arr);
+                address += recordLen;
+                return valueRead;
+            }
+            else {
+                address += 4;
+                address += recordLen;
+
+            }
+        }
+        return null;
     }
 
     private void split(int slot) {
@@ -185,6 +250,35 @@ public class HashTable2 implements Closeable {
 
     }
 
+
+    private int[] newRange2(int index, int bucketDepth) {
+        ++bucketDepth;
+        int lastNBits = ((index & (0xFFFFFFFF >>> (32 - (bucketDepth)))));
+        lastNBits |= (int) Math.pow(2, bucketDepth - 1);
+
+        int[] x = new int[(int) Math.pow(2, globalDepth - bucketDepth)];
+        for (int i = 0; i < x.length; i++) {
+            x[i] = -1;
+        }
+        x[0] = lastNBits;
+
+        while (globalDepth - bucketDepth > 0) {
+            final int mask = (int) Math.pow(2, bucketDepth);
+            final int pow = (int) Math.pow(2, globalDepth - bucketDepth - 1);
+            for (int i = 0; i < x.length; i+=pow) {
+                if (x[i] == -1) continue;
+                final Integer param = x[i];
+                x[i] = (param | mask);
+                x[i+=pow] = (param & ~mask);
+            }
+
+            bucketDepth++;
+        }
+        Arrays.sort(x);
+        return x;
+    }
+
+
     private int[] newRange0(int index, final int bucketDepth) {
         final int diff = globalDepth - bucketDepth;
         final String binary = toBinary(index, globalDepth);
@@ -205,29 +299,6 @@ public class HashTable2 implements Closeable {
         return addressList;
     }
 
-    //    private Integer[] newRange1(int index, int bucketDepth) {
-//        ++bucketDepth;
-//        int lastNBits = ((index & (0xFFFFFFFF >>> (32 - (bucketDepth)))));
-//        lastNBits |= (int) Math.pow(2, bucketDepth -1);
-//
-//        final Queue<Integer> strings = new LinkedList<Integer>();
-//        strings.add(lastNBits);
-//        while (!strings.isEmpty() && globalDepth - bucketDepth > 0) {
-//            final Integer[] integers = strings.toArray(new Integer[strings.size()]);
-//            strings.clear();
-//
-//            for (int i = 0; i < integers.length; i++) {
-//                final int mask = (int) Math.pow(2, bucketDepth);
-//                final Integer param = integers[i];
-//                strings.add(param | mask);
-//                strings.add(param & ~mask);
-//            }
-//            bucketDepth++;
-//        }
-//        final Integer[] integers = strings.toArray(new Integer[strings.size()]);
-//        Arrays.sort(integers);
-//        return  integers;
-//    }
     private  int[] newRange1(int index, int bucketDepth) {
         ++bucketDepth;
         int lastNBits = ((index & (0xFFFFFFFF >>> (32 - (bucketDepth)))));
