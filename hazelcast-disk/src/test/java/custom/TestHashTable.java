@@ -36,7 +36,7 @@ public class TestHashTable extends AbstractTest {
 
         final HashTable2 hashTable = new HashTable2(path);
         long wDiff = 0;
-        final int size = 1000000;
+        final int size = 1000 * 100;
         for (int i = 0; i < size; i++) {
             final Data key = getKey();
             final Data value = getValue();

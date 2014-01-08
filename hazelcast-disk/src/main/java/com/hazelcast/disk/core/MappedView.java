@@ -325,51 +325,51 @@ public class MappedView implements Storage {
     }
 
     private static byte int3(int x) {
-        return (byte) (x >> 24);
+        return (byte) (x >>> 24);
     }
 
     private static byte int2(int x) {
-        return (byte) (x >> 16);
+        return (byte) (x >>> 16);
     }
 
     private static byte int1(int x) {
-        return (byte) (x >> 8);
+        return (byte) (x >>> 8);
     }
 
     private static byte int0(int x) {
-        return (byte) (x >> 0);
+        return (byte) (x >>> 0);
     }
 
     private static byte long7(long x) {
-        return (byte) (x >> 56);
+        return (byte) (x >>> 56);
     }
 
     private static byte long6(long x) {
-        return (byte) (x >> 48);
+        return (byte) (x >>> 48);
     }
 
     private static byte long5(long x) {
-        return (byte) (x >> 40);
+        return (byte) (x >>> 40);
     }
 
     private static byte long4(long x) {
-        return (byte) (x >> 32);
+        return (byte) (x >>> 32);
     }
 
     private static byte long3(long x) {
-        return (byte) (x >> 24);
+        return (byte) (x >>> 24);
     }
 
     private static byte long2(long x) {
-        return (byte) (x >> 16);
+        return (byte) (x >>> 16);
     }
 
     private static byte long1(long x) {
-        return (byte) (x >> 8);
+        return (byte) (x >>> 8);
     }
 
     private static byte long0(long x) {
-        return (byte) (x >> 0);
+        return (byte) (x >>> 0);
     }
 
     private static int makeInt(byte b3, byte b2, byte b1, byte b0) {
