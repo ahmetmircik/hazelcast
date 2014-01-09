@@ -26,5 +26,5 @@ public interface Storage extends Closeable{
 
     long size();
 
-    long getFileID();
+    void flush();
 }

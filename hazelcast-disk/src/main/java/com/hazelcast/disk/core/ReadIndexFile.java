@@ -32,8 +32,8 @@ public class ReadIndexFile {
     }
 
     void init() {
-        globalDepth = index.getInt(0);
-        count = index.getInt(4);
+        globalDepth = index.getInt(0L);
+        count = index.getInt(4L);
         System.out.println("TOTAL------->" + count + " Depth---->" + globalDepth);
 
         final int d = data.getInt(0L);
@@ -54,18 +54,18 @@ public class ReadIndexFile {
             long address = index.getLong(bucketAddressOffsetInIndexFile(i));
             if(!longs.add(address))continue;
             final int bucketDepth = data.getInt(address);
-            final int bucketSize = data.getInt(address += 4);
-            address += 4;
+            final int bucketSize = data.getInt(address += 4L);
+            address += 4L;
             x += bucketSize;
             for (int j = 0; j < bucketSize; j++) {
                 final int keyLen = data.getInt(address);
                 keyCount++;
                 byte[] arr = new byte[keyLen];
-                data.getBytes(address += 4, arr);
+                data.getBytes(address += 4L, arr);
                 final Data keyRead = new Data(0, arr);
                 final int recordLen = data.getInt(address += keyLen);
                 arr = new byte[recordLen];
-                data.getBytes(address += 4, arr);
+                data.getBytes(address += 4L, arr);
                 final Data valueRead = new Data(0, arr);
                 address += recordLen;
             }
@@ -76,24 +76,24 @@ public class ReadIndexFile {
     public Data getData(Data key) {
         final int slot = findSlot(key, globalDepth);
         long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
-        final int bucketSize = data.getInt(address += 4);
-        address += 4;
+        final int bucketSize = data.getInt(address += 4L);
+        address += 4L;
         for (int j = 0; j < bucketSize; j++) {
             final int keyLen = data.getInt(address);
             keyCount++;
             byte[] arr = new byte[keyLen];
-            data.getBytes(address += 4, arr);
+            data.getBytes(address += 4L, arr);
             final Data keyRead = new Data(0, arr);
             final int recordLen = data.getInt(address += keyLen);
             if(key.equals(keyRead)){
                 arr = new byte[recordLen];
-                data.getBytes(address += 4, arr);
+                data.getBytes(address += 4L, arr);
                 final Data valueRead = new Data(0, arr);
                 address += recordLen;
                 return new Data(0,arr);
             }
             else {
-                address += 4;
+                address += 4L;
                 address += recordLen;
 
             }
@@ -104,7 +104,7 @@ public class ReadIndexFile {
     }
 
     private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 8L) + 8;
+        return (slot * 8L) + 8L;
     }
 
     public int getCount() {

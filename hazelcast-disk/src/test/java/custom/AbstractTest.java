@@ -14,21 +14,23 @@ public abstract class AbstractTest {
     private static final int K = 1024;
 
     public static Data getKey() {
-        return getKey(16);
+        return getData(8);
     }
 
     public static Data getValue() {
-        return getKey(1024);
+        return getData(16);
     }
 
     public static Data getKey(int size) {
-        byte[] pop = new byte[size];
-        RANDOM.nextBytes(pop);
-        return new Data(0, pop);
+        return getData(size);
     }
 
 
     public static Data getValue(int size) {
+        return getData(size);
+    }
+
+    private static Data getData(int size) {
         byte[] pop = new byte[size];
         RANDOM.nextBytes(pop);
         return new Data(0, pop);

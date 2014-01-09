@@ -16,4 +16,6 @@ public abstract class PersistencyUnit implements Closeable {
 
     public abstract Data remove(Data key);
 
+    public abstract void flush();
+
 }

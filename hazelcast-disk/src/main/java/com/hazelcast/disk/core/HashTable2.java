@@ -2,6 +2,7 @@ package com.hazelcast.disk.core;
 
 import com.hazelcast.disk.PersistencyUnit;
 import com.hazelcast.disk.Storage;
+import com.hazelcast.disk.Utils;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.IOException;
@@ -40,12 +41,12 @@ import java.util.Queue;
 public class HashTable2 extends PersistencyUnit {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
-    private static final int NUMBER_OF_RECORDS = 20;
-    private static final int KVP_TOTAL_SIZE = 1024 + 16;//KVP
+    private static final int NUMBER_OF_RECORDS = 16;
+    private static final int KVP_TOTAL_SIZE = 16 + 512;//KVP
     private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
-    public static final int BUCKET_LENGTH = 4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD);
-    public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);
-    public static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 30);
+    private static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
+    private static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 10);
+    private static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 16);
 
 
     private final String path;
@@ -54,6 +55,7 @@ public class HashTable2 extends PersistencyUnit {
     private int globalDepth;
     private int totalCount = 0;
 
+
     public HashTable2(String path) {
         this.path = path;
         data = new MappedView(this.path + ".data", DATA_BLOCK_LENGTH);
@@ -61,6 +63,8 @@ public class HashTable2 extends PersistencyUnit {
         init();
         System.out.println("BUCKET_LENGTH\t" + BUCKET_LENGTH);
     }
+
+    long lastBucketPosition = 0;
 
     private void init() {
         globalDepth = index.getInt(0);
@@ -71,6 +75,9 @@ public class HashTable2 extends PersistencyUnit {
             index.writeInt(0, globalDepth);  //depth
             index.writeInt(4, 0);  //count
             index.writeLong(8, 0L); //address
+        }
+        else {
+            lastBucketPosition = data.size();
         }
     }
 
@@ -89,7 +96,7 @@ public class HashTable2 extends PersistencyUnit {
             final int slot = findSlot(key, globalDepth);
             final long bucketAddress = index.getLong(bucketAddressOffsetInIndexFile(slot));
             int bucketDepth = data.getInt(bucketAddress);
-            int bucketElementsCount = data.getInt(bucketAddress + 4);
+            int bucketElementsCount = data.getInt(bucketAddress + 4L);
 
             if (bucketElementsCount == NUMBER_OF_RECORDS) {
                 if (bucketDepth < globalDepth) {
@@ -98,10 +105,9 @@ public class HashTable2 extends PersistencyUnit {
                     //write buckets new depth.
                     data.writeInt(bucketAddress, bucketDepth);
                     // create new bucket.
-                    final int createIndexAt = addressList[0];
-                    final long newBucketAddress = createNewBucketAddress(createIndexAt);
+                    final long newBucketAddress = createNewBucketAddress();
                     data.writeInt(newBucketAddress, bucketDepth);
-                    data.writeInt(newBucketAddress + 4, 0); //number of records.
+                    data.writeInt(newBucketAddress + 4L, 0); //number of records.
                     //update buddies.
                     for (final int asIndex : addressList) {
                         index.writeLong(bucketAddressOffsetInIndexFile(asIndex), newBucketAddress);
@@ -127,25 +133,25 @@ public class HashTable2 extends PersistencyUnit {
                             + SIZE_OF_RECORD);
                 }
                 long tmpBucketAddress = bucketAddress;
-                tmpBucketAddress += 8;
+                tmpBucketAddress += 8L;
                 for (int i = 0; i < bucketElementsCount; i++) {
                     int keyLength = data.getInt(tmpBucketAddress);
-                    tmpBucketAddress += (keyLength + 4);
+                    tmpBucketAddress += (keyLength + 4L);
                     int valueLength = data.getInt(tmpBucketAddress);
-                    tmpBucketAddress += (valueLength + 4);
+                    tmpBucketAddress += (valueLength + 4L);
                 }
                 final int keyLength = key.getBuffer().length;
                 data.writeInt(tmpBucketAddress, keyLength);
-                tmpBucketAddress += 4;
+                tmpBucketAddress += 4L;
                 data.writeBytes(tmpBucketAddress, key.getBuffer());
                 tmpBucketAddress += keyLength;
                 Data keyTmp = stack.pollFirst();
                 Data value = stack.pollFirst();
                 final int valueLength = value.getBuffer().length;
                 data.writeInt(tmpBucketAddress, valueLength);
-                tmpBucketAddress += 4;
+                tmpBucketAddress += 4L;
                 data.writeBytes(tmpBucketAddress, value.getBuffer());
-                data.writeInt(bucketAddress + 4, ++bucketElementsCount);
+                data.writeInt(bucketAddress + 4L, ++bucketElementsCount);
 
                 totalCount += 1;
             }
@@ -176,7 +182,7 @@ public class HashTable2 extends PersistencyUnit {
                 return valueRead;
             }
             else {
-                address += 4;
+                address += 4L;
                 address += recordLen;
 
             }
@@ -185,12 +191,13 @@ public class HashTable2 extends PersistencyUnit {
         return null;
     }
 
+    //todo
     @Override
     public Data remove(Data key) {
         final int slot = findSlot(key, globalDepth);
         long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
         final int bucketSize = data.getInt(address += 4);
-        address += 4;
+        address += 4L;
         for (int j = 0; j < bucketSize; j++) {
             final int keyLen = data.getInt(address);
             byte[] arr = new byte[keyLen];
@@ -205,12 +212,30 @@ public class HashTable2 extends PersistencyUnit {
                 return valueRead;
             }
             else {
-                address += 4;
+                address += 4L;
                 address += recordLen;
 
             }
         }
         return null;
+    }
+
+    @Override
+    public void flush() {
+        data.flush();
+        index.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+        System.out.println("globalDepth\t:" + globalDepth);
+        System.out.println("totalCount\t:" + totalCount);
+        index.writeInt(0L, globalDepth);
+        index.writeInt(4L, totalCount);
+
+
+        index.close();
+        data.close();
     }
 
     private void split(int slot) {
@@ -226,10 +251,10 @@ public class HashTable2 extends PersistencyUnit {
                 //old bucket
                 data.writeInt(address, globalDepth);
                 //new buckets  depth
-                final long newBucketsAddress = createNewBucketAddress(siblingSlot);
+                final long newBucketsAddress = createNewBucketAddress();
                 data.writeInt(newBucketsAddress, globalDepth);
                 //new buckets  number of records.
-                data.writeInt(newBucketsAddress + 4, 0);
+                data.writeInt(newBucketsAddress + 4L, 0);
                 //update index file.
                 index.writeLong(bucketAddressOffsetInIndexFile, newBucketsAddress);
             } else {
@@ -356,8 +381,8 @@ public class HashTable2 extends PersistencyUnit {
         return s;
     }
 
-    private long createNewBucketAddress(int slot) {
-        return 1L * slot * BUCKET_LENGTH;
+    private long createNewBucketAddress() {
+        return lastBucketPosition += BUCKET_LENGTH;
     }
 
     private Data[][] getKeyValuePairs(final long bucketStartOffset) {
@@ -384,18 +409,7 @@ public class HashTable2 extends PersistencyUnit {
 
 
     private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 8L) + 8;
+        return (slot * 8L) + 8L;
     }
 
-    @Override
-    public void close() throws IOException {
-        System.out.println("globalDepth\t:" + globalDepth);
-        System.out.println("totalCount\t:" + totalCount);
-        index.writeInt(0L, globalDepth);
-        index.writeInt(4L, totalCount);
-
-
-        index.close();
-        data.close();
-    }
 }

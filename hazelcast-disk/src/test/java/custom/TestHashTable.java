@@ -24,10 +24,10 @@ public class TestHashTable extends AbstractTest {
     public static void main(String[] args) throws IOException {
 
         final String path = getDirName();
-        test(path);
+//        test(path);
 //        read(path);
-        readCompare(path);
-//        read("191744149");
+//        readCompare(path);
+        read("-1359722348");
 
     }
 //count-->50000000 write avg--> 3241
@@ -36,14 +36,14 @@ public class TestHashTable extends AbstractTest {
 
         final HashTable2 hashTable = new HashTable2(path);
         long wDiff = 0;
-        final int size = 1000 * 100;
+        final int size = 1000000;
         for (int i = 0; i < size; i++) {
-            final Data key = getKey();
-            final Data value = getValue();
+            final Data key = getKey(16);
+            final Data value = getValue(512);
             long l1 = System.nanoTime();
             hashTable.put(key, value);
             wDiff += System.nanoTime() - l1;
-            mapData.put(key, value);
+//            mapData.put(key, value);
         }
 
 
