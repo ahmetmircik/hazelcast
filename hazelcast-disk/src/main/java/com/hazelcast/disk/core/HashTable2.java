@@ -70,15 +70,12 @@ public class HashTable2 extends PersistencyUnit {
         lastBucketPosition = data.size();
         globalDepth = index.getInt(0);
         totalCount = index.getInt(4);
-        if (globalDepth == 0) {
-            data.writeInt(0, 0);
-            data.writeInt(4, 0);
+        if (globalDepth == 0 && totalCount == 0) {
             index.writeInt(0, globalDepth);  //depth
-            index.writeInt(4, 0);  //count
-            index.writeLong(8, 0L); //address
         }
     }
 
+    //todo put big data with linked records?
     @Override
     public Data put(Data keyIn, Data valueIn) {
         //todo what is most appropriate data structure here?

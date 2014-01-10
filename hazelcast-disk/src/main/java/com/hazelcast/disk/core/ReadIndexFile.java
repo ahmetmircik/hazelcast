@@ -54,7 +54,7 @@ public class ReadIndexFile {
         long size = data.size();
         final HashSet<Long> longs = new HashSet<Long>();
         for (int i = 0; i < size/HashTable2.BUCKET_LENGTH; i++) {
-            long address = i * HashTable2.BUCKET_LENGTH;
+            long address = 1L * i * HashTable2.BUCKET_LENGTH;
             final long log = address;
             if(!longs.add(address))continue;
             final int bucketDepth = data.getInt(address);
@@ -76,7 +76,7 @@ public class ReadIndexFile {
 //                System.out.println(keyRead.hashCode() + "---" + log);
 
 
-                dataDataHashMap.put(keyRead,valueRead);
+                //dataDataHashMap.put(keyRead,valueRead);
             }
         }
         System.out.println("bs=" + x);
