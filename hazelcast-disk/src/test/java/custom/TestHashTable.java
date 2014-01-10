@@ -24,10 +24,9 @@ public class TestHashTable extends AbstractTest {
     public static void main(String[] args) throws IOException {
 
         final String path = getDirName();
-//        test(path);
-//        read(path);
+        test(path);
+        read(path);
 //        readCompare(path);
-        read("-1359722348");
 
     }
 //count-->50000000 write avg--> 3241
@@ -36,14 +35,14 @@ public class TestHashTable extends AbstractTest {
 
         final HashTable2 hashTable = new HashTable2(path);
         long wDiff = 0;
-        final int size = 1000000;
+        final int size = 120;
         for (int i = 0; i < size; i++) {
             final Data key = getKey(16);
             final Data value = getValue(512);
             long l1 = System.nanoTime();
             hashTable.put(key, value);
             wDiff += System.nanoTime() - l1;
-//            mapData.put(key, value);
+            mapData.put(key, value);
         }
 
 
@@ -78,14 +77,31 @@ public class TestHashTable extends AbstractTest {
     }
 
     public static void read(String path) throws IOException {
-        long l1 = System.nanoTime();
 
+        long l1=0 ;
         final ReadIndexFile readIndexFile = new ReadIndexFile(path);
-        readIndexFile.readSequentially();
+        final Map<Data, Data> dataDataMap = readIndexFile.readSequentially();
+        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
+            long start = System.nanoTime();
+            final Data data = dataDataMap.get(entry.getKey());
+            long diff =System.nanoTime()-start;
+            l1+=diff;
+
+            final Data value = entry.getValue();
+            try {
+                if (!value.equals(data)) {
+                    throw new RuntimeException("should be equal...");
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
         System.out.println("key count " + readIndexFile.keyCount);
 
         final int count = readIndexFile.getCount();
-        final long l = (System.nanoTime() - l1) / count;
+        final long l = l1 / count;
         System.out.println("count-->" + count + " read avg--> " + l);
 
 
