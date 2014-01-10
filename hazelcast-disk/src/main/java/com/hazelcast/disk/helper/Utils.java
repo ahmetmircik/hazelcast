@@ -1,4 +1,4 @@
-package com.hazelcast.disk;
+package com.hazelcast.disk.helper;
 
 /**
  * @author: ahmetmircik

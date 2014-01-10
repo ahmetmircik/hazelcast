@@ -2,7 +2,7 @@ package com.hazelcast.disk.core;
 
 import com.hazelcast.disk.PersistencyUnit;
 import com.hazelcast.disk.Storage;
-import com.hazelcast.disk.Utils;
+import com.hazelcast.disk.helper.Utils;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.IOException;
@@ -41,12 +41,12 @@ import java.util.Queue;
 public class HashTable2 extends PersistencyUnit {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
-    private static final int NUMBER_OF_RECORDS = 16;
+    private static final int NUMBER_OF_RECORDS = 20;
     private static final int KVP_TOTAL_SIZE = 16 + 512;//KVP
     private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
-    private static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
-    private static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 10);
-    private static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 16);
+    public static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
+    public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);//64KB
+    public static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 22);//512KB
 
 
     private final String path;
@@ -67,6 +67,7 @@ public class HashTable2 extends PersistencyUnit {
     long lastBucketPosition = 0;
 
     private void init() {
+        lastBucketPosition = data.size();
         globalDepth = index.getInt(0);
         totalCount = index.getInt(4);
         if (globalDepth == 0) {
@@ -75,9 +76,6 @@ public class HashTable2 extends PersistencyUnit {
             index.writeInt(0, globalDepth);  //depth
             index.writeInt(4, 0);  //count
             index.writeLong(8, 0L); //address
-        }
-        else {
-            lastBucketPosition = data.size();
         }
     }
 
@@ -100,6 +98,7 @@ public class HashTable2 extends PersistencyUnit {
 
             if (bucketElementsCount == NUMBER_OF_RECORDS) {
                 if (bucketDepth < globalDepth) {
+//                    printIndexFile();
                     final int[] addressList = newRange2(slot, bucketDepth);
                     ++bucketDepth;
                     //write buckets new depth.
@@ -112,6 +111,7 @@ public class HashTable2 extends PersistencyUnit {
                     for (final int asIndex : addressList) {
                         index.writeLong(bucketAddressOffsetInIndexFile(asIndex), newBucketAddress);
                     }
+//                    printIndexFile();
                 } else {
                     split(slot);
                 }
@@ -154,11 +154,28 @@ public class HashTable2 extends PersistencyUnit {
                 data.writeInt(bucketAddress + 4L, ++bucketElementsCount);
 
                 totalCount += 1;
+
             }
+//            System.out.println(key.hashCode() +" ==== " +bucketAddress);
         }
 
+//        printIndexFile();
         // todo should return previous???
         return null;
+    }
+
+    void printIndexFile(){
+
+        final int numberOfSlots = (int) Math.pow(2, globalDepth);
+        int depth = index.getInt(0);
+        int count = index.getInt(4);
+        System.out.println("======================");
+        System.out.println("depth = "+globalDepth);
+        System.out.println("count = "+totalCount);
+        for (int i = 0; i < numberOfSlots; i++) {
+            System.out.println("["+i+"]"+index.getLong(bucketAddressOffsetInIndexFile(i)));
+        }
+        System.out.println("======================");
     }
 
 
@@ -233,7 +250,7 @@ public class HashTable2 extends PersistencyUnit {
         index.writeInt(0L, globalDepth);
         index.writeInt(4L, totalCount);
 
-
+//        printIndexFile();
         index.close();
         data.close();
     }
@@ -246,7 +263,7 @@ public class HashTable2 extends PersistencyUnit {
         for (int i = 0; i < numberOfSlots; i++) {
             final long address = index.getLong(bucketAddressOffsetInIndexFile(i));
             final int siblingSlot = i + numberOfSlots;
-            final long bucketAddressOffsetInIndexFile = bucketAddressOffsetInIndexFile(siblingSlot);
+            final long bucketAddressPosition = bucketAddressOffsetInIndexFile(siblingSlot);
             if (i == slot) {
                 //old bucket
                 data.writeInt(address, globalDepth);
@@ -256,10 +273,10 @@ public class HashTable2 extends PersistencyUnit {
                 //new buckets  number of records.
                 data.writeInt(newBucketsAddress + 4L, 0);
                 //update index file.
-                index.writeLong(bucketAddressOffsetInIndexFile, newBucketsAddress);
+                index.writeLong(bucketAddressPosition, newBucketsAddress);
             } else {
                 //if no need to create bucket, just point old bucket.
-                index.writeLong(bucketAddressOffsetInIndexFile, address);
+                index.writeLong(bucketAddressPosition, address);
             }
         }
     }
@@ -343,9 +360,9 @@ public class HashTable2 extends PersistencyUnit {
                 x[i] = (param | mask);
                 int g = 0;
                 for (int j = 0; j < x.length; j++) {
-                   if(x[j] == -1){
-                      g =j;
-                   }
+                    if(x[j] == -1){
+                        g =j;
+                    }
                 }
                 x[g] = (param & ~mask);
             }
@@ -382,7 +399,7 @@ public class HashTable2 extends PersistencyUnit {
     }
 
     private long createNewBucketAddress() {
-        return lastBucketPosition += BUCKET_LENGTH;
+        return lastBucketPosition += BUCKET_LENGTH * 1L;
     }
 
     private Data[][] getKeyValuePairs(final long bucketStartOffset) {
@@ -395,13 +412,13 @@ public class HashTable2 extends PersistencyUnit {
             byte[] bytes = new byte[keyLen];
             tmpBucketOffset += 4L;
             data.getBytes(tmpBucketOffset, bytes);
-            tmpBucketOffset += keyLen;
+            tmpBucketOffset += keyLen * 1L;
             dataObjects[i][0] = new Data(0, bytes);
             int recordLen = data.getInt(tmpBucketOffset);
             bytes = new byte[recordLen];
             tmpBucketOffset += 4L;
             data.getBytes(tmpBucketOffset, bytes);
-            tmpBucketOffset += recordLen;
+            tmpBucketOffset += recordLen * 1L;
             dataObjects[i][1] = new Data(0, bytes);
         }
         return dataObjects;
@@ -409,7 +426,7 @@ public class HashTable2 extends PersistencyUnit {
 
 
     private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 8L) + 8L;
+        return 1L * (slot << 3) + 8L;
     }
 
 }

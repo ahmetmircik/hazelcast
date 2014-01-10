@@ -5,7 +5,9 @@ import com.hazelcast.nio.serialization.Data;
 
 import java.io.IOError;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 /**
  * @author: ahmetmircik
@@ -26,8 +28,8 @@ public class ReadIndexFile {
 
     public ReadIndexFile(String path) {
         this.path = path;
-        index = new MappedView(this.path + ".index", HashTable.INDEX_BLOCK_LENGTH);
-        data = new MappedView(this.path + ".data", HashTable.DATA_BLOCK_LENGTH);
+        data = new MappedView(this.path + ".data", HashTable2.DATA_BLOCK_LENGTH);
+        index = new MappedView(this.path + ".index", HashTable2.INDEX_BLOCK_LENGTH);
         init();
     }
 
@@ -41,17 +43,19 @@ public class ReadIndexFile {
 
         System.out.println("d=" + d + " s" + s);
 
+
     }
 
     public int keyCount = 0;
 
-    public void readSequentially() throws IOException {
+    public Map<Data,Data> readSequentially() throws IOException {
+        final HashMap<Data, Data> dataDataHashMap = new HashMap<Data, Data>();
         int x = 0;
         long size = data.size();
-        final long depth = index.getInt(0);
         final HashSet<Long> longs = new HashSet<Long>();
-        for (int i = 0; i < Math.pow(2, depth); i++) {
-            long address = index.getLong(bucketAddressOffsetInIndexFile(i));
+        for (int i = 0; i < size/HashTable2.BUCKET_LENGTH; i++) {
+            long address = i * HashTable2.BUCKET_LENGTH;
+            final long log = address;
             if(!longs.add(address))continue;
             final int bucketDepth = data.getInt(address);
             final int bucketSize = data.getInt(address += 4L);
@@ -63,17 +67,24 @@ public class ReadIndexFile {
                 byte[] arr = new byte[keyLen];
                 data.getBytes(address += 4L, arr);
                 final Data keyRead = new Data(0, arr);
-                final int recordLen = data.getInt(address += keyLen);
+                final int recordLen = data.getInt(address += keyLen * 1L);
                 arr = new byte[recordLen];
                 data.getBytes(address += 4L, arr);
                 final Data valueRead = new Data(0, arr);
-                address += recordLen;
+                address += recordLen * 1L;
+
+//                System.out.println(keyRead.hashCode() + "---" + log);
+
+
+                dataDataHashMap.put(keyRead,valueRead);
             }
         }
         System.out.println("bs=" + x);
+        return dataDataHashMap;
     }
 
     public Data getData(Data key) {
+//        printIndexFile();
         final int slot = findSlot(key, globalDepth);
         long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
         final int bucketSize = data.getInt(address += 4L);
@@ -103,8 +114,23 @@ public class ReadIndexFile {
         return null;
     }
 
+    void printIndexFile(){
+
+        final int numberOfSlots = (int) Math.pow(2, globalDepth);
+        int depth = index.getInt(0);
+        int count = index.getInt(4);
+//        System.out.println("======================");
+//        System.out.println("depth = "+depth);
+//        System.out.println("count = "+count);
+        for (int i = 0; i < numberOfSlots; i++) {
+            index.getLong(bucketAddressOffsetInIndexFile(i));
+//            System.out.println("["+i+"]"+index.getLong(bucketAddressOffsetInIndexFile(i)));
+        }
+//        System.out.println("======================");
+    }
+
     private long bucketAddressOffsetInIndexFile(int slot) {
-        return (slot * 8L) + 8L;
+        return 1L *(slot << 3) + 8L;
     }
 
     public int getCount() {

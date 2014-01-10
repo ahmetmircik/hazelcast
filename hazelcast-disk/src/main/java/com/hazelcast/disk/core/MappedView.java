@@ -1,7 +1,8 @@
 package com.hazelcast.disk.core;
 
 import com.hazelcast.disk.Storage;
-import com.hazelcast.disk.Utils;
+import com.hazelcast.disk.helper.MapUtils;
+import com.hazelcast.disk.helper.Utils;
 
 import java.io.IOError;
 import java.io.IOException;
@@ -47,11 +48,22 @@ public class MappedView implements Storage {
         try {
             this.file = new RandomAccessFile(this.path, mode);
             this.fileChannel = file.getChannel();
-            this.views = new MappedByteBuffer[1];
             this.blockSize = blockSize;
             this.mode = mode;
             VIEW_POSITION_SHIFT = Utils.numberOfTwos(Math.max(4096, Utils.next2(blockSize)));
             VIEW_CHUNK_SIZE = (int) Math.pow(2, VIEW_POSITION_SHIFT);
+            this.views = new MappedByteBuffer[1];
+
+            long size = fileChannel.size();
+            if(size > 0){
+                final int viewIndex = (int)(size >>> VIEW_POSITION_SHIFT);
+                views = new MappedByteBuffer[viewIndex + 1];
+                int i =0;
+                while (i<viewIndex + 1) {
+                    views[i] = createBuffer( 1L  *i * VIEW_CHUNK_SIZE, VIEW_CHUNK_SIZE);
+                    i++;
+                }
+            }
         } catch (IOException e) {
             throw new Error(e);
         }
@@ -94,7 +106,7 @@ public class MappedView implements Storage {
         acquire(offset);
         final int viewIndex = (int) (offset >>> VIEW_POSITION_SHIFT);
         long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
-        return views[viewIndex].get((int) startPositionInViewChunk);
+        return views[viewIndex].get((int) startPositionInViewChunk) ;
     }
 
     @Override
@@ -124,7 +136,7 @@ public class MappedView implements Storage {
 
     @Override
     public void flush() {
-        forceBuffers();
+        flushBuffers();
     }
 
     @Override
@@ -220,12 +232,12 @@ public class MappedView implements Storage {
     //todo unmap is independent from filechannel close.reference queue
     @Override
     public void close() throws IOException {
-        forceBuffers();
 
-        //fileChannel.force(true);
+//        fileChannel.force(true);
         fileChannel.close();
         file.close();
 
+        flushBuffers();
 
         for (Reference<MappedByteBuffer> rb : unreleasedChunks) {
             MappedByteBuffer b = rb.get();
@@ -246,7 +258,7 @@ public class MappedView implements Storage {
         views = null;
     }
 
-    public void forceBuffers() {
+    public void flushBuffers() {
         //clear GC references
         for (Reference ref = unreleasedQueue.poll(); ref != null; ref = unreleasedQueue.poll()) {
             unreleasedChunks.remove(ref);
@@ -272,7 +284,6 @@ public class MappedView implements Storage {
     }
 
 
-    //todo offset should be long ???
     //todo if size limit exceeds return false
     private boolean checkAvailable(long offset) {
 
@@ -301,14 +312,20 @@ public class MappedView implements Storage {
         return true;
     }
 
+
+    public MappedByteBuffer testBuffer(long offset, int size) {
+        return createBuffer(offset,size);
+    }
+
     private MappedByteBuffer createBuffer(long offset, int size) {
         MappedByteBuffer bucket = null;
         try {
-            bucket = fileChannel.map(this.mode.equals("rw") ? FileChannel.MapMode.READ_WRITE : FileChannel.MapMode.READ_ONLY,
-                    offset,
-                    size);
-            bucket.order(ByteOrder.nativeOrder());
+//            bucket = fileChannel.map(this.mode.equals("rw") ? FileChannel.MapMode.READ_WRITE : FileChannel.MapMode.READ_ONLY,
+//                    offset,
+//                    size);
+//            bucket.order(ByteOrder.nativeOrder());
 
+            bucket = MapUtils.getMap(fileChannel,offset,size);
             unreleasedChunks.add(new WeakReference<MappedByteBuffer>(bucket, unreleasedQueue));
 
             for (Reference ref = unreleasedQueue.poll(); ref != null; ref = unreleasedQueue.poll()) {
