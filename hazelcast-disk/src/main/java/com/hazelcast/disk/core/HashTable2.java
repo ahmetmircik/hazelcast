@@ -45,7 +45,7 @@ public class HashTable2 extends PersistencyUnit {
     private static final int KVP_TOTAL_SIZE = 16 + 512;//KVP
     private static final int SIZE_OF_RECORD = 8 + KVP_TOTAL_SIZE;
     public static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
-    public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);//64KB
+    public static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 20);//1MB
     public static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 22);//512KB
 
 
@@ -214,14 +214,13 @@ public class HashTable2 extends PersistencyUnit {
         address += 4L;
         for (int j = 0; j < bucketSize; j++) {
             final int keyLen = data.getInt(address);
-            byte[] arr = new byte[keyLen];
-            data.getBytes(address += 4, arr);
-            final Data keyRead = new Data(0, arr);
+            byte[] keyBuffer = new byte[keyLen];
+            data.getBytes(address += 4, keyBuffer);
             final int recordLen = data.getInt(address += keyLen);
-            if(key.equals(keyRead)){
-                arr = new byte[recordLen];
-                data.getBytes(address += 4, arr);
-                final Data valueRead = new Data(0, arr);
+            if(Arrays.equals(keyBuffer,key.getBuffer())){
+                byte[] recordBuffer = new byte[recordLen];
+                data.getBytes(address += 4, keyBuffer);
+                final Data valueRead = new Data(0, keyBuffer);
                 address += recordLen;
                 return valueRead;
             }
@@ -396,7 +395,7 @@ public class HashTable2 extends PersistencyUnit {
     }
 
     private long createNewBucketAddress() {
-        return lastBucketPosition += BUCKET_LENGTH * 1L;
+        return lastBucketPosition += (BUCKET_LENGTH * 1L);
     }
 
     private Data[][] getKeyValuePairs(final long bucketStartOffset) {

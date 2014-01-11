@@ -145,8 +145,8 @@ public class ReadIndexFile {
         }
     }
 
-    //todo what if depth > 0?
     private int findSlot(Data key, int depth) {
+        if (depth > 31) throw new IllegalArgumentException("depth is not supported\t:" + depth);
         if (depth == 0) {
             return 0;
         }
@@ -154,5 +154,6 @@ public class ReadIndexFile {
         return ((hash & (0xFFFFFFFF >>> (32 - depth))));
 
     }
+
 
 }

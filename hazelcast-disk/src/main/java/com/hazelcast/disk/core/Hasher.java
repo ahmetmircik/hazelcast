@@ -9,11 +9,12 @@ import com.hazelcast.nio.serialization.Data;
 public interface Hasher<Key,Hash> {
      Hash hash(Key key);
 
-     static final Hasher DATA_HASHER = new Hasher<Data,Integer>(){
+     static final Hasher<Data,Integer> DATA_HASHER = new Hasher<Data, Integer>() {
 
-        @Override
-        public Integer hash(Data data) {
-            return  MurmurHash3.murmurhash3x8632(data.getBuffer(), 0, data.getBuffer().length, 271);
-        }
-    } ;
+         @Override
+         public Integer hash(Data data) {
+//             return SipHashInline.hash24(data.getBuffer());
+             return  MurmurHash3.murmurhash3x8632(data.getBuffer(), 0, data.getBuffer().length, 271);
+         }
+     };
 }

@@ -24,8 +24,8 @@ public class TestHashTable extends AbstractTest {
 
     public static void main(String[] args) throws IOException {
 
-        final String path = "x610";// getDirName();
-//        test(path);
+        final String path = getDirName();
+        test(path);
         read(path);
 //        readCompare(path);
 
@@ -36,7 +36,7 @@ public class TestHashTable extends AbstractTest {
 
         final HashTable2 hashTable = new HashTable2(path);
         long wDiff = 0;
-        final int size = 500000 * 2 * 3;
+        final int size = 5000 * 20 * 10;
         for (int i = 0; i < size; i++) {
             final Data key = getKey(16);
             final Data value = getValue(512);
