@@ -1,5 +1,6 @@
 package com.hazelcast.disk.core;
 
+import com.hazelcast.disk.helper.MurmurHash3;
 import com.hazelcast.nio.serialization.Data;
 
 /**

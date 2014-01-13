@@ -1,4 +1,4 @@
-package com.hazelcast.disk.core;
+package custom;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -128,16 +128,6 @@ public class Main {
     }
 
 
-    static void testWR() throws IOException {
-        final Directory directory = new Directory("testWR");
-        directory.createFiles();
-
-        // directory.testWrite();
-//        directory.loadLastIndexFilePosition();
-
-        directory.close();
-
-    }
 
 
 }

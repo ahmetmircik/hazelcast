@@ -9,7 +9,7 @@
  *  https://github.com/yonik/java_util/blob/master/src/util/hash/MurmurHash3.java.
  */
 
-package com.hazelcast.disk.core;
+package com.hazelcast.disk.helper;
 
 /**
  *  <p>

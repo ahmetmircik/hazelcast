@@ -1,7 +1,7 @@
 //package custom;
 //
 //import com.hazelcast.disk.core.IndexDir;
-//import com.hazelcast.disk.core.MurmurHash3;
+//import com.hazelcast.disk.helper.MurmurHash3;
 //import com.hazelcast.disk.core.ReadDataFile;
 //import com.hazelcast.disk.core.ReadIndexFile;
 //import com.hazelcast.nio.serialization.Data;

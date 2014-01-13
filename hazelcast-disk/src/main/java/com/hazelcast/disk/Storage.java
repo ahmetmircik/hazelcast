@@ -1,7 +1,6 @@
 package com.hazelcast.disk;
 
 import java.io.Closeable;
-import java.nio.MappedByteBuffer;
 
 /**
  * @author: ahmetmircik
@@ -29,6 +28,4 @@ public interface Storage extends Closeable{
 
     void flush();
 
-    //---test
-    MappedByteBuffer testBuffer(long offset, int size);
 }

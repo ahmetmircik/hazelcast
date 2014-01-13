@@ -55,7 +55,6 @@ public final class HashTable extends PersistencyUnit {
     private int globalDepth;
     private long lastBucketPosition = 0;
 
-
     //todo path length limit OS.
     public HashTable(String path) {
         if (path == null || path.length() == 0)
