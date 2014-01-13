@@ -1,7 +1,6 @@
 package com.hazelcast.disk.core;
 
 import com.hazelcast.disk.Storage;
-import com.hazelcast.disk.helper.MapUtils;
 import com.hazelcast.disk.helper.Utils;
 
 import java.io.IOError;
@@ -50,7 +49,7 @@ public class MappedView implements Storage {
             this.fileChannel = file.getChannel();
             this.blockSize = blockSize;
             this.mode = mode;
-            VIEW_POSITION_SHIFT = Utils.numberOfTwos(Math.max(4096, Utils.next2(blockSize)));
+            VIEW_POSITION_SHIFT = Utils.numberOfTwos(Math.max(4096, Utils.next2(this.blockSize)));
             VIEW_CHUNK_SIZE = (int) Math.pow(2, VIEW_POSITION_SHIFT);
             this.views = new MappedByteBuffer[1];
 
@@ -60,7 +59,9 @@ public class MappedView implements Storage {
                 views = new MappedByteBuffer[viewIndex + 1];
                 int i =0;
                 while (i<viewIndex + 1) {
-                    views[i] = createBuffer( 1L  *i * VIEW_CHUNK_SIZE, VIEW_CHUNK_SIZE);
+                    views[i] = createBuffer( 1L  *i * VIEW_CHUNK_SIZE,
+                          //(int) Math.min(VIEW_CHUNK_SIZE, size - (1L  *i * VIEW_CHUNK_SIZE))
+                          VIEW_CHUNK_SIZE);
                     i++;
                 }
             }
@@ -121,7 +122,13 @@ public class MappedView implements Storage {
         acquire(offset);
         int viewIndex = (int) (offset >>> VIEW_POSITION_SHIFT);
         long startPositionInViewChunk = offset - (1L * VIEW_CHUNK_SIZE * viewIndex);
-        views[viewIndex].put((int) startPositionInViewChunk, value);
+        try {
+
+            views[viewIndex].put((int) startPositionInViewChunk, value);
+        }
+        catch (Exception e){
+            System.out.println("");
+        }
     }
 
     @Override
@@ -320,12 +327,12 @@ public class MappedView implements Storage {
     private MappedByteBuffer createBuffer(long offset, int size) {
         MappedByteBuffer bucket = null;
         try {
-//            bucket = fileChannel.map(this.mode.equals("rw") ? FileChannel.MapMode.READ_WRITE : FileChannel.MapMode.READ_ONLY,
-//                    offset,
-//                    size);
-//            bucket.order(ByteOrder.nativeOrder());
+            bucket = fileChannel.map(this.mode.equals("rw") ? FileChannel.MapMode.READ_WRITE : FileChannel.MapMode.READ_ONLY,
+                    offset,
+                    size);
+            bucket.order(ByteOrder.nativeOrder());
 
-            bucket = MapUtils.getMap(fileChannel,offset,size);
+//            bucket = MapUtils.getMap(fileChannel,offset,size);
             unreleasedChunks.add(new WeakReference<MappedByteBuffer>(bucket, unreleasedQueue));
 
             for (Reference ref = unreleasedQueue.poll(); ref != null; ref = unreleasedQueue.poll()) {

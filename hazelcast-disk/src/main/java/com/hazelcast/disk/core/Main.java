@@ -16,31 +16,38 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
 
-        long diff = 0;
-        final int size = (int) Math.pow(2, globalDepth);
-        for (int i = 0; i < size; i++) {
-            final long l = System.nanoTime();
-            newRange0(i, 3);
-            diff += System.nanoTime() - l;
-        }
 
-        long diff2 = 0;
-        for (int i = 0; i < size; i++) {
-            final long l = System.nanoTime();
-            newRange1(i, 3);
-            diff2 += System.nanoTime() - l;
-        }
+        int x = 0x2;
 
-        System.out.println(diff / size + "....." + diff2 / size);
+        System.out.println((byte)0 | x );
 
-
-        for (int i = 0; i < size; i++) {
-            final int[] ints = newRange0(i, 1);
-            final int[] ints2 = newRange1(i, 1);
-            if (!Arrays.equals(ints, ints2)) {
-                System.out.println("sdsada");
-            }
-        }
+//        System.out.println(x += Integer.MAX_VALUE);
+//
+//        long diff = 0;
+//        final int size = (int) Math.pow(2, globalDepth);
+//        for (int i = 0; i < size; i++) {
+//            final long l = System.nanoTime();
+//            newRange0(i, 3);
+//            diff += System.nanoTime() - l;
+//        }
+//
+//        long diff2 = 0;
+//        for (int i = 0; i < size; i++) {
+//            final long l = System.nanoTime();
+//            newRange1(i, 3);
+//            diff2 += System.nanoTime() - l;
+//        }
+//
+//        System.out.println(diff / size + "....." + diff2 / size);
+//
+//
+//        for (int i = 0; i < size; i++) {
+//            final int[] ints = newRange0(i, 1);
+//            final int[] ints2 = newRange1(i, 1);
+//            if (!Arrays.equals(ints, ints2)) {
+//                System.out.println("sdsada");
+//            }
+//        }
 
     }
 

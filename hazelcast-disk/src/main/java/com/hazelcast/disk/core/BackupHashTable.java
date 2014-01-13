@@ -101,13 +101,13 @@
 //            for (int i = 0; i < bucketElementsCount; i++) {
 //                final int keyLen = data.getInt(tmpBucketAddress);
 //                if(keyLen < 0){
-//                    System.out.println("key000");
+//                    log("key000");
 //                }
 //                tmpBucketAddress += keyLen;
 //                tmpBucketAddress += 4;
 //                final int recordLen = data.getInt(tmpBucketAddress);
 //                if(recordLen < 0){
-//                    System.out.println("rec000");
+//                    log("rec000");
 //                }
 //                tmpBucketAddress += recordLen;
 //                tmpBucketAddress += 4;

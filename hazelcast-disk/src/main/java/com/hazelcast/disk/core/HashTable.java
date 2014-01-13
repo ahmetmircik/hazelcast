@@ -78,7 +78,7 @@
 //        int bucketElementsCount = data.getInt(bucketAddress + 4);
 //        if (bucketElementsCount == NUMBER_OF_RECORDS) {
 //            if (bucketDepth < globalDepth) {
-////                System.out.println("bucketDepth");
+////                log("bucketDepth");
 //                final int[] addressList = newRange(slot, bucketDepth);
 //                ++bucketDepth;
 //                //write buckets new depth.
@@ -139,12 +139,12 @@
 //
 //    public Data getData(Data key) {
 //        final int slot = findSlot(key, globalDepth);
-////        System.out.println("eee " + key.hashCode() + " slot "+slot);
+////        log("eee " + key.hashCode() + " slot "+slot);
 //        long address = index.getLong(bucketAddressOffsetInIndexFile(slot));
 //        // final int bucketDepth = data.getInt(0L);
 //        final int bucketSize = data.getInt(address += 4L);
 //        if(bucketSize!=1){
-//            System.out.println("uaosduaoda");
+//            log("uaosduaoda");
 //        }
 //        address += 4;
 //        for (int j = 0; j < bucketSize; j++) {
@@ -152,7 +152,7 @@
 //            byte[] arr = new byte[keyLen];
 //            data.getBytes(address += 4, arr);
 //            final Data keyRead = new Data(0, arr);
-////            System.out.println("==== " + key.hashCode() + " keyRead "+keyRead.hashCode());
+////            log("==== " + key.hashCode() + " keyRead "+keyRead.hashCode());
 //            final int recordLen = data.getInt(address += keyLen);
 //            if (key.equals(keyRead)) {
 //                arr = new byte[recordLen];
@@ -168,7 +168,7 @@
 //    }
 //
 //    private void split(int slot) {
-////        System.out.println("split");
+////        log("split");
 //        globalDepth++;
 //        //double index file by copy.
 //        final int numberOfSlots = (int) Math.pow(2, globalDepth);
@@ -308,7 +308,7 @@
 //
 //    @Override
 //    public void close() throws IOException {
-////        System.out.println(globalDepth);
+////        log(globalDepth);
 //        index.close();
 //        data.close();
 //    }

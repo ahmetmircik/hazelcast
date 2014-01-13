@@ -18,4 +18,5 @@ public abstract class PersistencyUnit implements Closeable {
 
     public abstract void flush();
 
+    public abstract long size();
 }
