@@ -161,6 +161,8 @@ public final class HashTable extends PersistencyUnit {
                         }
                     }
                 }
+
+                //todo stop bit start bit???
                 if (BUCKET_LENGTH - currentBucketLength < keyLengthIn + valueLengthIn + 8L) {
                     throw new NotEnoughSpaceException("No space left for the record in bucket");
                 }
