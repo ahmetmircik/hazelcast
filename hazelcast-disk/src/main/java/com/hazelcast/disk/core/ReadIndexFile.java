@@ -28,8 +28,8 @@
 //
 //    public ReadIndexFile(String path) {
 //        this.path = path;
-//        data = new MappedView(this.path + ".data", HashTable2.DATA_BLOCK_LENGTH);
-//        index = new MappedView(this.path + ".index", HashTable2.INDEX_BLOCK_LENGTH);
+//        data = new MappedView(this.path + ".data", HashTable.DATA_BLOCK_LENGTH);
+//        index = new MappedView(this.path + ".index", HashTable.INDEX_BLOCK_LENGTH);
 //        init();
 //    }
 //
@@ -52,8 +52,8 @@
 //        final HashMap<Data, Data> dataDataHashMap = new HashMap<Data, Data>();
 //        long size = data.size();
 //        final HashSet<Long> longs = new HashSet<Long>();
-//        for (int i = 0; i < size/HashTable2.BUCKET_LENGTH; i++) {
-//            long address = 1L * i * HashTable2.BUCKET_LENGTH;
+//        for (int i = 0; i < size/HashTable.BUCKET_LENGTH; i++) {
+//            long address = 1L * i * HashTable.BUCKET_LENGTH;
 //            final int bucketDepth = data.getInt(address);
 //            address += 4L;
 //            final int bucketSize = data.getInt(address);

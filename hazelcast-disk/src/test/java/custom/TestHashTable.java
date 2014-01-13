@@ -1,6 +1,6 @@
 package custom;
 
-import com.hazelcast.disk.core.HashTable2;
+import com.hazelcast.disk.core.HashTable;
 import com.hazelcast.disk.core.Hasher;
 import com.hazelcast.nio.serialization.Data;
 
@@ -36,34 +36,34 @@ public class TestHashTable extends AbstractTest {
 
     public static void test(String path) throws IOException {
 
-        final HashTable2 hashTable = new HashTable2(path);
+        final HashTable hashTable = new HashTable(path);
         long wDiff = 0;
-        final int size = 100000;
+        final int size = 1000;
         for (int i = 0; i < size; i++) {
             final Data key = getKey(8);
             final Data value = getValue(10);
             long l1 = System.nanoTime();
             hashTable.put(key, value);
             wDiff += System.nanoTime() - l1;
-//            mapData.put(key, value);
+            mapData.put(key, value);
         }
 
-//        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
-//            if (!entry.getValue().equals(hashTable.remove(entry.getKey())) )
-//            {
-//                System.out.println("remove problem");
-//            }
-//        }
-//
-//
-//        for (int i = 0; i < 1; i++) {
-//            final Data key = getKey(8);
-//            final Data value = getValue(10);
-//            long l1 = System.nanoTime();
-//            hashTable.put(key, value);
-//            wDiff += System.nanoTime() - l1;
-//            mapData.put(key, value);
-//        }
+        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
+            if (!entry.getValue().equals(hashTable.remove(entry.getKey())) )
+            {
+                System.out.println("remove problem");
+            }
+        }
+
+
+        for (int i = 0; i < 1; i++) {
+            final Data key = getKey(8);
+            final Data value = getValue(10);
+            long l1 = System.nanoTime();
+            hashTable.put(key, value);
+            wDiff += System.nanoTime() - l1;
+            mapData.put(key, value);
+        }
 
 //        int i = 0;
 //        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
@@ -93,7 +93,7 @@ public class TestHashTable extends AbstractTest {
     }
 
     public static void compare(String path) throws IOException {
-        final HashTable2 hashTable = new HashTable2(path);
+        final HashTable hashTable = new HashTable(path);
         long avgCounter = 0;
         for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
             long start = System.nanoTime();
@@ -142,7 +142,7 @@ public class TestHashTable extends AbstractTest {
 
     public static void read(String path) throws IOException {
 
-        final HashTable2 readIndexFile = new HashTable2(path);
+        final HashTable readIndexFile = new HashTable(path);
         long l1 = System.nanoTime();
         final Map<Data, Data> dataDataMap = readIndexFile.readSequentially();
         for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
