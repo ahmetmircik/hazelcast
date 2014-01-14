@@ -23,10 +23,10 @@ public class PerformanceTest extends AbstractDiskTest {
     @Test
     public void averageWriteTime() throws IOException {
 
-        Hashtable hashtable = null;
+        Hashtable<Data,Data> hashtable = null;
         try {
             final String path = getDirName();
-            hashtable = new Hashtable(path);
+            hashtable = getHashTable(path);
             FileHelper.deleteOnExit(path);
 
             final int writeCount = 1000000;
@@ -53,7 +53,7 @@ public class PerformanceTest extends AbstractDiskTest {
         Hashtable hashtable = null;
         final String path = getDirName();
         try {
-            hashtable = new Hashtable(path);
+            hashtable = getHashTable(path);
             for (int i = 0; i < writeCount; i++) {
                 final Data key = getData(8, 20);
                 final Data value = getData(8, 100);
@@ -65,12 +65,12 @@ public class PerformanceTest extends AbstractDiskTest {
         }
         try {
             long total = 0;
-            hashtable = new Hashtable(path);
+            hashtable = getHashTable(path);
             FileHelper.deleteOnExit(path);
             final long start = System.nanoTime();
             hashtable.loadAll();
             total += System.nanoTime() - start;
-            System.out.println("Load all time for " +writeCount + " KVP K{8,20} V{8,100} " + total + " nanos");
+            System.out.println("Load all time ---> loaded count\t:" +writeCount + " KVP K{8,20} V{8,100} " + total + " nanos");
         } finally {
             hashtable.close();
 

@@ -1,7 +1,5 @@
 package com.hazelcast.disk;
 
-import com.hazelcast.nio.serialization.Data;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
@@ -10,18 +8,17 @@ import java.util.List;
  * @author: ahmetmircik
  * Date: 12/20/13
  */
-public abstract class PersistencyUnit implements Closeable {
+public abstract class PersistencyUnit<K,V> implements Closeable {
 
-    public abstract Data put(Data key, Data value);
+    public abstract V put(K key, V value);
 
-    public abstract Data get(Data key);
+    public abstract V get(K key);
 
-    public abstract Data remove(Data key);
+    public abstract V remove(K key);
 
     public abstract void flush();
 
     public abstract long size();
 
-    //todo make generic
-    public abstract List loadAll() throws IOException;
+    public abstract <T> List<T> loadAll() throws IOException;
 }

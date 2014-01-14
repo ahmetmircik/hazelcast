@@ -25,7 +25,7 @@ import java.io.IOException;
 public class RewriteTest extends AbstractDiskTest {
 
     private static final String PATH = getDirName();
-    private static Hashtable HASHTABLE;
+    private static Hashtable<Data,Data> HASHTABLE;
     private static final int WRITE_COUNT = 100000;
     private static final int REPEAT_COUNT = 3;
     private static long resultAccumulator = 0;
@@ -43,7 +43,7 @@ public class RewriteTest extends AbstractDiskTest {
     public void rewriteExistingHashtable() throws IOException {
 
         try {
-            HASHTABLE = new Hashtable(PATH);
+            HASHTABLE = getHashTable(PATH);
 
             for (int i = 0; i < WRITE_COUNT; i++) {
                 final Data key = getData(8, 20);

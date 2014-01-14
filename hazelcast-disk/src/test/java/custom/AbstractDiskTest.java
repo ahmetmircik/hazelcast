@@ -1,8 +1,9 @@
 package custom;
 
-import com.hazelcast.disk.core.Hasher;
+import com.hazelcast.disk.core.Hashtable;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.util.ConstructorFunction;
 
 import java.security.SecureRandom;
 
@@ -11,8 +12,6 @@ import java.security.SecureRandom;
  * Date: 12/31/13
  */
 public abstract class AbstractDiskTest extends HazelcastTestSupport {
-
-    protected static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
 
     protected static final SecureRandom RANDOM = new SecureRandom();
 
@@ -66,6 +65,24 @@ public abstract class AbstractDiskTest extends HazelcastTestSupport {
 
     public static Data getDataX() {
         return new Data(0, data);
+    }
+
+    public static Hashtable<Data,Data> getHashTable(String path){
+        final Hashtable hashtable = new Hashtable<Data,Data>(path);
+        hashtable.setKeyConstructorFunction(new ConstructorFunction<byte[], Data>() {
+            @Override
+            public Data createNew(byte[] arg) {
+                return new Data(0,arg);
+            }
+        });
+        hashtable.setValueConstructorFunction(new ConstructorFunction<byte[], Data>() {
+            @Override
+            public Data createNew(byte[] arg) {
+                return new Data(0,arg);
+            }
+        });
+
+        return hashtable;
     }
 
 }
