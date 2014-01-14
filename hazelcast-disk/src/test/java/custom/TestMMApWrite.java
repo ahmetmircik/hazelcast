@@ -10,7 +10,7 @@ import java.io.IOException;
  * @author: ahmetmircik
  * Date: 1/5/14
  */
-public class TestMMApWrite extends AbstractTest {
+public class TestMMApWrite extends AbstractDiskTest {
 
     public static void main(String[] args) throws IOException {
         Storage storage = new MappedView(getDirName(), 1<<20);

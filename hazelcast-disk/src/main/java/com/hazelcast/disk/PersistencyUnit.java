@@ -3,6 +3,8 @@ package com.hazelcast.disk;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.Closeable;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * @author: ahmetmircik
@@ -19,4 +21,7 @@ public abstract class PersistencyUnit implements Closeable {
     public abstract void flush();
 
     public abstract long size();
+
+    //todo make generic
+    public abstract List loadAll() throws IOException;
 }

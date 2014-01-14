@@ -40,7 +40,7 @@ public final class HashTable extends PersistencyUnit {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     private static final int NUMBER_OF_RECORDS = 32;
-    private static final int KVP_TOTAL_SIZE = 32 + 10 * 1024;//KVP
+    private static final int KVP_TOTAL_SIZE = 32 + 512;//KVP
     private static final int ONE_RECORD_HEADER_SIZE = 1;
     private static final int SIZE_OF_RECORD = ONE_RECORD_HEADER_SIZE + 8 + KVP_TOTAL_SIZE;
     private static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
@@ -146,19 +146,22 @@ public final class HashTable extends PersistencyUnit {
                     final byte header = data.getByte(tmpBucketAddress);
                     final boolean isRemovedRecord = header == MARK_REMOVED;
                     tmpBucketAddress += ONE_RECORD_HEADER_SIZE;//record header
-                    final int keyLen = data.getInt(tmpBucketAddress);
+                    final int tmpKeyLen = data.getInt(tmpBucketAddress);
                     tmpBucketAddress += 4L;
-                    final int valueLen = data.getInt(tmpBucketAddress);
-                    tmpBucketAddress += (keyLen + valueLen + 4L);
+                    final int tmpValueLen = data.getInt(tmpBucketAddress);
+                    tmpBucketAddress += (tmpKeyLen + tmpValueLen + 4L);
                     if (!isRemovedRecord) {
                         i++;
-                        currentBucketLength += keyLen + valueLen + 8L;
+                        currentBucketLength += tmpKeyLen + tmpValueLen + 8L;
                     } else {
                         // we can write on removed record.
-                        if (keyLengthIn + valueLengthIn <= keyLen + valueLen) {
+                        if (keyLengthIn + valueLengthIn <= tmpKeyLen + tmpValueLen) {
                             tmpBucketAddress = bucketBaseAddress;
                             break;
                         }
+                    }
+                    if (tmpBucketAddress < 0) {
+                        System.out.println("");
                     }
                 }
 
@@ -166,6 +169,7 @@ public final class HashTable extends PersistencyUnit {
                 if (BUCKET_LENGTH - currentBucketLength < keyLengthIn + valueLengthIn + 8L) {
                     throw new NotEnoughSpaceException("No space left for the record in bucket");
                 }
+                data.writeByte(tmpBucketAddress, (byte) 0);
                 tmpBucketAddress += ONE_RECORD_HEADER_SIZE;//header
                 data.writeInt(tmpBucketAddress, keyLengthIn);
                 tmpBucketAddress += 4L;
@@ -178,6 +182,8 @@ public final class HashTable extends PersistencyUnit {
                 totalCount++;
             }
         }
+
+//        printDataFile();
         return null;
     }
 
@@ -193,7 +199,7 @@ public final class HashTable extends PersistencyUnit {
         address += 4;
         for (int j = 0; j < bucketSize; ) {
             final byte header = data.getByte(address);
-            final boolean isRemmovedRecord = header == MARK_REMOVED;
+            final boolean isRemovedRecord = header == MARK_REMOVED;
             address += ONE_RECORD_HEADER_SIZE;//header
             final int keyLen = data.getInt(address);
             address += 4L;
@@ -203,8 +209,8 @@ public final class HashTable extends PersistencyUnit {
             data.getBytes(address, arr);
             final Data keyRead = new Data(0, arr);
             address += keyLen;
-            if (key.equals(keyRead)) {
-                if (isRemmovedRecord) {
+            if (Arrays.equals(key.getBuffer(), keyRead.getBuffer())) {
+                if (isRemovedRecord) {
                     // already removed record.
                     return null;
                 }
@@ -216,8 +222,12 @@ public final class HashTable extends PersistencyUnit {
                 address += recordLen;
             }
 
-            if (!isRemmovedRecord) {
+            if (!isRemovedRecord) {
                 j++;
+            }
+
+            if(j == bucketSize){
+                printDataFile();
             }
 
         }
@@ -295,8 +305,10 @@ public final class HashTable extends PersistencyUnit {
         index.close();
     }
 
-    public Map<Data, Data> readSequentially() throws IOException {
-        final HashMap<Data, Data> dataDataHashMap = new HashMap<Data, Data>();
+    @Override
+    public List<Data[]> loadAll() throws IOException {
+        int t = 0;
+        final List<Data[]> list = new ArrayList<Data[]>();
         long size = data.size();
         for (int i = 0; i < size / HashTable.BUCKET_LENGTH; i++) {
             long address = 1L * i * HashTable.BUCKET_LENGTH;
@@ -306,7 +318,7 @@ public final class HashTable extends PersistencyUnit {
             address += 4L;
             for (int j = 0; j < bucketSize; ) {
                 final byte header = data.getByte(address);
-                final boolean isRemmovedRecord = header == MARK_REMOVED;
+                final boolean isRemovedRecord = header == MARK_REMOVED;
                 address += ONE_RECORD_HEADER_SIZE;//header
                 final int keyLen = data.getInt(address);
                 address += 4L;
@@ -320,13 +332,16 @@ public final class HashTable extends PersistencyUnit {
                 data.getBytes(address, arr);
                 final Data valueRead = new Data(0, arr);
                 address += recordLen;
-                if (!isRemmovedRecord) {
-                    dataDataHashMap.put(keyRead, valueRead);
+                if (!isRemovedRecord) {
+                    final Data[] tmp = new Data[2];
+                    tmp[0] = keyRead;
+                    tmp[1] = valueRead;
+                    list.add(tmp);
                     j++;
                 }
             }
         }
-        return dataDataHashMap;
+        return list;
     }
 
     //todo what if depth > 31?
@@ -387,6 +402,9 @@ public final class HashTable extends PersistencyUnit {
             tmpBucketOffset += 4L;
             final int recordLen = data.getInt(tmpBucketOffset);
             tmpBucketOffset += 4L;
+            if (keyLen < 0) {
+                System.out.println("");
+            }
             //read key
             byte[] bytes = new byte[keyLen];
             data.getBytes(tmpBucketOffset, bytes);
@@ -442,7 +460,7 @@ public final class HashTable extends PersistencyUnit {
     private void printDataFile() {
         long total = 0;
         long size = data.size();
-        boolean print = false;
+        boolean print = true;
         if (!print) return;
         log("File size\t:" + size + " GD {" + globalDepth + "}", print);
         for (int i = 0; i < size / HashTable.BUCKET_LENGTH; i++) {
@@ -462,6 +480,9 @@ public final class HashTable extends PersistencyUnit {
                 address += 4L;
                 final int recordLen = data.getInt(address);
                 address += 4L;
+                if (keyLen < 0) {
+                    System.out.println();
+                }
                 byte[] arr = new byte[keyLen];
                 data.getBytes(address, arr);
                 final Data keyRead = new Data(0, arr);

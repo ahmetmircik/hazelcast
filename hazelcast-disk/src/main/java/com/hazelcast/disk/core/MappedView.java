@@ -134,7 +134,7 @@ public class MappedView implements Storage {
     @Override
     public long size() {
         try {
-            return file.length();
+            return fileChannel.size();
         } catch (IOException e) {
             throw new IOError(e);
         }
