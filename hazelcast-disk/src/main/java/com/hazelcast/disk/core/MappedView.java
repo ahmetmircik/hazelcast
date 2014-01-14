@@ -49,7 +49,7 @@ public class MappedView implements Storage {
             this.fileChannel = file.getChannel();
             this.blockSize = blockSize;
             this.mode = mode;
-            VIEW_POSITION_SHIFT = Utils.numberOfTwos(Math.max(4096, Utils.next2(this.blockSize)));
+            VIEW_POSITION_SHIFT = Utils.numberOf2s(Math.max(4096, Utils.nextPowerOf2(this.blockSize)));
             VIEW_CHUNK_SIZE = (int) Math.pow(2, VIEW_POSITION_SHIFT);
             this.views = new MappedByteBuffer[1];
 

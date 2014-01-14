@@ -1,6 +1,6 @@
 package com.hazelcast.disk;
 
-import com.hazelcast.disk.core.HashTable;
+import com.hazelcast.disk.core.Hashtable;
 import com.hazelcast.disk.helper.FileHelper;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.test.HazelcastSerialClassRunner;
@@ -24,17 +24,17 @@ import java.util.List;
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class TestHashTable extends AbstractDiskTest {
+public class BasicHashtableTest extends AbstractDiskTest {
 
     private static List<Data[]> DATA_LIST;
-    private static HashTable hashTable;
+    private static Hashtable hashtable;
     private static int writeCount;
 
     @BeforeClass
     public static void before() {
         final String path = getDirName();
-        hashTable = new HashTable(path);
-        writeCount = 1500000;
+        hashtable = new Hashtable(path);
+        writeCount = 100000;
         DATA_LIST = new ArrayList<Data[]>(writeCount);
         FileHelper.deleteOnExit(path);
     }
@@ -46,9 +46,9 @@ public class TestHashTable extends AbstractDiskTest {
             final Data key = getData(8, 100);
             final Data value = getData(8, 200);
             DATA_LIST.add(new Data[]{key, value});
-            hashTable.put(key, value);
+            hashtable.put(key, value);
         }
-        Assert.assertEquals(writeCount, hashTable.size());
+        Assert.assertEquals(writeCount, hashtable.size());
     }
 
     @Test
@@ -56,13 +56,13 @@ public class TestHashTable extends AbstractDiskTest {
         int falseCount = 0;
         for (final Data[] e : DATA_LIST) {
             final byte[] expected = e[1].getBuffer();
-            final byte[] actual = hashTable.get(e[0]).getBuffer();
+            final byte[] actual = hashtable.get(e[0]).getBuffer();
             Assert.assertTrue(Arrays.equals(expected, actual));
 
 //            if (!Arrays.equals(expected,actual))
 //            {
 //                falseCount++;
-////                final byte[] xx = hashTable.get(e[0]).getBuffer();
+////                final byte[] xx = hashtable.get(e[0]).getBuffer();
 //            }
         }
 
@@ -73,7 +73,7 @@ public class TestHashTable extends AbstractDiskTest {
     @Test
     public void test_3_LoadAll() throws IOException {
         DATA_LIST.clear();
-        final List<Data[]> list = hashTable.loadAll();
+        final List<Data[]> list = hashtable.loadAll();
         DATA_LIST.addAll(list);
         Assert.assertEquals(writeCount, DATA_LIST.size());
     }
@@ -83,7 +83,7 @@ public class TestHashTable extends AbstractDiskTest {
 
         Assert.assertEquals(writeCount, DATA_LIST.size());
         for (final Data[] e : DATA_LIST) {
-            final Data value = hashTable.get(e[0]);
+            final Data value = hashtable.get(e[0]);
 //            if (!Arrays.equals(e[1].getBuffer(), value.getBuffer())) {
 //                falseCount++;
 //            }
@@ -98,7 +98,7 @@ public class TestHashTable extends AbstractDiskTest {
         Assert.assertEquals(writeCount, DATA_LIST.size());
 
         for (final Data[] e : DATA_LIST) {
-            final Data value = hashTable.remove(e[0]);
+            final Data value = hashtable.remove(e[0]);
 //            if (!Arrays.equals(e[1].getBuffer(), value.getBuffer())) {
 //                falseCount++;
 //            }
@@ -109,7 +109,7 @@ public class TestHashTable extends AbstractDiskTest {
 
     @AfterClass
     public static void after() throws IOException {
-        hashTable.close();
+        hashtable.close();
     }
 
 }

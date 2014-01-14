@@ -36,14 +36,14 @@ import java.util.*;
  * --------------------------
  * HEADER + KEY LENGTH + VALUE LENGTH + KEY + VALUE
  */
-public final class HashTable extends PersistencyUnit {
+public final class Hashtable extends PersistencyUnit {
 
     private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     private static final int NUMBER_OF_RECORDS = 32;
     private static final int KVP_TOTAL_SIZE = 32 + 512;//KVP
     private static final int ONE_RECORD_HEADER_SIZE = 1;
     private static final int SIZE_OF_RECORD = ONE_RECORD_HEADER_SIZE + 8 + KVP_TOTAL_SIZE;
-    private static final int BUCKET_LENGTH = Utils.next2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
+    private static final int BUCKET_LENGTH = Utils.nextPowerOf2(4 + 4 + (NUMBER_OF_RECORDS * SIZE_OF_RECORD));
     private static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);//64KB
     private static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 22);//4MB
     private static final int MARK_REMOVED = 0x2;
@@ -56,7 +56,7 @@ public final class HashTable extends PersistencyUnit {
     private long lastBucketPosition = 0;
 
     //todo path length limit OS.
-    public HashTable(String path) {
+    public Hashtable(String path) {
         if (path == null || path.length() == 0)
             throw new NullPointerException();
         this.path = path;
@@ -299,7 +299,7 @@ public final class HashTable extends PersistencyUnit {
         index.writeInt(0L, globalDepth);
         index.writeLong(4L, totalCount);
 
-        log(totalCount, true);
+        log("Total written\t:" + totalCount, true);
 
         data.close();
         index.close();
@@ -310,8 +310,8 @@ public final class HashTable extends PersistencyUnit {
         int t = 0;
         final List<Data[]> list = new ArrayList<Data[]>();
         long size = data.size();
-        for (int i = 0; i < size / HashTable.BUCKET_LENGTH; i++) {
-            long address = 1L * i * HashTable.BUCKET_LENGTH;
+        for (int i = 0; i < size / Hashtable.BUCKET_LENGTH; i++) {
+            long address = 1L * i * Hashtable.BUCKET_LENGTH;
             final int bucketDepth = data.getInt(address);
             address += 4L;
             final int bucketSize = data.getInt(address);
@@ -463,8 +463,8 @@ public final class HashTable extends PersistencyUnit {
         boolean print = true;
         if (!print) return;
         log("File size\t:" + size + " GD {" + globalDepth + "}", print);
-        for (int i = 0; i < size / HashTable.BUCKET_LENGTH; i++) {
-            long address = 1L * i * HashTable.BUCKET_LENGTH;
+        for (int i = 0; i < size / Hashtable.BUCKET_LENGTH; i++) {
+            long address = 1L * i * Hashtable.BUCKET_LENGTH;
             if (address > lastBucketPosition) break;
             final int bucketDepth = data.getInt(address);
             address += 4L;

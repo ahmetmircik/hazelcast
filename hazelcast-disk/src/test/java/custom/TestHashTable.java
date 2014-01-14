@@ -1,6 +1,6 @@
 //package custom;
 //
-//import com.hazelcast.disk.core.HashTable;
+//import com.hazelcast.disk.core.Hashtable;
 //import com.hazelcast.disk.core.Hasher;
 //import com.hazelcast.nio.serialization.Data;
 //
@@ -14,7 +14,7 @@
 // * @author: ahmetmircik
 // * Date: 1/1/14
 // */
-//public class TestHashTable extends AbstractDiskTest {
+//public class BasicHashtableTest extends AbstractDiskTest {
 //
 //    private static ConcurrentMap<Data, Data> mapData = new ConcurrentHashMap<Data, Data>();
 //
@@ -36,7 +36,7 @@
 //
 //    public static void test(String path) throws IOException {
 //
-//        final HashTable hashTable = new HashTable(path);
+//        final Hashtable hashTable = new Hashtable(path);
 //        long wDiff = 0;
 //        final int size = 1000;
 //        for (int i = 0; i < size; i++) {
@@ -93,7 +93,7 @@
 //    }
 //
 //    public static void compare(String path) throws IOException {
-//        final HashTable hashTable = new HashTable(path);
+//        final Hashtable hashTable = new Hashtable(path);
 //        long avgCounter = 0;
 //        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {
 //            long start = System.nanoTime();
@@ -142,7 +142,7 @@
 //
 //    public static void read(String path) throws IOException {
 //
-//        final HashTable readIndexFile = new HashTable(path);
+//        final Hashtable readIndexFile = new Hashtable(path);
 //        long l1 = System.nanoTime();
 //        final Map<Data, Data> dataDataMap = readIndexFile.loadAll();
 //        for (Map.Entry<Data, Data> entry : mapData.entrySet()) {

@@ -53,7 +53,7 @@ public abstract class AbstractDiskTest extends HazelcastTestSupport {
     public static String getDirName(){
         final int dirName = RANDOM.nextInt();
         String path = TEMP_DIR +"" + String.valueOf(dirName);
-        System.out.println("Path\t:"+path);
+        System.out.println("--->Path\t:"+path);
         return path;
     }
 
