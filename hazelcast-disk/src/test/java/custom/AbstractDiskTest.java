@@ -68,7 +68,7 @@ public abstract class AbstractDiskTest extends HazelcastTestSupport {
     }
 
     public static Hashtable<Data,Data> getHashTable(String path){
-        final Hashtable hashtable = new Hashtable<Data,Data>(path);
+        final Hashtable<Data,Data> hashtable = new Hashtable<Data,Data>(path);
         hashtable.setKeyConstructorFunction(new ConstructorFunction<byte[], Data>() {
             @Override
             public Data createNew(byte[] arg) {

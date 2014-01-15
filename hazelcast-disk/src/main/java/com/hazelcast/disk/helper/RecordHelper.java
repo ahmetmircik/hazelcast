@@ -11,6 +11,6 @@ public enum RecordHelper {
 
     public static byte[] asByteArray(Object o) {
         if(o instanceof Data) return ((Data) o).getBuffer();
-        return null;
+        throw new IllegalArgumentException("no byte form registered for class {" + o.getClass()+"}");
     }
 }

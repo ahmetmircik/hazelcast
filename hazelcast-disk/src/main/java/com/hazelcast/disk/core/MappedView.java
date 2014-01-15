@@ -341,7 +341,7 @@ public class MappedView implements Storage {
 
         } catch (Exception e) {
             System.out.println("offset-->" + offset + "\tsize -->" + size);
-            new Error(e);
+            throw new IOError(e);
         }
 
         return bucket;
@@ -366,8 +366,7 @@ public class MappedView implements Storage {
                     Object cleaner = cleanerMethod.invoke(b, new Object[0]);
                     if (cleaner != null) {
                         Method clearMethod = cleaner.getClass().getMethod("clean", new Class[0]);
-                        if (cleanerMethod != null)
-                            clearMethod.invoke(cleaner, new Object[0]);
+                        clearMethod.invoke(cleaner, new Object[0]);
                     }
                 }
             }

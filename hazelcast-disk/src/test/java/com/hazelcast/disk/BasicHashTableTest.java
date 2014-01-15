@@ -2,6 +2,7 @@ package com.hazelcast.disk;
 
 import com.hazelcast.disk.core.Hashtable;
 import com.hazelcast.disk.helper.FileHelper;
+import com.hazelcast.disk.helper.RecordHelper;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.annotation.SlowTest;
@@ -26,17 +27,17 @@ import java.util.List;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class BasicHashtableTest extends AbstractDiskTest {
 
-    private static List<Data[]> DATA_LIST;
-    private static Hashtable hashtable;
+    private static List<Object[]> DATA_LIST;
+    private static Hashtable<Data, Data> hashtable;
     private static int writeCount;
 
     @BeforeClass
     public static void before() {
         final String path = getDirName();
-        hashtable = new Hashtable(path);
-        writeCount = 100000;
-        DATA_LIST = new ArrayList<Data[]>(writeCount);
+        hashtable = getHashTable(path);
         FileHelper.deleteOnExit(path);
+        writeCount = 100000;
+        DATA_LIST = new ArrayList<Object[]>(writeCount);
     }
 
 
@@ -54,9 +55,9 @@ public class BasicHashtableTest extends AbstractDiskTest {
     @Test
     public void test_2_Get() throws IOException {
         int falseCount = 0;
-        for (final Data[] e : DATA_LIST) {
-            final byte[] expected = e[1].getBuffer();
-            final byte[] actual = hashtable.get(e[0]).getBuffer();
+        for (final Object[] e : DATA_LIST) {
+            final byte[] expected = RecordHelper.asByteArray(e[1]);
+            final byte[] actual = RecordHelper.asByteArray(hashtable.get((Data) e[0]));
             Assert.assertTrue(Arrays.equals(expected, actual));
 
 //            if (!Arrays.equals(expected,actual))
@@ -73,7 +74,7 @@ public class BasicHashtableTest extends AbstractDiskTest {
     @Test
     public void test_3_LoadAll() throws IOException {
         DATA_LIST.clear();
-        final List<Data[]> list = hashtable.loadAll();
+        final List<Object[]> list = hashtable.loadAll();
         DATA_LIST.addAll(list);
         Assert.assertEquals(writeCount, DATA_LIST.size());
     }
@@ -82,12 +83,12 @@ public class BasicHashtableTest extends AbstractDiskTest {
     public void test_4_CompareReadDataWithWritten() {
 
         Assert.assertEquals(writeCount, DATA_LIST.size());
-        for (final Data[] e : DATA_LIST) {
-            final Data value = hashtable.get(e[0]);
+        for (final Object[] e : DATA_LIST) {
+            final Data value = hashtable.get((Data) e[0]);
 //            if (!Arrays.equals(e[1].getBuffer(), value.getBuffer())) {
 //                falseCount++;
 //            }
-            Assert.assertTrue(Arrays.equals(e[1].getBuffer(), value.getBuffer()));
+            Assert.assertTrue(Arrays.equals(RecordHelper.asByteArray(e[1]), value.getBuffer()));
         }
         //    System.err.println("------------> test_3_CompareReadDataWithWritten false count\t:" + falseCount);
     }
@@ -97,13 +98,15 @@ public class BasicHashtableTest extends AbstractDiskTest {
 
         Assert.assertEquals(writeCount, DATA_LIST.size());
 
-        for (final Data[] e : DATA_LIST) {
-            final Data value = hashtable.remove(e[0]);
+        for (final Object[] e : DATA_LIST) {
+            final Data value = hashtable.remove((Data) e[0]);
 //            if (!Arrays.equals(e[1].getBuffer(), value.getBuffer())) {
 //                falseCount++;
 //            }
-            Assert.assertTrue(Arrays.equals(e[1].getBuffer(), value.getBuffer()));
+            Assert.assertTrue(Arrays.equals(RecordHelper.asByteArray(e[1]), value.getBuffer()));
         }
+
+        Assert.assertEquals(0, hashtable.size());
         //    System.err.println("------------> test_3_CompareReadDataWithWritten false count\t:" + falseCount);
     }
 

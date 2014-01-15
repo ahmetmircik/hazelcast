@@ -38,7 +38,7 @@ public class RewriteTest extends AbstractDiskTest {
     }
 
 
-    @Test
+    @Test(timeout = 1000 * 30)
     @Repeat(REPEAT_COUNT)
     public void rewriteExistingHashtable() throws IOException {
 
@@ -46,8 +46,8 @@ public class RewriteTest extends AbstractDiskTest {
             HASHTABLE = getHashTable(PATH);
 
             for (int i = 0; i < WRITE_COUNT; i++) {
-                final Data key = getData(8, 20);
-                final Data value = getData(8, 100);
+                final Data key = getData(3, 12);
+                final Data value = getData(8, 88);
                 HASHTABLE.put(key, value);
             }
         } finally {
@@ -63,7 +63,7 @@ public class RewriteTest extends AbstractDiskTest {
 
     @AfterClass
     public static void after() {
-        Assert.assertEquals("Rewrite pocess failed...", 3 * WRITE_COUNT, resultAccumulator);
+        Assert.assertEquals("Rewrite process failed...", 3 * WRITE_COUNT, resultAccumulator);
         FileHelper.deleteOnExit(PATH);
     }
 }

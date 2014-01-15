@@ -81,10 +81,4 @@ public final class MurmurHash3 {
     return h1;
   }
 
-    public static void main(String[] args) {
-        Integer id = 638510024;
-        byte[] bytes = (id + "").getBytes();
-        System.out.println(murmurhash3x8632(bytes, 0, bytes.length, 129));
-    }
-
 }

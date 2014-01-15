@@ -3,10 +3,13 @@ package com.hazelcast.disk.core;
 import com.hazelcast.disk.PersistencyUnit;
 import com.hazelcast.disk.Storage;
 import com.hazelcast.disk.helper.Utils;
-import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.util.ConstructorFunction;
 
 import java.io.IOException;
 import java.util.*;
+
+import static com.hazelcast.disk.helper.RecordHelper.asByteArray;
+
 
 /**
  * <p/>
@@ -36,9 +39,8 @@ import java.util.*;
  * --------------------------
  * HEADER + KEY LENGTH + VALUE LENGTH + KEY + VALUE
  */
-public final class Hashtable extends PersistencyUnit {
+public final class Hashtable<K, V> extends PersistencyUnit<K, V> {
 
-    private static final Hasher<Data, Integer> HASHER = Hasher.DATA_HASHER;
     private static final int NUMBER_OF_RECORDS = 32;
     private static final int KVP_TOTAL_SIZE = 32 + 512;//KVP
     private static final int ONE_RECORD_HEADER_SIZE = 1;
@@ -47,13 +49,15 @@ public final class Hashtable extends PersistencyUnit {
     private static final int INDEX_BLOCK_LENGTH = (int) Math.pow(2, 16);//64KB
     private static final int DATA_BLOCK_LENGTH = (int) Math.pow(2, 22);//4MB
     private static final int MARK_REMOVED = 0x2;
-    private static final Data[][] EMPTY_KVP = new Data[0][2];
+    private static final Object[][] EMPTY_KVP = new Object[0][2];
     private final String path;
     private final Storage data;
     private final Storage index;
     private long totalCount = 0L;
     private int globalDepth;
     private long lastBucketPosition = 0;
+    private ConstructorFunction<byte[], K> keyConstructorFunction = null;
+    private ConstructorFunction<byte[], V> valueConstructorFunction = null;
 
     //todo path length limit OS.
     public Hashtable(String path) {
@@ -75,18 +79,18 @@ public final class Hashtable extends PersistencyUnit {
     //todo put big data with linked records?
     //todo prevent dublicate key put??
     @Override
-    public Data put(Data keyIn, Data valueIn) {
+    public V put(K keyIn, V valueIn) {
         if (keyIn == null)
             throw new NullPointerException();
         if (valueIn == null)
             throw new NullPointerException();
         //todo what is most appropriate data structure here?
-        final Deque<Data> stack = new LinkedList<Data>();
+        final Deque<Object> stack = new LinkedList<Object>();
         stack.offerFirst(valueIn);
         stack.offerFirst(keyIn);
 
         while (true) {
-            final Data key = stack.peekFirst();
+            final K key = (K) stack.peekFirst();
             if (key == null) break;
             final int slot = findSlot(key, globalDepth);
             final long bucketAddress = index.getLong(bucketAddressOffsetInIndexFile(slot));
@@ -118,26 +122,26 @@ public final class Hashtable extends PersistencyUnit {
                         index.writeLong(bucketAddressPosition, address);
                     }
                 }
-                final Data[][] keyValuePairs = getKeyValuePairs(bucketAddress);
+                final Object[][] keyValuePairs = getKeyValuePairs(bucketAddress);
                 for (int i = 0; i < keyValuePairs.length; i++) {
-                    stack.offerFirst(keyValuePairs[i][1]);
-                    stack.offerFirst(keyValuePairs[i][0]);
+                    stack.offerFirst((V) keyValuePairs[i][1]);
+                    stack.offerFirst((K) keyValuePairs[i][0]);
                 }
                 //reset number of elements in this bucket.
                 data.writeInt(bucketAddress + 4L, 0);
                 totalCount -= keyValuePairs.length;
             } else {
                 //insert KVP.
-                Data keyTmp = stack.pollFirst(); //dummy poll.
-                Data value = stack.pollFirst();
+                K keyTmp = (K) stack.pollFirst(); //dummy poll.
+                V value = (V) stack.pollFirst();
                 final int blockSize = KVP_TOTAL_SIZE;
                 if (blockSize > SIZE_OF_RECORD) {
                     throw new IllegalArgumentException(blockSize + " is bigger than allowed record size "
                             + SIZE_OF_RECORD);
                 }
                 //new puts key-value lengths.
-                final int keyLengthIn = key.getBuffer().length;
-                final int valueLengthIn = value.getBuffer().length;
+                final int keyLengthIn = asByteArray(key).length;
+                final int valueLengthIn = asByteArray(value).length;
                 long currentBucketLength = 8L;
                 long tmpBucketAddress = bucketAddress;
                 tmpBucketAddress += 8L;
@@ -167,7 +171,7 @@ public final class Hashtable extends PersistencyUnit {
 
                 //todo stop bit start bit???
                 if (BUCKET_LENGTH - currentBucketLength < keyLengthIn + valueLengthIn + 8L) {
-                    throw new NotEnoughSpaceException("No space left for the record in bucket");
+                    throw new NotEnoughSpaceErroe("No space left for the record in bucket");
                 }
                 data.writeByte(tmpBucketAddress, (byte) 0);
                 tmpBucketAddress += ONE_RECORD_HEADER_SIZE;//header
@@ -175,9 +179,9 @@ public final class Hashtable extends PersistencyUnit {
                 tmpBucketAddress += 4L;
                 data.writeInt(tmpBucketAddress, valueLengthIn);
                 tmpBucketAddress += 4L;
-                data.writeBytes(tmpBucketAddress, key.getBuffer());
+                data.writeBytes(tmpBucketAddress, asByteArray(key));
                 tmpBucketAddress += keyLengthIn;
-                data.writeBytes(tmpBucketAddress, value.getBuffer());
+                data.writeBytes(tmpBucketAddress, asByteArray(value));
                 data.writeInt(bucketAddress + 4L, ++bucketElementsCount);
                 totalCount++;
             }
@@ -189,7 +193,7 @@ public final class Hashtable extends PersistencyUnit {
 
 
     @Override
-    public Data get(Data key) {
+    public V get(K key) {
         if (key == null)
             throw new NullPointerException();
         final int slot = findSlot(key, globalDepth);
@@ -207,16 +211,16 @@ public final class Hashtable extends PersistencyUnit {
             address += 4L;
             byte[] arr = new byte[keyLen];
             data.getBytes(address, arr);
-            final Data keyRead = new Data(0, arr);
+            final K keyRead = keyConstructorFunction.createNew(arr);
             address += keyLen;
-            if (Arrays.equals(key.getBuffer(), keyRead.getBuffer())) {
+            if (key.equals(keyRead)) {
                 if (isRemovedRecord) {
                     // already removed record.
                     return null;
                 }
                 arr = new byte[recordLen];
                 data.getBytes(address, arr);
-                final Data valueRead = new Data(0, arr);
+                final V valueRead = valueConstructorFunction.createNew(arr);
                 return valueRead;
             } else {
                 address += recordLen;
@@ -226,7 +230,7 @@ public final class Hashtable extends PersistencyUnit {
                 j++;
             }
 
-            if(j == bucketSize){
+            if (j == bucketSize) {
                 printDataFile();
             }
 
@@ -236,7 +240,7 @@ public final class Hashtable extends PersistencyUnit {
 
     //todo cacheline.
     @Override
-    public Data remove(Data key) {
+    public V remove(K key) {
         if (key == null)
             throw new NullPointerException();
         final int slot = findSlot(key, globalDepth);
@@ -256,7 +260,7 @@ public final class Hashtable extends PersistencyUnit {
             byte[] keyBuffer = new byte[keyLen];
             data.getBytes(address, keyBuffer);
             address += keyLen;
-            if (Arrays.equals(keyBuffer, key.getBuffer())) {
+            if (Arrays.equals(keyBuffer, asByteArray(key))) {
                 if (isRemovedRecord) {
                     // already removed record.
                     return null;
@@ -268,7 +272,7 @@ public final class Hashtable extends PersistencyUnit {
                     //read removed record.
                     byte[] recordBuffer = new byte[recordLen];
                     data.getBytes(address, recordBuffer);
-                    final Data valueRead = new Data(0, recordBuffer);
+                    final V valueRead = valueConstructorFunction.createNew(recordBuffer);
                     //retur old value.
                     return valueRead;
                 }
@@ -305,10 +309,11 @@ public final class Hashtable extends PersistencyUnit {
         index.close();
     }
 
+    //todo return map???
     @Override
-    public List<Data[]> loadAll() throws IOException {
+    public List<Object[]> loadAll() throws IOException {
         int t = 0;
-        final List<Data[]> list = new ArrayList<Data[]>();
+        final List<Object[]> list = new ArrayList<Object[]>();
         long size = data.size();
         for (int i = 0; i < size / Hashtable.BUCKET_LENGTH; i++) {
             long address = 1L * i * Hashtable.BUCKET_LENGTH;
@@ -326,14 +331,14 @@ public final class Hashtable extends PersistencyUnit {
                 address += 4L;
                 byte[] arr = new byte[keyLen];
                 data.getBytes(address, arr);
-                final Data keyRead = new Data(0, arr);
+                final K keyRead = keyConstructorFunction.createNew(arr);
                 address += keyLen;
                 arr = new byte[recordLen];
                 data.getBytes(address, arr);
-                final Data valueRead = new Data(0, arr);
+                final V valueRead = valueConstructorFunction.createNew(arr);
                 address += recordLen;
                 if (!isRemovedRecord) {
-                    final Data[] tmp = new Data[2];
+                    final Object[] tmp = new Object[2];
                     tmp[0] = keyRead;
                     tmp[1] = valueRead;
                     list.add(tmp);
@@ -345,12 +350,12 @@ public final class Hashtable extends PersistencyUnit {
     }
 
     //todo what if depth > 31?
-    private int findSlot(Data key, int depth) {
+    private int findSlot(K key, int depth) {
         if (depth > 31) throw new IllegalArgumentException("depth is not supported\t:" + depth);
         if (depth == 0) {
             return 0;
         }
-        final int hash = HASHER.hash(key);
+        final int hash = Hashers.getHasher(asByteArray(key));
         return ((hash & (0x7FFFFFFF >>> (32 - depth))));
 
     }
@@ -387,12 +392,12 @@ public final class Hashtable extends PersistencyUnit {
         return lastBucketPosition += (BUCKET_LENGTH * 1L);
     }
 
-    private Data[][] getKeyValuePairs(final long bucketStartOffset) {
+    private Object[][] getKeyValuePairs(final long bucketStartOffset) {
         final int numberOfElements = data.getInt(bucketStartOffset + 4);
         if (numberOfElements == 0) {
             return EMPTY_KVP;
         }
-        final Data[][] dataObjects = new Data[numberOfElements][2];
+        final Object[][] dataObjects = new Object[numberOfElements][2];
         long tmpBucketOffset = bucketStartOffset;
         tmpBucketOffset += 8L;
         for (int i = 0; i < numberOfElements; ) {
@@ -402,20 +407,17 @@ public final class Hashtable extends PersistencyUnit {
             tmpBucketOffset += 4L;
             final int recordLen = data.getInt(tmpBucketOffset);
             tmpBucketOffset += 4L;
-            if (keyLen < 0) {
-                System.out.println("");
-            }
             //read key
             byte[] bytes = new byte[keyLen];
             data.getBytes(tmpBucketOffset, bytes);
-            dataObjects[i][0] = new Data(0, bytes);
+            dataObjects[i][0] = keyConstructorFunction.createNew(bytes);
             tmpBucketOffset += keyLen;
             bytes = new byte[recordLen];
             data.getBytes(tmpBucketOffset, bytes);
             tmpBucketOffset += recordLen;
             //todo improve logic here
             if (header != MARK_REMOVED) {
-                dataObjects[i][1] = new Data(0, bytes);
+                dataObjects[i][1] = valueConstructorFunction.createNew(bytes);
                 i++;
             }
         }
@@ -427,6 +429,13 @@ public final class Hashtable extends PersistencyUnit {
         return (((long) slot) << 3) + 12L;
     }
 
+    public void setKeyConstructorFunction(ConstructorFunction<byte[], K> keyConstructorFunction) {
+        this.keyConstructorFunction = keyConstructorFunction;
+    }
+
+    public void setValueConstructorFunction(ConstructorFunction<byte[], V> valueConstructorFunction) {
+        this.valueConstructorFunction = valueConstructorFunction;
+    }
 
     /**
      * ----------- DEBUG METHODS START ----------
@@ -471,7 +480,7 @@ public final class Hashtable extends PersistencyUnit {
             final int bucketSize = data.getInt(address);
 //            log(address - 4 + "\t:d[" + bucketDepth + "] s[" + bucketSize + "]", print);
             address += 4L;
-            String p = "";
+            StringBuilder builder = new StringBuilder();
             for (int j = 0; j < bucketSize; ) {
                 final byte header = data.getByte(address);
                 final boolean isRemoved = header == MARK_REMOVED;
@@ -485,22 +494,23 @@ public final class Hashtable extends PersistencyUnit {
                 }
                 byte[] arr = new byte[keyLen];
                 data.getBytes(address, arr);
-                final Data keyRead = new Data(0, arr);
+                final K keyRead = keyConstructorFunction.createNew(arr);
                 address += keyLen;
                 arr = new byte[recordLen];
                 data.getBytes(address, arr);
-                final Data valueRead = new Data(0, arr);
+                final V valueRead = valueConstructorFunction.createNew(arr);
                 address += recordLen;
                 total++;
-                p += (total + "-RMV[" + isRemoved + "]S:{" + findSlot(keyRead, globalDepth) + "}"
+                builder.append (total + "-RMV[" + isRemoved + "]S:{" + findSlot(keyRead, globalDepth) + "}"
                         + "K[" + keyRead.hashCode() + "]" + "V[" + valueRead.hashCode() + "]" + " | ");
                 if (!isRemoved) {
                     j++;
                 }
             }
-            log(p, print);
+            log(builder.toString(), print);
             log("\n-------------------------");
         }
     }
+
 
 }

@@ -13,7 +13,7 @@ public enum  FileHelper {
     public static void deleteOnExit(String basePath) {
         for (String name : new String[]{basePath + ".data", basePath + ".index"}) {
             File file = new File(name);
-            file.delete();
+            file.delete();//ignore return type. just testing method.
             file.deleteOnExit();
         }
     }
