@@ -41,9 +41,9 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.SerializationService;
+import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.partition.MigrationEndpoint;
 import com.hazelcast.partition.PartitionService;
-import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.query.PagingPredicate;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.IndexService;
@@ -63,7 +63,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Level;
 
 /**
  * The SPI Service for the Map.
@@ -941,7 +940,7 @@ public class MapService implements ManagedService, MigrationAwareService,
 
             public void run() {
 
-                final Set<Data> keysGatheredForNearCacheEviction = new HashSet<Data>();
+                Set<Data> keysGatheredForNearCacheEviction  = null;
                 for (int i = 0; i < nodeEngine.getPartitionService().getPartitionCount(); i++) {
                     if ((i % ExecutorConfig.DEFAULT_POOL_SIZE) != mod) {
                         continue;
@@ -950,20 +949,28 @@ public class MapService implements ManagedService, MigrationAwareService,
                     if (nodeEngine.getThisAddress().equals(owner)) {
                         final PartitionContainer pc = partitionContainers[i];
                         final RecordStore recordStore = pc.getRecordStore(mapName);
-                        TreeSet<Record> sortedRecords = new TreeSet<Record>(comparator);
+                        final Collection<Record> values = recordStore.getReadonlyRecordMap().values();
+                        final List<Record> sortedRecords = new ArrayList<Record>(values.size());
                         sortedRecords.addAll(recordStore.getReadonlyRecordMap().values());
+                        Collections.sort(sortedRecords,comparator);
+
                         int evictSize;
-                        if (maxSizePolicy == MaxSizeConfig.MaxSizePolicy.PER_NODE || maxSizePolicy == MaxSizeConfig.MaxSizePolicy.PER_PARTITION) {
-                            evictSize = Math.max((sortedRecords.size() - targetSizePerPartition), (sortedRecords.size() * evictionPercentage / 100 + 1));
-                        } else {
-                            evictSize = sortedRecords.size() * evictionPercentage / 100;
+                        switch (maxSizePolicy){
+                            case PER_PARTITION:
+                            evictSize =  sortedRecords.size() - targetSizePerPartition;
+                            break;
+                            case PER_NODE:
+                            default:
+                                evictSize = sortedRecords.size() * evictionPercentage / 100;
+                                break;
                         }
 
-                        if (evictSize == 0)
+                        if (evictSize <= 0){
                             continue;
+                        }
 
-                        Set<Record> recordSet = new HashSet<Record>();
-                        Set<Data> keySet = new HashSet<Data>();
+                        Set<Record> recordSet = new HashSet<Record>(evictSize);
+                        Set<Data> keySet = new HashSet<Data>(evictSize);
                         Iterator iterator = sortedRecords.iterator();
                         while (iterator.hasNext() && evictSize-- > 0) {
                             Record rec = (Record) iterator.next();
@@ -972,6 +979,8 @@ public class MapService implements ManagedService, MigrationAwareService,
                         }
 
                         if (keySet.isEmpty()) continue;
+
+                        keysGatheredForNearCacheEviction = new HashSet<Data>(keySet.size());
                         //add keys for near cache eviction.
                         keysGatheredForNearCacheEviction.addAll(keySet);
                         //prepare local "evict keys" operation.
