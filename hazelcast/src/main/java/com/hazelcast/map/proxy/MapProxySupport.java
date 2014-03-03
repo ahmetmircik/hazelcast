@@ -83,7 +83,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         MapStoreConfig mapStoreConfig = mapConfig.getMapStoreConfig();
         if (mapStoreConfig != null && mapStoreConfig.isEnabled()) {
             MapStoreConfig.InitialLoadMode initialLoadMode = mapStoreConfig.getInitialLoadMode();
-            if (initialLoadMode.equals(MapStoreConfig.InitialLoadMode.EAGER)) {
+            if (MapStoreConfig.InitialLoadMode.EAGER.equals(initialLoadMode)) {
                 waitUntilLoaded();
             }
         }
@@ -500,7 +500,8 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                             entry.getKey(),
                             partitionStrategy),
                             mapService
-                                    .toData(entry.getValue())));
+                                    .toData(entry.getValue())
+                    ));
                 }
 
                 for (final Map.Entry<Integer, MapEntrySet> entry : entryMap.entrySet()) {
@@ -803,7 +804,8 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                     .invokeOnAllPartitions(SERVICE_NAME,
                             new PartitionWideEntryWithPredicateOperationFactory(name,
                                     entryProcessor,
-                                    predicate));
+                                    predicate)
+                    );
             for (Object o : results.values()) {
                 if (o != null) {
                     final MapService service = getService();
