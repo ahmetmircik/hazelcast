@@ -98,7 +98,7 @@ public class MapStoreTest extends HazelcastTestSupport {
 
         IMap map = instance1.getMap("testMapGetAll");
 
-        final HashSet<String> keys = new HashSet<String>();
+        final HashSet<String> keys = new HashSet<String>(3);
         keys.add("key1");
         keys.add("key3");
         keys.add("key4");
