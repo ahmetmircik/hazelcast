@@ -23,12 +23,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
-
-@RunWith(HazelcastParallelClassRunner.class)
-@Category(QuickTest.class)
 /**
  * Invalidates any map operation starter node's near cache immediately.
  */
+@RunWith(HazelcastParallelClassRunner.class)
+@Category(QuickTest.class)
 public class NearCacheLocalImmediateInvalidateTest extends HazelcastTestSupport {
 
     private static final int numIterations = 1000;
