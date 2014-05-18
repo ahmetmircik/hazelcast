@@ -18,7 +18,7 @@ package com.hazelcast.benchmark.serialization;
 
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.nio.serialization.TypeSerializer;
+import com.hazelcast.nio.serialization.StreamSerializer;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.smile.SmileFactory;
 
@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class SOSmileSerializer implements TypeSerializer<SampleObject> {
+public class SOSmileSerializer implements StreamSerializer<SampleObject> {
 
     SmileFactory f = new SmileFactory();
     ObjectMapper mapper = new ObjectMapper(f);

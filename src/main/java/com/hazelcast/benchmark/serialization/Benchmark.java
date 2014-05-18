@@ -18,8 +18,14 @@ package com.hazelcast.benchmark.serialization;
 
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.hazelcast.config.SerializationConfig;
-import com.hazelcast.config.TypeSerializerConfig;
-import com.hazelcast.nio.serialization.*;
+import com.hazelcast.config.SerializerConfig;
+import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.nio.serialization.DataSerializableFactory;
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import com.hazelcast.nio.serialization.Portable;
+import com.hazelcast.nio.serialization.PortableFactory;
+import com.hazelcast.nio.serialization.SerializationService;
+import com.hazelcast.nio.serialization.SerializationServiceBuilder;
 
 public class Benchmark {
 
@@ -82,7 +88,7 @@ public class Benchmark {
 
     private static void testKryo() throws Exception {
         SerializationConfig config = new SerializationConfig();
-        config.addTypeSerializer(new TypeSerializerConfig().
+        config.addSerializerConfig(new SerializerConfig().
                 setTypeClass(KryoSerializable.class).
                 setImplementation(new SOKryoSerializer(false)));
 
@@ -95,7 +101,7 @@ public class Benchmark {
 
     private static void testKryoUnsafe() throws Exception {
         SerializationConfig config = new SerializationConfig();
-        config.addTypeSerializer(new TypeSerializerConfig().
+        config.addSerializerConfig(new SerializerConfig().
                 setTypeClass(KryoSerializable.class).
                 setImplementation(new SOKryoSerializer(true)));
 

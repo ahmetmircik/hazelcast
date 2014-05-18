@@ -79,6 +79,7 @@ public class PlainBenchmark {
     private static void testDS() throws Exception {
         final Serializer serializer = new Serializer() {
             final SerializationService ss = new SerializationServiceBuilder()
+                    .setAllowUnsafe(true)
                     .setUseNativeByteOrder(true).build();
 
             public byte[] write(Object o) throws IOException {
@@ -113,6 +114,7 @@ public class PlainBenchmark {
     private static void testIDS() throws Exception {
         final Serializer serializer = new Serializer() {
             final SerializationService ss = new SerializationServiceBuilder()
+                    .setAllowUnsafe(true)
                     .setUseNativeByteOrder(true).build();
 
             final DataSerializableFactory f = new DataSerializableFactory() {

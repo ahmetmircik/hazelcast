@@ -23,13 +23,13 @@ import com.esotericsoftware.kryo.io.UnsafeInput;
 import com.esotericsoftware.kryo.io.UnsafeOutput;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.nio.serialization.TypeSerializer;
+import com.hazelcast.nio.serialization.StreamSerializer;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class SOKryoSerializer implements TypeSerializer<Object> {
+public class SOKryoSerializer implements StreamSerializer<Object> {
 
     Kryo kryo = new Kryo();
     final boolean unsafe;
