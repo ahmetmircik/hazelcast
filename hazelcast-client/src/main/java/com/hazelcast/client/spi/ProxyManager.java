@@ -22,14 +22,25 @@ import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.RemoveDistributedObjectListenerRequest;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.ProxyFactoryConfig;
-import com.hazelcast.client.proxy.*;
+import com.hazelcast.client.proxy.ClientAtomicLongProxy;
+import com.hazelcast.client.proxy.ClientAtomicReferenceProxy;
+import com.hazelcast.client.proxy.ClientCountDownLatchProxy;
+import com.hazelcast.client.proxy.ClientExecutorServiceProxy;
+import com.hazelcast.client.proxy.ClientIdGeneratorProxy;
+import com.hazelcast.client.proxy.ClientListProxy;
+import com.hazelcast.client.proxy.ClientLockProxy;
+import com.hazelcast.client.proxy.ClientMapProxy;
+import com.hazelcast.client.proxy.ClientMapReduceProxy;
+import com.hazelcast.client.proxy.ClientMultiMapProxy;
+import com.hazelcast.client.proxy.ClientQueueProxy;
+import com.hazelcast.client.proxy.ClientSemaphoreProxy;
+import com.hazelcast.client.proxy.ClientSetProxy;
+import com.hazelcast.client.proxy.ClientTopicProxy;
 import com.hazelcast.client.util.ListenerUtil;
 import com.hazelcast.collection.list.ListService;
 import com.hazelcast.collection.set.SetService;
-import com.hazelcast.concurrent.atomicreference.AtomicReferenceService;
-import com.hazelcast.mapreduce.impl.MapReduceService;
-import com.hazelcast.multimap.MultiMapService;
 import com.hazelcast.concurrent.atomiclong.AtomicLongService;
+import com.hazelcast.concurrent.atomicreference.AtomicReferenceService;
 import com.hazelcast.concurrent.countdownlatch.CountDownLatchService;
 import com.hazelcast.concurrent.idgen.IdGeneratorService;
 import com.hazelcast.concurrent.lock.LockServiceImpl;
@@ -43,6 +54,8 @@ import com.hazelcast.executor.DistributedExecutorService;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.MapService;
+import com.hazelcast.mapreduce.impl.MapReduceService;
+import com.hazelcast.multimap.MultiMapService;
 import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.queue.QueueService;
 import com.hazelcast.spi.DefaultObjectNamespace;
@@ -51,7 +64,9 @@ import com.hazelcast.spi.impl.PortableDistributedObjectEvent;
 import com.hazelcast.topic.TopicService;
 import com.hazelcast.util.ExceptionUtil;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -182,13 +197,19 @@ public final class ProxyManager {
             throw new IllegalArgumentException("No factory registered for service: " + service);
         }
         final ClientProxy clientProxy = factory.create(id);
-        final ClientProxyFuture future = new ClientProxyFuture();
-        final ClientProxyFuture current = proxies.putIfAbsent(ns, future);
-        if (current != null){
+        proxyFuture = new ClientProxyFuture();
+        final ClientProxyFuture current = proxies.putIfAbsent(ns, proxyFuture);
+        if (current != null) {
             return current.get();
         }
-        initialize(clientProxy);
-        future.set(clientProxy);
+        try {
+            initialize(clientProxy);
+        } catch (Exception e) {
+            proxies.remove(ns);
+            proxyFuture.set(e);
+            throw ExceptionUtil.rethrow(e);
+        }
+        proxyFuture.set(clientProxy);
         return clientProxy;
     }
 
@@ -197,18 +218,13 @@ public final class ProxyManager {
         return proxies.remove(ns).get();
     }
 
-    private void initialize(ClientProxy clientProxy) {
+    private void initialize(ClientProxy clientProxy) throws Exception {
         ClientCreateRequest request = new ClientCreateRequest(clientProxy.getName(), clientProxy.getServiceName());
-        try {
-            client.getInvocationService().invokeOnRandomTarget(request).get();
-        } catch (Exception e) {
-            throw ExceptionUtil.rethrow(e);
-        }
-        final ClientContext clientContext = new ClientContext(client, this);
-        clientProxy.setContext(clientContext);
+        client.getInvocationService().invokeOnRandomTarget(request).get();
+        clientProxy.setContext(new ClientContext(client, this));
     }
 
-    public Collection<? extends DistributedObject> getDistributedObjects(){
+    public Collection<? extends DistributedObject> getDistributedObjects() {
         Collection<DistributedObject> objects = new LinkedList<DistributedObject>();
         for (ClientProxyFuture future : proxies.values()) {
             objects.add(future.get());
@@ -230,7 +246,7 @@ public final class ProxyManager {
                 final ObjectNamespace ns = new DefaultObjectNamespace(e.getServiceName(), e.getName());
                 ClientProxyFuture future = proxies.get(ns);
                 ClientProxy proxy = future == null ? null : future.get();
-                if (proxy == null){
+                if (proxy == null) {
                     proxy = getProxy(e.getServiceName(), e.getName());
                 }
 
@@ -259,7 +275,7 @@ public final class ProxyManager {
 
     private static class ClientProxyFuture {
 
-        volatile ClientProxy proxy;
+        volatile Object proxy;
 
         ClientProxy get() {
             if (proxy == null) {
@@ -277,10 +293,13 @@ public final class ProxyManager {
                     Thread.currentThread().interrupt();
                 }
             }
-            return proxy;
+            if (proxy instanceof Throwable) {
+                throw ExceptionUtil.rethrow((Throwable)proxy);
+            }
+            return (ClientProxy)proxy;
         }
 
-        void set(ClientProxy o) {
+        void set(Object o) {
             if (o == null) {
                 throw new IllegalArgumentException();
             }
@@ -289,5 +308,6 @@ public final class ProxyManager {
                 notifyAll();
             }
         }
+
     }
 }

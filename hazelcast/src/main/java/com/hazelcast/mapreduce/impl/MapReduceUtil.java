@@ -57,6 +57,7 @@ public final class MapReduceUtil {
 
     private static final String EXECUTOR_NAME_PREFIX = "mapreduce::hz::";
     private static final String SERVICE_NAME = MapReduceService.SERVICE_NAME;
+    private static final float DEFAULT_MAP_GROWTH_FACTOR = 0.75f;
 
     private MapReduceUtil() {
     }
@@ -244,13 +245,19 @@ public final class MapReduceUtil {
                     operation.run();
 
                     if (returnsResponse) {
-                        results.add((V) operation.getResponse());
+                        V response = (V) operation.getResponse();
+                        if (response != null) {
+                            results.add(response);
+                        }
                     }
                 } else {
                     if (returnsResponse) {
                         InvocationBuilder ib = os.createInvocationBuilder(SERVICE_NAME, operation, member.getAddress());
 
-                        results.add((V) ib.invoke().get());
+                        V response = (V) ib.invoke().get();
+                        if (response != null) {
+                            results.add(response);
+                        }
                     } else {
                         os.send(operation, member.getAddress());
                     }
@@ -298,4 +305,7 @@ public final class MapReduceUtil {
         return EXECUTOR_NAME_PREFIX + name;
     }
 
+    public static int mapSize(final int sourceSize) {
+        return sourceSize == 0 ? 0 : (int) (sourceSize / DEFAULT_MAP_GROWTH_FACTOR) + 1;
+    }
 }

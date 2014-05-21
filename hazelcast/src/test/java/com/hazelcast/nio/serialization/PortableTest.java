@@ -17,11 +17,12 @@
 package com.hazelcast.nio.serialization;
 
 import com.hazelcast.config.SerializationConfig;
+import com.hazelcast.nio.BufferObjectDataInput;
+import com.hazelcast.nio.BufferObjectDataOutput;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.annotation.QuickTest;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -31,6 +32,7 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -105,18 +107,20 @@ public class PortableTest {
 
     @Test
     public void testDifferentVersions() {
-        final SerializationService serializationService = new SerializationServiceBuilder().setVersion(1).addPortableFactory(FACTORY_ID, new PortableFactory() {
-            public Portable create(int classId) {
-                return new NamedPortable();
-            }
+        final SerializationService serializationService = new SerializationServiceBuilder().setVersion(1)
+                .addPortableFactory(FACTORY_ID, new PortableFactory() {
+                    public Portable create(int classId) {
+                        return new NamedPortable();
+                    }
 
-        }).build();
+                }).build();
 
-        final SerializationService serializationService2 = new SerializationServiceBuilder().setVersion(2).addPortableFactory(FACTORY_ID, new PortableFactory() {
-            public Portable create(int classId) {
-                return new NamedPortableV2();
-            }
-        }).build();
+        final SerializationService serializationService2 = new SerializationServiceBuilder().setVersion(2)
+                .addPortableFactory(FACTORY_ID, new PortableFactory() {
+                    public Portable create(int classId) {
+                        return new NamedPortableV2();
+                    }
+                }).build();
 
         NamedPortable p1 = new NamedPortable("portable-v1", 111);
         Data data = serializationService.toData(p1);
@@ -126,6 +130,50 @@ public class PortableTest {
 
         serializationService2.toObject(data);
         serializationService.toObject(data2);
+    }
+
+    @Test
+    public void testDifferentVersionsUsingDataWriteAndRead() throws IOException {
+        final SerializationService serializationService = new SerializationServiceBuilder().setVersion(1)
+                .addPortableFactory(FACTORY_ID, new PortableFactory() {
+                    public Portable create(int classId) {
+                        return new NamedPortable();
+                    }
+
+                }).build();
+
+        final SerializationService serializationService2 = new SerializationServiceBuilder().setVersion(2)
+                .addPortableFactory(FACTORY_ID, new PortableFactory() {
+                    public Portable create(int classId) {
+                        return new NamedPortableV2();
+                    }
+                }).build();
+
+        NamedPortable p1 = new NamedPortable("portable-v1", 111);
+        Data data = serializationService.toData(p1);
+
+        // emulate socket write by writing data to stream
+        BufferObjectDataOutput out = serializationService.createObjectDataOutput(1024);
+        data.writeData(out);
+        byte[] bytes = out.toByteArray();
+
+        // emulate socket read by reading data from stream
+        BufferObjectDataInput in = serializationService2.createObjectDataInput(bytes);
+        data = new Data();
+        data.readData(in);
+
+        // register class def and read data
+        Object object1 = serializationService2.toObject(data);
+
+        // serialize new portable version
+        NamedPortableV2 p2 = new NamedPortableV2("portable-v2", 123);
+        Data data2 = serializationService2.toData(p2);
+
+        // de-serialize back using old version
+        Object object2 = serializationService.toObject(data2);
+
+        assertTrue(object1 instanceof NamedPortableV2);
+        assertTrue(object2 instanceof NamedPortable);
     }
 
     @Test
@@ -256,11 +304,11 @@ public class PortableTest {
         serializationConfig.setPortableVersion(1);
         serializationConfig
                 .addClassDefinition(
-                    new ClassDefinitionBuilder(FACTORY_ID, RawDataPortable.CLASS_ID)
-                        .addLongField("l").addCharArrayField("c").addPortableField("p", createNamedPortableClassDefinition()).build())
+                        new ClassDefinitionBuilder(FACTORY_ID, RawDataPortable.CLASS_ID)
+                                .addLongField("l").addCharArrayField("c").addPortableField("p", createNamedPortableClassDefinition()).build())
                 .addClassDefinition(
-                    new ClassDefinitionBuilder(FACTORY_ID, NamedPortable.CLASS_ID)
-                        .addUTFField("name").addIntField("myint").build()
+                        new ClassDefinitionBuilder(FACTORY_ID, NamedPortable.CLASS_ID)
+                                .addUTFField("name").addIntField("myint").build()
                 );
 
         SerializationService serializationService = new SerializationServiceBuilder().setConfig(serializationConfig).build();
@@ -700,6 +748,17 @@ public class PortableTest {
 
         public int getFactoryId() {
             return FACTORY_ID;
+        }
+
+
+        @Override
+        public String toString() {
+            final StringBuilder sb = new StringBuilder("NamedPortableV2{");
+            sb.append("name='").append(name).append('\'');
+            sb.append(", k=").append(k);
+            sb.append(", v=").append(v);
+            sb.append('}');
+            return sb.toString();
         }
     }
 
