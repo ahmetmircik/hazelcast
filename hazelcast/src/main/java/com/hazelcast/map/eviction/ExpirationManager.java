@@ -46,7 +46,7 @@ public class ExpirationManager {
 
         private static final int EXPIRATION_PERCENTAGE = 10;
 
-        private static final long MIN_MILLIS_DIFF_BETWEEN_TWO_RUN = 2000;
+        private static final long MIN_MILLIS_DIFF_BETWEEN_TWO_RUNS = 2000;
 
         private final Comparator<PartitionContainer> partitionContainerComparator = new Comparator<PartitionContainer>() {
             @Override
@@ -123,7 +123,7 @@ public class ExpirationManager {
         }
 
         private boolean notInProcessibleTimeWindow(PartitionContainer partitionContainer, long now) {
-            return now - partitionContainer.getLastCleanupTime() < MIN_MILLIS_DIFF_BETWEEN_TWO_RUN;
+            return now - partitionContainer.getLastCleanupTime() < MIN_MILLIS_DIFF_BETWEEN_TWO_RUNS;
         }
 
         private int getMaxCleanupOperationCountInOneRound() {
