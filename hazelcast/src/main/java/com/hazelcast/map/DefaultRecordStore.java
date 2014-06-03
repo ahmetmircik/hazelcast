@@ -42,6 +42,7 @@ import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.OperationAccessor;
 import com.hazelcast.spi.ResponseHandler;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
+import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
 
 import java.util.AbstractMap;
@@ -52,7 +53,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -71,7 +71,7 @@ public class DefaultRecordStore implements RecordStore {
     /**
      * Number of reads before clean up.
      */
-    private static final byte POST_READ_CHECK_POINT = 0x3F;
+    private static final int POST_READ_CHECK_POINT = 0x3F;
     private final String name;
     private final int partitionId;
     private final ConcurrentMap<Data, Record> records = new ConcurrentHashMap<Data, Record>(1000);
@@ -85,14 +85,27 @@ public class DefaultRecordStore implements RecordStore {
     private final WriteBehindQueue<DelayedEntry> writeBehindQueue;
     private long lastEvictionTime;
     /**
+     * Flag for checking if this record store has at least one candidate entry
+     * for expiration (idle or tll) or not.
+     */
+    private volatile boolean expirable;
+
+    /**
+     * Iterates over a pre-set entry count/percentage in one round.
+     */
+    private Iterator<Record> expirationIterator;
+
+    /**
      * If there is no clean-up caused by puts after some time,
      * count a number of gets and start eviction.
      */
-    private byte readCountBeforeCleanUp;
+    private int readCountBeforeCleanUp;
+
     /**
      * To check if a key has a delayed delete operation or not.
      */
     private final Set<Data> writeBehindWaitingDeletions;
+
     /**
      * used for lru eviction.
      */
@@ -114,6 +127,8 @@ public class DefaultRecordStore implements RecordStore {
                 : lockService.createLockStore(partitionId, new DefaultObjectNamespace(MapService.SERVICE_NAME, name));
         this.sizeEstimator = SizeEstimators.createMapSizeEstimator();
         loadFromMapStore(nodeEngine);
+        this.expirable = mapContainer.getMapConfig().getMaxIdleSeconds() > 0
+                || mapContainer.getMapConfig().getTimeToLiveSeconds() > 0;
     }
 
     public boolean isLoaded() {
@@ -167,6 +182,7 @@ public class DefaultRecordStore implements RecordStore {
 
     public Record putBackup(Data key, Object value, long ttl) {
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         if (record == null) {
@@ -261,31 +277,63 @@ public class DefaultRecordStore implements RecordStore {
     }
 
     @Override
-    public List findUnlockedExpiredRecords() {
-        checkIfLoaded();
-
+    public void evictExpireds(int percentage, boolean owner) {
         final long nowInNanos = nowInNanos();
-        List<Object> expiredKeyValueSequence = Collections.emptyList();
-        boolean createLazy = true;
-        for (Map.Entry<Data, Record> entry : records.entrySet()) {
-            final Data key = entry.getKey();
+        final float maxIterationCount = getMaxIterationCount(percentage);
+        final int maxRetry = 3;
+        int loop = 0;
+        while (true) {
+            evictExpireds0(maxIterationCount, nowInNanos, owner);
+            loop++;
+            if (loop > maxRetry) {
+                break;
+            }
+        }
+    }
+
+    private float getMaxIterationCount(int percentage) {
+        final float oneHundred = 100F;
+        final int defaultMaxIterationCount = 100;
+        float maxIterationCount = size() * (percentage / oneHundred);
+        if (maxIterationCount < defaultMaxIterationCount) {
+            maxIterationCount = defaultMaxIterationCount;
+        }
+        return maxIterationCount;
+    }
+
+    private int evictExpireds0(float maxIterationCount, long nowInNanos, boolean owner) {
+        initExpirationIterator();
+        int evictedCount = 0;
+        int checkedEntryCount = 0;
+        while (expirationIterator.hasNext()) {
+            if (checkedEntryCount >= maxIterationCount) {
+                break;
+            }
+            checkedEntryCount++;
+            final Record record = expirationIterator.next();
+            final Data key = record.getKey();
             if (isLocked(key)) {
                 continue;
             }
-            final Record record = entry.getValue();
             if (isReachable(record, nowInNanos)) {
                 continue;
             }
-            final Object value = record.getValue();
-            evict(key);
-            if (createLazy) {
-                expiredKeyValueSequence = new ArrayList<Object>();
-                createLazy = false;
+            evict0(key);
+            evictedCount++;
+            initExpirationIterator();
+            // do post eviction operations.
+            if (owner) {
+                doPostEvictionOperations(key, record.getValue());
             }
-            expiredKeyValueSequence.add(key);
-            expiredKeyValueSequence.add(value);
         }
-        return expiredKeyValueSequence;
+        return evictedCount;
+    }
+
+
+    private void initExpirationIterator() {
+        if (expirationIterator == null || !expirationIterator.hasNext()) {
+            expirationIterator = records.values().iterator();
+        }
     }
 
     @Override
@@ -460,17 +508,22 @@ public class DefaultRecordStore implements RecordStore {
         lruAccessSequenceNumber = 0L;
     }
 
-    public Object evict(Data dataKey) {
+    @Override
+    public Object evict(Data key) {
         checkIfLoaded();
+        return evict0(key);
+    }
 
-        Record record = records.get(dataKey);
+    private Object evict0(Data key) {
+        Record record = records.get(key);
         Object oldValue = null;
         if (record != null) {
+            mapStoreFlush(key);
             mapService.interceptRemove(name, record.getValue());
             oldValue = record.getValue();
             updateSizeEstimator(-calculateRecordSize(record));
-            deleteRecord(dataKey);
-            removeIndex(dataKey);
+            deleteRecord(key);
+            removeIndex(key);
         }
         return oldValue;
     }
@@ -691,6 +744,7 @@ public class DefaultRecordStore implements RecordStore {
     public Object put(Data key, Object value, long ttl) {
         checkIfLoaded();
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         Object oldValue = null;
@@ -716,7 +770,6 @@ public class DefaultRecordStore implements RecordStore {
             updateTtl(record, ttl);
             saveIndex(record);
         }
-
         removeFromWriteBehindWaitingDeletions(key);
 
         return oldValue;
@@ -725,6 +778,7 @@ public class DefaultRecordStore implements RecordStore {
     public boolean set(Data key, Object value, long ttl) {
         checkIfLoaded();
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         boolean newRecord = false;
@@ -842,6 +896,7 @@ public class DefaultRecordStore implements RecordStore {
     public void putTransient(Data key, Object value, long ttl) {
         checkIfLoaded();
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         if (record == null) {
@@ -863,6 +918,7 @@ public class DefaultRecordStore implements RecordStore {
     public void putFromLoad(Data key, Object value, long ttl) {
         Record record = records.get(key);
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         if (record == null) {
             value = mapService.interceptPut(name, null, value);
@@ -883,6 +939,7 @@ public class DefaultRecordStore implements RecordStore {
     public boolean tryPut(Data key, Object value, long ttl) {
         checkIfLoaded();
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         if (record == null) {
@@ -908,6 +965,7 @@ public class DefaultRecordStore implements RecordStore {
     public Object putIfAbsent(Data key, Object value, long ttl) {
         checkIfLoaded();
         earlyWriteCleanup();
+        markExpirable(ttl);
 
         Record record = records.get(key);
         Object oldValue = null;
@@ -1022,19 +1080,36 @@ public class DefaultRecordStore implements RecordStore {
     }
 
     private void cleanUp() {
-        final long now = System.currentTimeMillis();
-        final int evictAfterMs = 1000;
-        if (now - lastEvictionTime <= evictAfterMs) {
+        if (size() == 0) {
             return;
         }
-        final boolean evictable = EvictionHelper.checkEvictable(mapContainer);
-        if (!evictable) {
-            return;
+        if (inEvictableTimeWindow() && isEvictable()) {
+            removeEvictables();
+            lastEvictionTime = Clock.currentTimeMillis();
+            readCountBeforeCleanUp = 0;
         }
+    }
+
+    private void removeEvictables() {
         EvictionHelper.removeEvictableRecords(DefaultRecordStore.this,
                 mapContainer.getMapConfig(), mapService);
-        lastEvictionTime = now;
-        readCountBeforeCleanUp = 0;
+    }
+
+
+    /**
+     * Eviction waits at least 1000 milliseconds to run.
+     *
+     * @return <code>true</code> if in that time window,
+     * otherwise <code>false</code>
+     */
+    private boolean inEvictableTimeWindow() {
+        final int evictAfterMs = 1000;
+        final long now = Clock.currentTimeMillis();
+        return (now - lastEvictionTime) > evictAfterMs;
+    }
+
+    private boolean isEvictable() {
+        return EvictionHelper.checkEvictable(mapContainer);
     }
 
     private Record nullIfExpired(Record record) {
@@ -1054,6 +1129,11 @@ public class DefaultRecordStore implements RecordStore {
             return;
         }
         writeBehindWaitingDeletions.remove(key);
+    }
+
+    @Override
+    public boolean isExpirable() {
+        return expirable;
     }
 
     private boolean hasWaitingWriteBehindDeleteOperation(Data key) {
@@ -1097,8 +1177,14 @@ public class DefaultRecordStore implements RecordStore {
         return result != null;
     }
 
+    /**
+     * - Sends eviction event.
+     * - Invalidates near cache.
+     *
+     * @param key   the key to be processed.
+     * @param value the value to be processed.
+     */
     private void doPostEvictionOperations(Data key, Object value) {
-        mapService.interceptAfterRemove(name, value);
         if (mapService.isNearCacheAndInvalidationEnabled(name)) {
             mapService.invalidateAllNearCaches(name, key);
         }
@@ -1172,23 +1258,35 @@ public class DefaultRecordStore implements RecordStore {
     }
 
     /**
+     * For write-behind mode, flush all waiting operations on this key to map store.
+     *
+     * @param key to be evicted.
+     */
+    private void mapStoreFlush(Data key) {
+        if (!mapContainer.isWriteBehindMapStoreEnabled()) {
+            return;
+        }
+        final DelayedEntry<Data, Object> delayedEntry = DelayedEntry.createWithKey(key);
+        mapContainer.getWriteBehindManager().flush(delayedEntry, getWriteBehindQueue());
+    }
+
+    /**
      * Constructs and adds a {@link com.hazelcast.map.writebehind.DelayedEntry}
      * instance to write behind queue.
      *
-     * @param dataKey
-     * @param recordValue
+     * @param key   to be stored.
+     * @param value to be stored.
      */
-    private void addToDelayedStore(Data dataKey, Object recordValue) {
+    private void addToDelayedStore(Data key, Object value) {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return;
         }
         final long writeDelayMillis = mapContainer.getWriteDelayMillis();
         final DelayedEntry<Data, Object> delayedEntry
-                = mapService.constructDelayedEntry(dataKey, recordValue,
-                partitionId, writeDelayMillis);
+                = mapService.constructDelayedEntry(key, value, partitionId, writeDelayMillis);
         // if value is null this is a delete operation.
-        if (recordValue == null) {
-            addToWriteBehindWaitingDeletions(dataKey);
+        if (value == null) {
+            addToWriteBehindWaitingDeletions(key);
         }
         writeBehindQueue.offer(delayedEntry);
     }
@@ -1211,6 +1309,12 @@ public class DefaultRecordStore implements RecordStore {
 
     private static long nowInNanos() {
         return System.nanoTime();
+    }
+
+    private void markExpirable(long ttl) {
+        if (ttl > 0) {
+            expirable = true;
+        }
     }
 
     private void updateSizeEstimator(long recordSize) {

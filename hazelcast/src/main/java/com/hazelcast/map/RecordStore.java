@@ -24,7 +24,6 @@ import com.hazelcast.map.writebehind.WriteBehindQueue;
 import com.hazelcast.nio.serialization.Data;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -136,7 +135,20 @@ public interface RecordStore {
 
     WriteBehindQueue<DelayedEntry> getWriteBehindQueue();
 
-    List findUnlockedExpiredRecords();
+    /**
+     * Do expiration operations.
+     *
+     * @param percentage of max expirables according to the record store size.
+     * @param owner <code>true</code> if an owner partition, otherwise <code>false</code>.
+     */
+    void evictExpireds(int percentage, boolean owner);
 
     void removeFromWriteBehindWaitingDeletions(Data key);
+
+    /**
+     * @return <code>true</code> if record store has at least one candidate entry
+     * for expiration else return <code>true</code>.
+     */
+    boolean isExpirable();
+
 }

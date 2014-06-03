@@ -28,25 +28,25 @@ public final class WriteBehindQueues {
     private WriteBehindQueues() {
     }
 
-    public static <T> WriteBehindQueue<T> createArrayWriteBehindQueue() {
+    public static <T extends AbstractDelayedEntry> WriteBehindQueue<T> createArrayWriteBehindQueue() {
         return new ArrayWriteBehindQueue<T>();
     }
 
-    public static <T> WriteBehindQueue<T> createBoundedArrayWriteBehindQueue() {
+    public static <T extends AbstractDelayedEntry> WriteBehindQueue<T> createBoundedArrayWriteBehindQueue() {
         return new BoundedArrayWriteBehindQueue<T>();
     }
 
-    public static <T> WriteBehindQueue<T> createDefaultWriteBehindQueue(boolean isWriteBehindEnabled) {
-        return isWriteBehindEnabled
+    public static <T extends AbstractDelayedEntry> WriteBehindQueue<T> createDefaultWriteBehindQueue(boolean isWBehindEnabled) {
+        return isWBehindEnabled
                 ? (WriteBehindQueue<T>) createSafeWriteBehindQueue(createBoundedArrayWriteBehindQueue())
                 : (WriteBehindQueue<T>) emptyWriteBehindQueue();
     }
 
-    public static <T> WriteBehindQueue<T> emptyWriteBehindQueue() {
+    public static <T extends AbstractDelayedEntry> WriteBehindQueue<T> emptyWriteBehindQueue() {
         return (WriteBehindQueue<T>) EmptyWriteBehindQueueHolder.EMPTY_WRITE_BEHIND_QUEUE;
     }
 
-    public static <T> WriteBehindQueue<T> createSafeWriteBehindQueue(WriteBehindQueue<T> queue) {
+    public static <T extends AbstractDelayedEntry> WriteBehindQueue<T> createSafeWriteBehindQueue(WriteBehindQueue<T> queue) {
         return new SynchronizedWriteBehindQueue<T>(queue);
     }
 
@@ -63,10 +63,10 @@ public final class WriteBehindQueues {
     /**
      * Empty write behind queue provides neutral null behaviour.
      */
-    private static final class EmptyWriteBehindQueue implements WriteBehindQueue {
+    private static final class EmptyWriteBehindQueue<T extends AbstractDelayedEntry> implements WriteBehindQueue<T> {
 
         @Override
-        public boolean offer(Object o) {
+        public boolean offer(T t) {
             return false;
         }
 
@@ -75,13 +75,13 @@ public final class WriteBehindQueues {
         }
 
         @Override
-        public Object get(int index) {
+        public T get(int index) {
             throw new IndexOutOfBoundsException("Index: " + index);
         }
 
         @Override
-        public boolean contains(Object o) {
-            return false;
+        public T remove(int index) {
+            return null;
         }
 
         @Override
@@ -110,7 +110,12 @@ public final class WriteBehindQueues {
         }
 
         @Override
-        public List fetchAndRemoveAll() {
+        public List removeAll() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List<T> markPassive(T entry) {
             return Collections.emptyList();
         }
 

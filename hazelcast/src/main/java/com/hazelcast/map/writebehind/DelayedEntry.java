@@ -19,10 +19,12 @@ package com.hazelcast.map.writebehind;
 /**
  * Immutable store entry for delayed store operations.
  *
- * @param <K>
- * @param <V>
+ * @param <K> the key type.
+ * @param <V> the value type.
  */
 public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
+
+    private static final Object NULL_VALUE = new Object();
 
     private final V value;
 
@@ -40,10 +42,18 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     }
 
     /**
+     * Includes only key, no value.
+     * Used in comparisons.
+     */
+    public static <K, V> DelayedEntry<K, V> createWithKey(K key) {
+        return new DelayedEntry<K, V>(key, (V) NULL_VALUE, 0L, 0);
+    }
+
+    /**
      * Used for tests.
      */
     public static <K, V> DelayedEntry<K, V> createEmpty() {
-        return new DelayedEntry<K, V>(null, null, 0, 0);
+        return new DelayedEntry<K, V>(null, null, 0L, 0);
     }
 
 

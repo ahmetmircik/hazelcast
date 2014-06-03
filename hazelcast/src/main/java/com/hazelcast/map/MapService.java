@@ -29,6 +29,7 @@ import com.hazelcast.core.Member;
 import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.eviction.ExpirationManager;
 import com.hazelcast.map.merge.HigherHitsMapMergePolicy;
 import com.hazelcast.map.merge.LatestUpdateMapMergePolicy;
 import com.hazelcast.map.merge.MapMergePolicy;
@@ -121,8 +122,7 @@ public class MapService implements ManagedService, MigrationAwareService,
     private final ConcurrentMap<String, NearCache> nearCacheMap = new ConcurrentHashMap<String, NearCache>();
     private final AtomicReference<List<Integer>> ownedPartitions;
     private final Map<String, MapMergePolicy> mergePolicyMap;
-    // we added following latency to be sure the ongoing migration is completed if the owner of
-    // the record could not complete task before migration
+    private final ExpirationManager expirationManager;
 
     public MapService(NodeEngine nodeEngine) {
         this.nodeEngine = nodeEngine;
@@ -134,7 +134,7 @@ public class MapService implements ManagedService, MigrationAwareService,
         mergePolicyMap.put(HigherHitsMapMergePolicy.class.getName(), new HigherHitsMapMergePolicy());
         mergePolicyMap.put(PassThroughMergePolicy.class.getName(), new PassThroughMergePolicy());
         mergePolicyMap.put(LatestUpdateMapMergePolicy.class.getName(), new LatestUpdateMapMergePolicy());
-
+        expirationManager = new ExpirationManager(this);
     }
 
     private final ConcurrentMap<String, LocalMapStatsImpl> statsMap = new ConcurrentHashMap<String, LocalMapStatsImpl>(1000);
@@ -170,6 +170,7 @@ public class MapService implements ManagedService, MigrationAwareService,
                 }
             });
         }
+        expirationManager.start();
     }
 
     public void reset() {

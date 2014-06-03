@@ -70,15 +70,19 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
     }
 
     @Override
-    public void process(Collection<DelayedEntry> delayedEntries, Map<Integer, Collection<DelayedEntry>> failsPerPartition) {
+    public Map<Integer, Collection<DelayedEntry>> process(Collection<DelayedEntry> delayedEntries) {
         if (delayedEntries == null || delayedEntries.isEmpty()) {
-            return;
+            return Collections.emptyMap();
         }
+        final Map<Integer, Collection<DelayedEntry>> failsPerPartition = new HashMap<Integer, Collection<DelayedEntry>>();
         final List<DelayedEntry> entriesToProcess = new ArrayList<DelayedEntry>();
         StoreOperationType operationType = null;
         StoreOperationType previousOperationType;
         // process entries by preserving order.
         for (final DelayedEntry<Data, Object> entry : delayedEntries) {
+            if (isFlushedEntry(entry)) {
+                continue;
+            }
             previousOperationType = operationType;
             if (entry.getValue() == null) {
                 operationType = StoreOperationType.DELETE;
@@ -95,6 +99,17 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
         final Collection<DelayedEntry> faileds = callHandler(entriesToProcess, operationType);
         addToFails(faileds, failsPerPartition);
         entriesToProcess.clear();
+        return failsPerPartition;
+    }
+
+    /**
+     * Returns true if {@link com.hazelcast.map.writebehind.DelayedEntry} store time is zero.
+     * zero store time means entry has already flushed to store.
+     *
+     * @return <code>true</code> if store time is zero, otherwise returns <code>false</code>.
+     */
+    private boolean isFlushedEntry(DelayedEntry entry) {
+        return entry.getStoreTime() == 0;
     }
 
     private void addToFails(Collection<DelayedEntry> fails, Map<Integer, Collection<DelayedEntry>> failsPerPartition) {

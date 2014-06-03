@@ -27,9 +27,9 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
     public void testOffer() {
         final WriteBehindQueue<DelayedEntry> queue = WriteBehindQueues.createDefaultWriteBehindQueue(true);
 
-        fillQueue(queue);
+        fillQueue(queue, 1000);
 
-        assertEquals(3, queue.size());
+        assertEquals(1000, queue.size());
     }
 
     @Test
@@ -50,20 +50,12 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
         assertEquals(0, queue.size());
     }
 
-    @Test
-    public void testContains() {
-        final WriteBehindQueue<DelayedEntry> queue = WriteBehindQueues.createDefaultWriteBehindQueue(true);
-
-        fillQueue(queue);
-
-        assertEquals(false, queue.contains(DelayedEntry.createEmpty()));
-    }
 
     @Test
     public void testClearFull() {
         final WriteBehindQueue<DelayedEntry> queue = WriteBehindQueues.createDefaultWriteBehindQueue(true);
 
-        fillQueue(queue);
+        fillQueue(queue, 1000);
 
         queue.clear();
 
@@ -75,29 +67,21 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
     public void testRemoveAll() {
         final WriteBehindQueue<DelayedEntry> queue = WriteBehindQueues.createDefaultWriteBehindQueue(true);
 
-        final DelayedEntry<Object, Object> e1 = DelayedEntry.createEmpty();
-        final DelayedEntry<Object, Object> e2 = DelayedEntry.createEmpty();
-        final DelayedEntry<Object, Object> e3 = DelayedEntry.createEmpty();
+        fillQueue(queue, 1000);
 
-        queue.offer(e1);
-        queue.offer(e2);
-        queue.offer(e3);
-
-        queue.removeFirst();
-        queue.removeFirst();
-        queue.removeFirst();
+        for (int i = 0; i < 1000; i++) {
+            queue.removeFirst();
+        }
 
         assertEquals(0, queue.size());
     }
 
-    private void fillQueue(WriteBehindQueue queue){
-        final DelayedEntry<Object, Object> e1 = DelayedEntry.createEmpty();
-        final DelayedEntry<Object, Object> e2 = DelayedEntry.createEmpty();
-        final DelayedEntry<Object, Object> e3 = DelayedEntry.createEmpty();
+    private void fillQueue(WriteBehindQueue queue, int numberOfItems) {
+        for (int i = 0; i < numberOfItems; i++) {
+            final DelayedEntry<Object, Object> e = DelayedEntry.createEmpty();
+            queue.offer(e);
+        }
 
-        queue.offer(e1);
-        queue.offer(e2);
-        queue.offer(e3);
     }
 
 }

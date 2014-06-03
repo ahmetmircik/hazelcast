@@ -16,14 +16,18 @@
 
 package com.hazelcast.map.writebehind;
 
+import java.util.Arrays;
+
 /**
- * @param <K>
+ * @param <K> the key type.
  */
 abstract class AbstractDelayedEntry<K> {
 
     private final K key;
 
     private final long storeTime;
+
+    private boolean active;
 
     // TODO really need this?
     private final int partitionId;
@@ -32,6 +36,7 @@ abstract class AbstractDelayedEntry<K> {
         this.key = key;
         this.storeTime = storeTime;
         this.partitionId = partitionId;
+        this.active = true;
     }
 
     public K getKey() {
@@ -44,6 +49,14 @@ abstract class AbstractDelayedEntry<K> {
 
     public int getPartitionId() {
         return partitionId;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 
     @Override
@@ -64,8 +77,10 @@ abstract class AbstractDelayedEntry<K> {
         return key.equals(delayedEntry.getKey());
     }
 
+
     @Override
     public int hashCode() {
-        return key.hashCode();
+        long[] elements = {key.hashCode(), storeTime};
+        return Arrays.hashCode(elements);
     }
 }

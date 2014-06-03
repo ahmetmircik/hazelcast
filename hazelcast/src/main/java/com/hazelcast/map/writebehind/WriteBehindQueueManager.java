@@ -106,16 +106,38 @@ class WriteBehindQueueManager implements WriteBehindManager {
         if (queue.size() == 0) {
             return Collections.emptyList();
         }
-        final List<DelayedEntry> sortedDelayedEntries = queue.fetchAndRemoveAll();
-        Collections.sort(sortedDelayedEntries, DELAYED_ENTRY_COMPARATOR);
-        final Map<Integer, Collection<DelayedEntry>> failedStoreOpPerPartition
-                = new HashMap<Integer, Collection<DelayedEntry>>();
-        mapStoreManager.process(sortedDelayedEntries, failedStoreOpPerPartition);
+        final List<DelayedEntry> sortedDelayedEntries = queue.removeAll();
+        return flush0(sortedDelayedEntries);
+    }
+
+    @Override
+    public Collection<Data> flush(DelayedEntry entry, WriteBehindQueue<DelayedEntry> queue) {
+        if (queue.size() == 0) {
+            return Collections.emptyList();
+        }
+        final List<DelayedEntry> delayedEntries = queue.markPassive(entry);
+        return flush0(delayedEntries);
+    }
+
+    private Collection<Data> flush0(List<DelayedEntry> delayedEntries) {
+        Collections.sort(delayedEntries, DELAYED_ENTRY_COMPARATOR);
+        final Map<Integer, Collection<DelayedEntry>> failedStoreOpPerPartition = mapStoreManager.process(delayedEntries);
         if (failedStoreOpPerPartition.size() > 0) {
             printErrorLog(failedStoreOpPerPartition);
         }
-        queue.clear();
-        return getDataKeys(sortedDelayedEntries);
+        return getDataKeys(delayedEntries);
+    }
+
+    private List<Data> getDataKeys(final List<DelayedEntry> sortedDelayedEntries) {
+        if (sortedDelayedEntries == null || sortedDelayedEntries.isEmpty()) {
+            return Collections.emptyList();
+        }
+        final List<Data> keys = new ArrayList<Data>(sortedDelayedEntries.size());
+        for (DelayedEntry entry : sortedDelayedEntries) {
+            // TODO Key type always should be Data. No need to call mapService.toData but check first if it is.
+            keys.add(mapService.toData(entry.getKey()));
+        }
+        return keys;
     }
 
     @Override
@@ -133,8 +155,8 @@ class WriteBehindQueueManager implements WriteBehindManager {
         logger.severe(logMessage);
     }
 
-    private static List<DelayedEntry> filterLessThanOrEqualToTime(WriteBehindQueue<DelayedEntry> queue,
-                                                                  long time, TimeUnit unit) {
+    private static List<DelayedEntry> filterItemsLessThanOrEqualToTime(WriteBehindQueue<DelayedEntry> queue,
+                                                                       long time, TimeUnit unit) {
         if (queue == null || queue.size() == 0) {
             return Collections.emptyList();
         }
@@ -155,54 +177,12 @@ class WriteBehindQueueManager implements WriteBehindManager {
         return delayedEntries;
     }
 
-    private static void removeProcessed(WriteBehindQueue<DelayedEntry> queue, int numberOfEntriesProcessed) {
-        if (queue == null || queue.size() == 0 || numberOfEntriesProcessed < 1) {
-            return;
-        }
-        for (int j = 0; j < numberOfEntriesProcessed; j++) {
-            queue.removeFirst();
-        }
-    }
-
-    private List<Data> getDataKeys(final List<DelayedEntry> sortedDelayedEntries) {
-        if (sortedDelayedEntries == null || sortedDelayedEntries.isEmpty()) {
-            return Collections.emptyList();
-        }
-        final List<Data> keys = new ArrayList<Data>(sortedDelayedEntries.size());
-        for (DelayedEntry entry : sortedDelayedEntries) {
-            // TODO Key type always should be Data. No need to call mapService.toData but check first if it is.
-            keys.add(mapService.toData(entry.getKey()));
-        }
-        return keys;
-    }
-
     private ScheduledExecutorService getScheduledExecutorService(String mapName, MapService mapService) {
         final NodeEngine nodeEngine = mapService.getNodeEngine();
         final ExecutionService executionService = nodeEngine.getExecutionService();
         final String executorName = EXECUTOR_NAME_PREFIX + mapName;
         executionService.register(executorName, 1, EXECUTOR_DEFAULT_QUEUE_CAPACITY, ExecutorType.CACHED);
         return executionService.getScheduledExecutor(executorName);
-    }
-
-    private static void removeProcessedEntries(MapService mapService, String mapName,
-                                               Map<Integer, Integer> partitionToEntryCountHolder,
-                                               Map<Integer, Collection<DelayedEntry>> failsPerPartition) {
-        for (Map.Entry<Integer, Integer> entry : partitionToEntryCountHolder.entrySet()) {
-            final Integer partitionId = entry.getKey();
-            final PartitionContainer partitionContainer = mapService.getPartitionContainer(partitionId);
-            final RecordStore recordStore = partitionContainer.getExistingRecordStore(mapName);
-            if (recordStore == null) {
-                continue;
-            }
-            final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
-            removeProcessed(queue, partitionToEntryCountHolder.get(partitionId));
-            final Collection<DelayedEntry> fails = failsPerPartition.get(partitionId);
-            if (fails == null || fails.isEmpty()) {
-                continue;
-            }
-            queue.addFront(fails);
-
-        }
     }
 
     /**
@@ -216,10 +196,14 @@ class WriteBehindQueueManager implements WriteBehindManager {
 
         private final MapStoreManager mapStoreManager;
 
-        /** Run on backup nodes after this interval.*/
+        /**
+         * Run on backup nodes after this interval.
+         */
         private final long backupRunIntervalTimeInNanos;
 
-        /** Last run time of this processor.*/
+        /**
+         * Last run time of this processor.
+         */
         private long lastRunTimeInNanos = nowInNanos();
 
         private StoreProcessor(String mapName, MapService mapService,
@@ -250,26 +234,22 @@ class WriteBehindQueueManager implements WriteBehindManager {
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 final InternalPartition partition = partitionService.getPartition(partitionId);
                 final Address owner = partition.getOwnerOrNull();
-                if (owner == null) {
+                RecordStore recordStore;
+                if (owner == null || (recordStore = getRecordStoreOrNull(mapName, partitionId)) == null) {
                     // no-op because no owner is set yet.
                     // Therefore we don't know anything about the map
                     continue;
                 }
-                final PartitionContainer partitionContainer = mapService.getPartitionContainer(partitionId);
-                final RecordStore recordStore = partitionContainer.getExistingRecordStore(mapName);
-                if (recordStore == null) {
+                final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
+                final List<DelayedEntry> delayedEntries = filterItemsLessThanOrEqualToTime(queue,
+                        now, TimeUnit.NANOSECONDS);
+                if (delayedEntries.isEmpty()) {
                     continue;
                 }
-                final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
-                final List<DelayedEntry> delayedEntries = filterLessThanOrEqualToTime(queue,
-                        now, TimeUnit.NANOSECONDS);
                 if (!owner.equals(thisAddress)) {
                     if (now < lastRunTimeInNanos + backupRunIntervalTimeInNanos) {
                         doInBackup(queue, delayedEntries, partitionId);
                     }
-                    continue;
-                }
-                if (delayedEntries.size() == 0) {
                     continue;
                 }
                 // initialize when needed, we do not want
@@ -280,23 +260,38 @@ class WriteBehindQueueManager implements WriteBehindManager {
                     createLazy = false;
                 }
                 partitionToEntryCountHolder.put(partitionId, delayedEntries.size());
+                removeInActives(delayedEntries);
                 sortedDelayedEntries.addAll(delayedEntries);
             }
             if (sortedDelayedEntries.isEmpty()) {
                 return;
             }
             lastRunTimeInNanos = nowInNanos();
-            // TODO candidate for parallel sort?
             Collections.sort(sortedDelayedEntries, DELAYED_ENTRY_COMPARATOR);
-            final Map<Integer, Collection<DelayedEntry>> failsPerPartition = new HashMap<Integer, Collection<DelayedEntry>>();
-            mapStoreManager.process(sortedDelayedEntries, failsPerPartition);
-            removeProcessedEntries(mapService, mapName, partitionToEntryCountHolder, failsPerPartition);
+            Map<Integer, Collection<DelayedEntry>> failsPerPartition = mapStoreManager.process(sortedDelayedEntries);
+            removeProcessedEntries(mapName, partitionToEntryCountHolder);
+            addFailsToQueue(mapName, failsPerPartition);
         }
 
         /**
-         * @param queue
-         * @param delayedEntries
-         * @param partitionId
+         * Removes inactive entries from the list.
+         * Inactive entries may be the result of an eviction.
+         *
+         * @param candidatesForProcessing is the list to be processed.
+         */
+        private void removeInActives(List<DelayedEntry> candidatesForProcessing) {
+            for (int i = 0; i < candidatesForProcessing.size(); i++) {
+                final DelayedEntry entry = candidatesForProcessing.get(i);
+                if (!entry.isActive()) {
+                    candidatesForProcessing.remove(i);
+                }
+            }
+        }
+
+        /**
+         * @param queue          write behind queue.
+         * @param delayedEntries entries to be processed.
+         * @param partitionId    corresponding partition id.
          */
         private void doInBackup(final WriteBehindQueue queue, final List<DelayedEntry> delayedEntries, final int partitionId) {
             final NodeEngine nodeEngine = mapService.getNodeEngine();
@@ -309,6 +304,52 @@ class WriteBehindQueueManager implements WriteBehindManager {
                 mapStoreManager.callBeforeStoreListeners(delayedEntries);
                 removeProcessed(queue, delayedEntries.size());
                 mapStoreManager.callAfterStoreListeners(delayedEntries);
+            }
+        }
+
+        private void removeProcessedEntries(String mapName, Map<Integer, Integer> partitionToEntryCountHolder) {
+            for (Map.Entry<Integer, Integer> entry : partitionToEntryCountHolder.entrySet()) {
+                final Integer partitionId = entry.getKey();
+                final RecordStore recordStore = getRecordStoreOrNull(mapName, partitionId);
+                if (recordStore == null) {
+                    continue;
+                }
+                final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
+                removeProcessed(queue, partitionToEntryCountHolder.get(partitionId));
+            }
+        }
+
+        private RecordStore getRecordStoreOrNull(String mapName, int partitionId) {
+            final PartitionContainer partitionContainer = mapService.getPartitionContainer(partitionId);
+            return partitionContainer.getExistingRecordStore(mapName);
+        }
+
+        private void addFailsToQueue(String mapName, Map<Integer, Collection<DelayedEntry>> failsPerPartition) {
+            if (failsPerPartition.isEmpty()) {
+                return;
+            }
+            for (Map.Entry<Integer, Collection<DelayedEntry>> entry : failsPerPartition.entrySet()) {
+                final Integer partitionId = entry.getKey();
+                final Collection<DelayedEntry> fails = failsPerPartition.get(partitionId);
+                if (fails == null || fails.isEmpty()) {
+                    continue;
+                }
+                final RecordStore recordStore = getRecordStoreOrNull(mapName, partitionId);
+                if (recordStore == null) {
+                    continue;
+                }
+                final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
+                queue.addFront(fails);
+            }
+        }
+
+        private void removeProcessed(WriteBehindQueue<DelayedEntry> queue, int numberOfEntriesProcessed) {
+            if (queue == null || queue.size() == 0 || numberOfEntriesProcessed < 1) {
+                return;
+            }
+
+            for (int j = 0; j < numberOfEntriesProcessed; j++) {
+                queue.removeFirst();
             }
         }
 

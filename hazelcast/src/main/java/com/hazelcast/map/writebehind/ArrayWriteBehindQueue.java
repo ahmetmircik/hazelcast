@@ -26,7 +26,7 @@ import java.util.List;
  *
  * @param <T> Type of entry to be queued.
  */
-class ArrayWriteBehindQueue<T> implements WriteBehindQueue<T> {
+class ArrayWriteBehindQueue<T extends AbstractDelayedEntry> implements WriteBehindQueue<T> {
 
     private static final int INITIAL_CAPACITY = 16;
 
@@ -66,16 +66,12 @@ class ArrayWriteBehindQueue<T> implements WriteBehindQueue<T> {
     }
 
     @Override
-    public boolean contains(T entry) {
-        if (list.isEmpty() || entry == null) {
-            return false;
+    public T remove(int index) {
+        final int size = list.size();
+        if (index >= size || index < 0) {
+            return null;
         }
-        for (T t : list) {
-            if (entry.equals(t)) {
-                return true;
-            }
-        }
-        return false;
+        return list.remove(index);
     }
 
     @Override
@@ -118,10 +114,25 @@ class ArrayWriteBehindQueue<T> implements WriteBehindQueue<T> {
     }
 
     @Override
-    public List<T> fetchAndRemoveAll() {
+    public List<T> removeAll() {
         final List<T> list = asList();
         clear();
         return list;
+    }
+
+    @Override
+    public List<T> markPassive(T entry) {
+        if (list.isEmpty() || entry == null) {
+            return Collections.emptyList();
+        }
+        final List<T> resultList = new ArrayList<T>();
+        for (T t : list) {
+            if (entry.equals(t)) {
+                t.setActive(false);
+                resultList.add(t);
+            }
+        }
+        return resultList.isEmpty() ? (List<T>) Collections.EMPTY_LIST : resultList;
     }
 
     @Override

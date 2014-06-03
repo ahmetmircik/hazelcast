@@ -24,7 +24,7 @@ import java.util.List;
  *
  * @param <E>
  */
-class SynchronizedWriteBehindQueue<E> implements WriteBehindQueue<E> {
+class SynchronizedWriteBehindQueue<E extends AbstractDelayedEntry> implements WriteBehindQueue<E> {
 
     private final WriteBehindQueue<E> queue;
 
@@ -61,9 +61,9 @@ class SynchronizedWriteBehindQueue<E> implements WriteBehindQueue<E> {
     }
 
     @Override
-    public boolean contains(E o) {
+    public E remove(int index) {
         synchronized (mutex) {
-            return queue.contains(o);
+            return queue.remove(index);
         }
     }
 
@@ -109,9 +109,16 @@ class SynchronizedWriteBehindQueue<E> implements WriteBehindQueue<E> {
     }
 
     @Override
-    public List<E> fetchAndRemoveAll() {
+    public List<E> removeAll() {
         synchronized (mutex) {
-            return queue.fetchAndRemoveAll();
+            return queue.removeAll();
+        }
+    }
+
+    @Override
+    public List<E> markPassive(E e) {
+        synchronized (mutex) {
+            return queue.markPassive(e);
         }
     }
 
