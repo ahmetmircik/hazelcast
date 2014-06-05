@@ -205,7 +205,7 @@ public class DefaultRecordStore implements RecordStore {
 
         Record record = records.get(key);
         if (record == null) {
-            record = mapService.createRecord(name, key, value, ttl, getNow());
+            record = mapService.createRecord(name, key, value, ttl, now);
             records.put(key, record);
             updateSizeEstimator(calculateRecordSize(record));
         } else {
@@ -668,6 +668,7 @@ public class DefaultRecordStore implements RecordStore {
     @Override
     public MapEntrySet getAll(Set<Data> keySet) {
         checkIfLoaded();
+        final long now = getNow();
         final MapEntrySet mapEntrySet = new MapEntrySet();
         Map<Object, Data> keyMapForLoader = Collections.emptyMap();
         if (mapContainer.getStore() != null) {
@@ -707,7 +708,7 @@ public class DefaultRecordStore implements RecordStore {
                 continue;
             }
             if (value != null) {
-                Record record = mapService.createRecord(name, dataKey, value, DEFAULT_TTL, getNow());
+                Record record = mapService.createRecord(name, dataKey, value, DEFAULT_TTL, now);
                 records.put(dataKey, record);
                 saveIndex(record);
                 updateSizeEstimator(calculateRecordSize(record));
@@ -717,6 +718,7 @@ public class DefaultRecordStore implements RecordStore {
                 mapEntrySet.add(new AbstractMap.SimpleImmutableEntry(dataKey, mapService.toData(value)));
             }
         }
+        postReadCleanUp(now);
         return mapEntrySet;
     }
 
