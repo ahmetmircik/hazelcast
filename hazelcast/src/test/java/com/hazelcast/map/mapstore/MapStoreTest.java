@@ -153,7 +153,6 @@ public class MapStoreTest extends HazelcastTestSupport {
     public void testSlowStore() throws Exception {
         final TestMapStore store = new WaitingOnFirstTestMapStore();
         Config cfg = new Config();
-        cfg.setProperty(GroupProperties.PROP_PARTITION_COUNT, "1");
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
         mapStoreConfig.setWriteDelaySeconds(1);
@@ -480,7 +479,7 @@ public class MapStoreTest extends HazelcastTestSupport {
             map.put(i, "value" + i);
         }
 
-        sleepSeconds(10);
+        sleepSeconds(11);
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() throws Exception {
@@ -490,48 +489,12 @@ public class MapStoreTest extends HazelcastTestSupport {
         assertEquals(total, testMapStore.getStore().size());
     }
 
-
-    @Test
-    public void testWBQSize() throws Exception {
-        final SimpleMapStore mapStore = new SimpleMapStore();
-        final Config config = newConfig(mapStore, 1);
-        config.setProperty(GroupProperties.PROP_PARTITION_COUNT, "1");
-
-        final HazelcastInstance node = createHazelcastInstance(config);
-        final IMap map = node.getMap(randomString());
-
-        for (int i = 0; i < 1000; i++) {
-            map.put(i, "value" + i);
-        }
-        assertTrueEventually(new AssertTask() {
-            @Override
-            public void run() throws Exception {
-                assertEquals(1000, mapStore.store.size());
-            }
-        });
-
-        System.out.println("Sleeping");
-        sleepSeconds(10);
-        for (int i = 0; i < 1000; i++) {
-            map.evict(i);
-        }
-        System.out.println("Sleeping");
-        sleepSeconds(10);
-        assertTrueEventually(new AssertTask() {
-            @Override
-            public void run() throws Exception {
-                assertEquals(1000, mapStore.store.size());
-            }
-        });
-    }
-
     @Test
     public void testOneMemberWriteBehindWithEvictions() throws Exception {
         final String mapName = "testOneMemberWriteBehindWithEvictions";
         final TestEventBasedMapStore testMapStore = new TestEventBasedMapStore();
         testMapStore.loadAllLatch = new CountDownLatch(1);
         final Config config = newConfig(testMapStore, 2);
-        config.setProperty(GroupProperties.PROP_PARTITION_COUNT, "1");
         final HazelcastInstance node1 = createHazelcastInstance(config);
         final IMap map = node1.getMap(mapName);
         // check if load all called.
@@ -546,8 +509,6 @@ public class MapStoreTest extends HazelcastTestSupport {
         }
         //wait for all store ops.
         assertTrue(testMapStore.storeLatch.await(10, TimeUnit.SECONDS));
-
-        assertEquals(populationCount, testMapStore.store.size());
         // init before eviction.
         testMapStore.storeLatch = new CountDownLatch(populationCount);
         //evict.
@@ -568,6 +529,8 @@ public class MapStoreTest extends HazelcastTestSupport {
         for (int i = 0; i < populationCount; i++) {
             map.evict(i);
         }
+        //wait for all store ops.
+        testMapStore.storeLatch.await(10, TimeUnit.SECONDS);
         //check store size
         assertEquals(populationCount, testMapStore.getStore().size());
         //check map size
@@ -624,9 +587,9 @@ public class MapStoreTest extends HazelcastTestSupport {
         final TestMapStore testMapStore = new TestMapStore(2, 0, 0);
         testMapStore.setLoadAllKeys(false);
         Config config = newConfig(testMapStore, 5);
-        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(1);
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
         HazelcastInstance h1 = nodeFactory.newHazelcastInstance(config);
-//        HazelcastInstance h2 = nodeFactory.newHazelcastInstance(config);
+        HazelcastInstance h2 = nodeFactory.newHazelcastInstance(config);
         IMap<Object, Object> map = h1.getMap("map");
         map.put("key", "value");
         Thread.sleep(2000);
@@ -1061,7 +1024,6 @@ public class MapStoreTest extends HazelcastTestSupport {
         map.clear();
         assertEquals(0, map.size());
         assertEquals(0, store.loadAllKeys().size());
-        assertEquals(0, store.store.size());
     }
 
     // bug: store is called twice on loadAll

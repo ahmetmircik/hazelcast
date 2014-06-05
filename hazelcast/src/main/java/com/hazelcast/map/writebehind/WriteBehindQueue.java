@@ -25,7 +25,7 @@ import java.util.List;
  *
  * @param <E> Type of entry to be stored.
  */
-public interface WriteBehindQueue<E extends AbstractDelayedEntry> {
+public interface WriteBehindQueue<E> {
 
     /**
      * adds to the end.
@@ -89,19 +89,6 @@ public interface WriteBehindQueue<E extends AbstractDelayedEntry> {
      * @return removed items in this queue.
      */
     List<E> removeAll();
-
-    /**
-     * Returns all objects which equals to this entry in this queue
-     * and marks them passive. Passive entries do not go to ordinary
-     * processing cycle.
-     * <p/>
-     * NOTE: This method is here because want to make this operation
-     * under same lock. {@link com.hazelcast.map.writebehind.SynchronizedWriteBehindQueue#markPassive(AbstractDelayedEntry)}
-     *
-     * @param entry to search against.
-     * @return All objects which equal to this entry.
-     */
-    List<E> markPassive(E entry);
 
     /**
      * Empty or a real queue.

@@ -26,7 +26,7 @@ import java.util.List;
  *
  * @param <T> Type of entry to be queued.
  */
-class ArrayWriteBehindQueue<T extends AbstractDelayedEntry> implements WriteBehindQueue<T> {
+class ArrayWriteBehindQueue<T> implements WriteBehindQueue<T> {
 
     private static final int INITIAL_CAPACITY = 16;
 
@@ -118,21 +118,6 @@ class ArrayWriteBehindQueue<T extends AbstractDelayedEntry> implements WriteBehi
         final List<T> list = asList();
         clear();
         return list;
-    }
-
-    @Override
-    public List<T> markPassive(T entry) {
-        if (list.isEmpty() || entry == null) {
-            return Collections.emptyList();
-        }
-        final List<T> resultList = new ArrayList<T>();
-        for (T t : list) {
-            if (entry.equals(t)) {
-                t.setActive(false);
-                resultList.add(t);
-            }
-        }
-        return resultList.isEmpty() ? (List<T>) Collections.EMPTY_LIST : resultList;
     }
 
     @Override

@@ -70,13 +70,13 @@ public final class WriteBehindManagers {
         }
 
         @Override
-        public Collection<Data> flush(DelayedEntry entry, WriteBehindQueue<DelayedEntry> queue) {
-            return Collections.emptyList();
+        public ScheduledExecutorService getScheduler() {
+            throw new UnsupportedOperationException();
         }
 
         @Override
-        public ScheduledExecutorService getScheduler() {
-            throw new UnsupportedOperationException();
+        public long getLastRunTime() {
+            return 0;
         }
 
         @Override

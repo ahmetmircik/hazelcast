@@ -80,9 +80,6 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
         StoreOperationType previousOperationType;
         // process entries by preserving order.
         for (final DelayedEntry<Data, Object> entry : delayedEntries) {
-            if (isFlushedEntry(entry)) {
-                continue;
-            }
             previousOperationType = operationType;
             if (entry.getValue() == null) {
                 operationType = StoreOperationType.DELETE;
@@ -96,20 +93,10 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
             }
             entriesToProcess.add(entry);
         }
-        final Collection<DelayedEntry> faileds = callHandler(entriesToProcess, operationType);
-        addToFails(faileds, failsPerPartition);
+        final Collection<DelayedEntry> failures = callHandler(entriesToProcess, operationType);
+        addToFails(failures, failsPerPartition);
         entriesToProcess.clear();
         return failsPerPartition;
-    }
-
-    /**
-     * Returns true if {@link com.hazelcast.map.writebehind.DelayedEntry} store time is zero.
-     * zero store time means entry has already flushed to store.
-     *
-     * @return <code>true</code> if store time is zero, otherwise returns <code>false</code>.
-     */
-    private boolean isFlushedEntry(DelayedEntry entry) {
-        return entry.getStoreTime() == 0;
     }
 
     private void addToFails(Collection<DelayedEntry> fails, Map<Integer, Collection<DelayedEntry>> failsPerPartition) {
@@ -183,7 +170,7 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
     }
 
     /**
-     * @param entry
+     * @param entry delayed entry to be stored.
      * @return failed entry list if any.
      */
     private Collection<DelayedEntry> callSingleStoreWithListeners(final DelayedEntry entry,
@@ -223,7 +210,7 @@ class DefaultMapStoreManager implements MapStoreManager<DelayedEntry> {
     }
 
     /**
-     * @param batchMap
+     * @param batchMap contains batched delayed entries.
      * @return failed entry list if any.
      */
     private Collection<DelayedEntry> callBatchStoreWithListeners(final Map<Object, DelayedEntry> batchMap,

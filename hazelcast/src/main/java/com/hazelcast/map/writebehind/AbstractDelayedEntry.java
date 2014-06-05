@@ -21,13 +21,11 @@ import java.util.Arrays;
 /**
  * @param <K> the key type.
  */
-abstract class AbstractDelayedEntry<K> {
+abstract class AbstractDelayedEntry<K> implements Comparable {
 
-    private final K key;
+    protected final K key;
 
-    private final long storeTime;
-
-    private boolean active;
+    protected final long storeTime;
 
     // TODO really need this?
     private final int partitionId;
@@ -36,7 +34,6 @@ abstract class AbstractDelayedEntry<K> {
         this.key = key;
         this.storeTime = storeTime;
         this.partitionId = partitionId;
-        this.active = true;
     }
 
     public K getKey() {
@@ -51,14 +48,6 @@ abstract class AbstractDelayedEntry<K> {
         return partitionId;
     }
 
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -71,10 +60,7 @@ abstract class AbstractDelayedEntry<K> {
             return false;
         }
         final AbstractDelayedEntry delayedEntry = (AbstractDelayedEntry) obj;
-        if (key == null) {
-            return false;
-        }
-        return key.equals(delayedEntry.getKey());
+        return key != null && storeTime == delayedEntry.storeTime && key.equals(delayedEntry.getKey());
     }
 
 

@@ -41,12 +41,16 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
         return new DelayedEntry<K, V>(key, value, storeTime, partitionId);
     }
 
+    public static <K, V> DelayedEntry<K, V> create(K key, V value, long storeTime) {
+        return new DelayedEntry<K, V>(key, value, storeTime, -1);
+    }
+
     /**
-     * Includes only key, no value.
+     * Includes only key and store time no value.
      * Used in comparisons.
      */
-    public static <K, V> DelayedEntry<K, V> createWithKey(K key) {
-        return new DelayedEntry<K, V>(key, (V) NULL_VALUE, 0L, 0);
+    public static <K, V> DelayedEntry<K, V> createWithNullValue(K key, long storeTime) {
+        return new DelayedEntry<K, V>(key, (V) NULL_VALUE, storeTime, 0);
     }
 
     /**
@@ -62,4 +66,41 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
         return String.format("DelayedEntry={key:%s, value:%s}", this.getKey(), this.getValue());
     }
 
+
+    /**
+     * This comparator used for sorting in {@link java.util.concurrent.ConcurrentSkipListSet}.
+     *
+     * @param o entry to compare.
+     * @return 0 if equals, -1 if smaller than, otherwise 1.
+     */
+    @Override
+    public int compareTo(Object o) {
+        final DelayedEntry entry = (DelayedEntry) o;
+        if (this.key.equals(entry.getKey())) {
+            return 0;
+        }
+        return storeTime < entry.getStoreTime() ? -1 : 1;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+        DelayedEntry entry = (DelayedEntry) o;
+        return value.equals(entry.value);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + value.hashCode();
+        return result;
+    }
 }

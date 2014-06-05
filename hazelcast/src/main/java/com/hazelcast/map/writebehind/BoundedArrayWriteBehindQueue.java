@@ -9,7 +9,7 @@ import java.util.List;
  *
  * @param <T> Type of entry to be queued.
  */
-class BoundedArrayWriteBehindQueue<T extends AbstractDelayedEntry> extends ArrayWriteBehindQueue<T> {
+class BoundedArrayWriteBehindQueue<T> extends ArrayWriteBehindQueue<T> {
 
     /**
      * upper bound which is used to provide back-pressure.

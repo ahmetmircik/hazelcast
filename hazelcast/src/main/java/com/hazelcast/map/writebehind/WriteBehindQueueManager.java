@@ -110,15 +110,6 @@ class WriteBehindQueueManager implements WriteBehindManager {
         return flush0(sortedDelayedEntries);
     }
 
-    @Override
-    public Collection<Data> flush(DelayedEntry entry, WriteBehindQueue<DelayedEntry> queue) {
-        if (queue.size() == 0) {
-            return Collections.emptyList();
-        }
-        final List<DelayedEntry> delayedEntries = queue.markPassive(entry);
-        return flush0(delayedEntries);
-    }
-
     private Collection<Data> flush0(List<DelayedEntry> delayedEntries) {
         Collections.sort(delayedEntries, DELAYED_ENTRY_COMPARATOR);
         final Map<Integer, Collection<DelayedEntry>> failedStoreOpPerPartition = mapStoreManager.process(delayedEntries);
@@ -145,6 +136,11 @@ class WriteBehindQueueManager implements WriteBehindManager {
         return scheduledExecutor;
     }
 
+    @Override
+    public long getLastRunTime() {
+        return processor.getLastRunTime();
+    }
+
     private void printErrorLog(Map<Integer, Collection<DelayedEntry>> failsPerPartition) {
         int size = 0;
         final Collection<Collection<DelayedEntry>> values = failsPerPartition.values();
@@ -156,11 +152,10 @@ class WriteBehindQueueManager implements WriteBehindManager {
     }
 
     private static List<DelayedEntry> filterItemsLessThanOrEqualToTime(WriteBehindQueue<DelayedEntry> queue,
-                                                                       long time, TimeUnit unit) {
+                                                                       long now) {
         if (queue == null || queue.size() == 0) {
             return Collections.emptyList();
         }
-        final long timeInNanos = unit.toNanos(time);
         List<DelayedEntry> delayedEntries = Collections.emptyList();
         DelayedEntry e;
         int i = 0;
@@ -169,7 +164,7 @@ class WriteBehindQueueManager implements WriteBehindManager {
                 // init when needed.
                 delayedEntries = new ArrayList<DelayedEntry>();
             }
-            if (e.getStoreTime() <= timeInNanos) {
+            if (e.getStoreTime() <= now) {
                 delayedEntries.add(e);
             }
             i++;
@@ -199,30 +194,31 @@ class WriteBehindQueueManager implements WriteBehindManager {
         /**
          * Run on backup nodes after this interval.
          */
-        private final long backupRunIntervalTimeInNanos;
+        private final long backupRunIntervalTime;
 
         /**
          * Last run time of this processor.
          */
-        private long lastRunTimeInNanos = nowInNanos();
+        private volatile long lastRunTime;
 
         private StoreProcessor(String mapName, MapService mapService,
                                MapStoreManager mapStoreManager) {
             this.mapName = mapName;
             this.mapService = mapService;
             this.mapStoreManager = mapStoreManager;
-            this.backupRunIntervalTimeInNanos = getReplicaWaitTimeInNanos();
+            this.backupRunIntervalTime = getReplicaWaitTime();
+            this.lastRunTime = MapService.getNow();
         }
 
-        private long getReplicaWaitTimeInNanos() {
-            return TimeUnit.SECONDS.toNanos(mapService.getNodeEngine().getGroupProperties()
+        private long getReplicaWaitTime() {
+            return TimeUnit.SECONDS.toMillis(mapService.getNodeEngine().getGroupProperties()
                     .MAP_REPLICA_WAIT_SECONDS_FOR_SCHEDULED_TASKS.getInteger());
         }
 
         @Override
         public void run() {
-            final long now = nowInNanos();
             final MapService mapService = this.mapService;
+            final long now = MapService.getNow();
             final NodeEngine nodeEngine = mapService.getNodeEngine();
             final ClusterService clusterService = nodeEngine.getClusterService();
             final InternalPartitionService partitionService = nodeEngine.getPartitionService();
@@ -241,13 +237,12 @@ class WriteBehindQueueManager implements WriteBehindManager {
                     continue;
                 }
                 final WriteBehindQueue<DelayedEntry> queue = recordStore.getWriteBehindQueue();
-                final List<DelayedEntry> delayedEntries = filterItemsLessThanOrEqualToTime(queue,
-                        now, TimeUnit.NANOSECONDS);
+                final List<DelayedEntry> delayedEntries = filterItemsLessThanOrEqualToTime(queue, now);
                 if (delayedEntries.isEmpty()) {
                     continue;
                 }
                 if (!owner.equals(thisAddress)) {
-                    if (now < lastRunTimeInNanos + backupRunIntervalTimeInNanos) {
+                    if (now < lastRunTime + backupRunIntervalTime) {
                         doInBackup(queue, delayedEntries, partitionId);
                     }
                     continue;
@@ -260,33 +255,18 @@ class WriteBehindQueueManager implements WriteBehindManager {
                     createLazy = false;
                 }
                 partitionToEntryCountHolder.put(partitionId, delayedEntries.size());
-                removeInActives(delayedEntries);
                 sortedDelayedEntries.addAll(delayedEntries);
             }
             if (sortedDelayedEntries.isEmpty()) {
                 return;
             }
-            lastRunTimeInNanos = nowInNanos();
+            lastRunTime = now;
             Collections.sort(sortedDelayedEntries, DELAYED_ENTRY_COMPARATOR);
             Map<Integer, Collection<DelayedEntry>> failsPerPartition = mapStoreManager.process(sortedDelayedEntries);
             removeProcessedEntries(mapName, partitionToEntryCountHolder);
             addFailsToQueue(mapName, failsPerPartition);
         }
 
-        /**
-         * Removes inactive entries from the list.
-         * Inactive entries may be the result of an eviction.
-         *
-         * @param candidatesForProcessing is the list to be processed.
-         */
-        private void removeInActives(List<DelayedEntry> candidatesForProcessing) {
-            for (int i = 0; i < candidatesForProcessing.size(); i++) {
-                final DelayedEntry entry = candidatesForProcessing.get(i);
-                if (!entry.isActive()) {
-                    candidatesForProcessing.remove(i);
-                }
-            }
-        }
 
         /**
          * @param queue          write behind queue.
@@ -353,8 +333,8 @@ class WriteBehindQueueManager implements WriteBehindManager {
             }
         }
 
-        private static long nowInNanos() {
-            return System.nanoTime();
+        public long getLastRunTime() {
+            return lastRunTime;
         }
     }
 

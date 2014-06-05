@@ -139,7 +139,7 @@ public interface RecordStore {
      * Do expiration operations.
      *
      * @param percentage of max expirables according to the record store size.
-     * @param owner <code>true</code> if an owner partition, otherwise <code>false</code>.
+     * @param owner      <code>true</code> if an owner partition, otherwise <code>false</code>.
      */
     void evictExpireds(int percentage, boolean owner);
 

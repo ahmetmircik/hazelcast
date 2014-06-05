@@ -40,9 +40,8 @@ public interface WriteBehindManager {
 
     Collection<Data> flush(WriteBehindQueue<DelayedEntry> queue);
 
-    Collection<Data> flush(DelayedEntry entry, WriteBehindQueue<DelayedEntry> queue);
-
     ScheduledExecutorService getScheduler();
 
+    long getLastRunTime();
 }
 
