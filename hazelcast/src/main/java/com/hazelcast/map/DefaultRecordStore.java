@@ -53,12 +53,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -106,7 +105,7 @@ public class DefaultRecordStore implements RecordStore {
      */
     private final Set<Data> writeBehindWaitingDeletions;
 
-    private final ConcurrentSkipListSet<DelayedEntry> evictionStagingArea;
+    private final ConcurrentSkipListMap<DelayedEntry, Long> evictionStagingArea;
 
     /**
      * used for lru eviction.
@@ -131,7 +130,7 @@ public class DefaultRecordStore implements RecordStore {
         loadFromMapStore(nodeEngine);
         this.expirable = mapContainer.getMapConfig().getMaxIdleSeconds() > 0
                 || mapContainer.getMapConfig().getTimeToLiveSeconds() > 0;
-        this.evictionStagingArea = mapContainer.isWriteBehindMapStoreEnabled() ? new ConcurrentSkipListSet<DelayedEntry>()
+        this.evictionStagingArea = mapContainer.isWriteBehindMapStoreEnabled() ? new ConcurrentSkipListMap<DelayedEntry, Long>()
                 : null;
     }
 
@@ -391,7 +390,7 @@ public class DefaultRecordStore implements RecordStore {
 
     @Override
     public long getHeapCost() {
-        return getSizeEstimator().getSize();
+        return sizeEstimator.getSize();
     }
 
     public boolean isLocked(Data dataKey) {
@@ -685,6 +684,10 @@ public class DefaultRecordStore implements RecordStore {
         }
         if (mapContainer.getStore() == null || keyMapForLoader.size() == 0) {
             return mapEntrySet;
+        }
+        final Map<Object, Object> fromEvictionStagingArea = getFromEvictionStagingArea(keySet);
+        for (Object o : fromEvictionStagingArea.keySet()) {
+            keyMapForLoader.remove(o);
         }
         final Map<Object, Object> loadedKeys = mapContainer.getStore().loadAll(keyMapForLoader.keySet());
         for (Map.Entry entry : loadedKeys.entrySet()) {
@@ -1179,14 +1182,15 @@ public class DefaultRecordStore implements RecordStore {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return;
         }
+        if (evictionStagingArea.isEmpty()) {
+            return;
+        }
         final long lastRunTime = mapContainer.getWriteBehindManager().getLastRunTime();
-        while (true) {
-            if (evictionStagingArea.isEmpty()) {
-                return;
-            }
-            final DelayedEntry first = evictionStagingArea.first();
-            if (lastRunTime > first.getStoreTime()) {
-                evictionStagingArea.pollFirst();
+        final Iterator<DelayedEntry> iterator = evictionStagingArea.keySet().iterator();
+        while (iterator.hasNext()) {
+            final DelayedEntry entry = iterator.next();
+            if (lastRunTime > entry.getStoreTime()) {
+                iterator.remove();
             } else {
                 return;
             }
@@ -1198,22 +1202,30 @@ public class DefaultRecordStore implements RecordStore {
             return;
         }
         final long storeTime = lastUpdateTime + getWriteDelayTime();
-        final DelayedEntry<Data, Object> delayedEntry = DelayedEntry.create(key, value, storeTime);
-        evictionStagingArea.add(delayedEntry);
+        final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.create(key.hashCode(), value, storeTime);
+        evictionStagingArea.put(delayedEntry, storeTime);
     }
 
     private Object getFromEvictionStagingArea(Data key) {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return null;
         }
-        final DelayedEntry<Data, Object> delayedEntry = DelayedEntry.createWithNullValue(key, 0L);
-        final NavigableSet<DelayedEntry> delayedEntries = evictionStagingArea.tailSet(delayedEntry);
-        if (delayedEntries.isEmpty()) {
+        final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.createWithNullValue(key.hashCode(), 0L);
+        final DelayedEntry entry = evictionStagingArea.floorKey(delayedEntry);
+        return entry;
+    }
+
+    private Map<Object, Object> getFromEvictionStagingArea(Set<Data> keys) {
+        if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return null;
         }
-
-        final DelayedEntry last = delayedEntries.last();
-        return last.getValue();
+        final Map<Object, Object> map = new HashMap<Object, Object>();
+        for (Data key : keys) {
+            final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.createWithNullValue(key.hashCode(), 0L);
+            final DelayedEntry entry = evictionStagingArea.floorKey(delayedEntry);
+            map.put(mapService.toObject(key), entry.getValue());
+        }
+        return map;
     }
 
     @Override
@@ -1374,11 +1386,6 @@ public class DefaultRecordStore implements RecordStore {
 
     private long getWriteDelayTime() {
         return mapContainer.getWriteDelayMillis();
-    }
-
-    @Override
-    public SizeEstimator getSizeEstimator() {
-        return sizeEstimator;
     }
 
     private void updateTtl(Record record, long ttl) {

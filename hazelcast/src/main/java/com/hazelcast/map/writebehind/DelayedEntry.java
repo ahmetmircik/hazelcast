@@ -68,7 +68,7 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
 
 
     /**
-     * This comparator used for sorting in {@link java.util.concurrent.ConcurrentSkipListSet}.
+     * This comparator used for sorting in here {@link com.hazelcast.map.DefaultRecordStore#evictionStagingArea}.
      *
      * @param o entry to compare.
      * @return 0 if equals, -1 if smaller than, otherwise 1.
@@ -76,7 +76,7 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     @Override
     public int compareTo(Object o) {
         final DelayedEntry entry = (DelayedEntry) o;
-        if (this.key.equals(entry.getKey())) {
+        if (this.key.hashCode() == entry.hashCode()) {
             return 0;
         }
         return storeTime < entry.getStoreTime() ? -1 : 1;

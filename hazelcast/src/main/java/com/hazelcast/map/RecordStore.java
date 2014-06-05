@@ -121,8 +121,6 @@ public interface RecordStore {
 
     long getHeapCost();
 
-    SizeEstimator getSizeEstimator();
-
     boolean isLoaded();
 
     void checkIfLoaded();
