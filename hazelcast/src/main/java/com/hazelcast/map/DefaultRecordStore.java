@@ -105,6 +105,15 @@ public class DefaultRecordStore implements RecordStore {
      */
     private final Set<Data> writeBehindWaitingDeletions;
 
+    /**
+     * A temporary living space for evicted data if we are using a write-behind map store.
+     * All read operations will use here to return last set value on a specific key, since there is a possibility that
+     * WBQ {@link com.hazelcast.map.writebehind.WriteBehindQueue} may contain more than one waiting operations
+     * on a specific key and eviction should trigger a map store flush for the waiting operations.
+     * This is for strong data consistency.
+     * <p/>
+     * This method {@link com.hazelcast.map.DefaultRecordStore#cleanupEvictionStagingArea} will try to evict this staging area.
+     */
     private final ConcurrentSkipListMap<DelayedEntry, Long> evictionStagingArea;
 
     /**
@@ -633,7 +642,7 @@ public class DefaultRecordStore implements RecordStore {
         Object value = null;
         if (record == null) {
             if (mapContainer.getStore() != null) {
-                value = getFromStore(key);
+                value = getFromStoreOrEvictionStagingArea(key);
                 if (value != null) {
                     record = mapService.createRecord(name, key, value, DEFAULT_TTL, now);
                     records.put(key, record);
@@ -650,7 +659,7 @@ public class DefaultRecordStore implements RecordStore {
         return value;
     }
 
-    public Object getFromStore(Data key) {
+    public Object getFromStoreOrEvictionStagingArea(Data key) {
         final Object fromStagingArea = getFromEvictionStagingArea(key);
         return fromStagingArea == null ? mapContainer.getStore().load(mapService.toObject(key)) :
                 fromStagingArea;
@@ -725,7 +734,7 @@ public class DefaultRecordStore implements RecordStore {
 
         if (record == null) {
             if (mapContainer.getStore() != null) {
-                Object value = getFromStore(key);
+                Object value = getFromStoreOrEvictionStagingArea(key);
                 if (value != null) {
                     record = mapService.createRecord(name, key, value, DEFAULT_TTL, now);
                     records.put(key, record);
@@ -1182,7 +1191,8 @@ public class DefaultRecordStore implements RecordStore {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return;
         }
-        if (evictionStagingArea.isEmpty()) {
+        final long now = getNow();
+        if (!inEvictableTimeWindow(now) || evictionStagingArea.isEmpty()) {
             return;
         }
         final long lastRunTime = mapContainer.getWriteBehindManager().getLastRunTime();
@@ -1210,6 +1220,8 @@ public class DefaultRecordStore implements RecordStore {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
             return null;
         }
+        // first create a delayed entry with only hash of the key since this map uses key comparison to find
+        // the entry.
         final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.createWithNullValue(key.hashCode(), 0L);
         final DelayedEntry entry = evictionStagingArea.floorKey(delayedEntry);
         return entry;

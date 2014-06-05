@@ -67,7 +67,9 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     }
 
 
+
     /**
+     * TODO this compareTo is implementation specific, think about to make it better.
      * This comparator used for sorting in here {@link com.hazelcast.map.DefaultRecordStore#evictionStagingArea}.
      *
      * @param o entry to compare.
