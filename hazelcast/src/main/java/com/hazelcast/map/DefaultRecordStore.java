@@ -1217,7 +1217,7 @@ public class DefaultRecordStore implements RecordStore {
 
     private Map<Object, Object> getFromEvictionStagingArea(Set<Data> keys) {
         if (!mapContainer.isWriteBehindMapStoreEnabled()) {
-            return null;
+            return Collections.emptyMap();
         }
         final Map<Object, Object> map = new HashMap<Object, Object>();
         for (Data key : keys) {
