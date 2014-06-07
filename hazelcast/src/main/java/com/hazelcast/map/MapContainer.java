@@ -133,7 +133,7 @@ public class MapContainer {
                     return;
                 }
                 final Data key = (Data) storeEvent.getSource().getKey();
-                final int partitionId = mapService.getNodeEngine().getPartitionService().getPartitionId(key);
+                final int partitionId = delayedEntry.getPartitionId();
                 final PartitionContainer partitionContainer = mapService.getPartitionContainer(partitionId);
                 final RecordStore recordStore = partitionContainer.getExistingRecordStore(name);
                 if (recordStore != null) {
@@ -141,6 +141,7 @@ public class MapContainer {
                 }
             }
         });
+
         this.writeBehindQueueManager.start();
     }
 

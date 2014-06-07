@@ -6,6 +6,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.MapStore;
 import com.hazelcast.instance.GroupProperties;
+import com.hazelcast.map.writebehind.DelayedEntry;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
@@ -19,61 +20,103 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
 public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
 
     @Test
-    public void testWriteBehind_withEvict() throws Exception {
-
-        final CounterMapStore mapStore = new CounterMapStore<Integer, String>();
-        final IMap<Object, Object> map = MapWithMapStoreBuilder.create()
-                .withMapStore(mapStore)
-                .withNodeCount(1)
-                .withBackupCount(0)
-                .withWriteDelaySeconds(3)
-                .withPartitionCount(1)
-                .build();
-
-        final int numberOfItems = 1000;
-        for (int i = 0; i < numberOfItems; i++) {
-            map.put(i, i);
+    public void testDelayedEntry_readFromMap() throws Exception {
+        final ConcurrentMap<DelayedEntry, Object> map = new ConcurrentHashMap<DelayedEntry, Object>();
+        for (int i = 0; i < 10000; i++) {
+            final DelayedEntry<Integer, Long> delayedEntry = DelayedEntry.createWithNullValue(i, 1L + (1 + i));
+            map.put(delayedEntry, delayedEntry.getStoreTime());
         }
-        sleepMillis(700);
-        for (int i = 0; i < numberOfItems; i++) {
-            map.evict(i);
+        for (int i = 0; i < 10000; i++) {
+            final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.createWithNullValue(i, 1L + (1 + i));
+            assertFinalValueEquals((1 + (1 + i)), ((Long) map.get(delayedEntry)).intValue());
         }
-        sleepMillis(4000);
-        assertEquals(numberOfItems, mapStore.countStore.intValue());
-
     }
 
     @Test
-    public void testWriteBehind_withEvict_onSameKey() throws Exception {
-        final CounterMapStore mapStore = new CounterMapStore<Integer, String>();
-        final IMap<Object, Object> map = MapWithMapStoreBuilder.create()
+    public void testWriteBehind_callEvictBeforePersisting() throws Exception {
+        final MapStoreWithCounter mapStore = new MapStoreWithCounter<Integer, String>();
+        final IMap<Object, Object> map = MapUsingMapStoreBuilder.create()
+                .withMapStore(mapStore)
+                .withNodeCount(1)
+                .withBackupCount(0)
+                .withWriteDelaySeconds(100)
+                .withPartitionCount(1)
+                .build();
+        final int numberOfItems = 1000;
+        populateMap(map, numberOfItems);
+        evictMap(map, numberOfItems);
+
+        assertFinalValueEqualsForEachEntry(map, numberOfItems);
+    }
+
+    @Test
+    public void testWriteBehind_callEvictBeforePersisting_onSameKey() throws Exception {
+        final MapStoreWithCounter mapStore = new MapStoreWithCounter<Integer, String>();
+        final IMap<Object, Object> map = MapUsingMapStoreBuilder.create()
                 .withMapStore(mapStore)
                 .withNodeCount(1)
                 .withBackupCount(0)
                 .withWriteDelaySeconds(3)
                 .withPartitionCount(1)
                 .build();
-
-        final int numberOfItems = 2041;
-        for (int i = 1; i <= numberOfItems; i++) {
-            map.put(0, i);
-        }
-        sleepMillis(800);
-
+        final int numberOfUpdates = 1000;
+        final int key = 0;
+        continuouslyUpdateKey(map, numberOfUpdates, key);
         map.evict(0);
+        final int expectedLastValue = numberOfUpdates - 1;
 
-        sleepMillis(4000);
+        assertFinalValueEquals(expectedLastValue, (Integer) map.get(0));
+    }
 
-        assertFinalValueEquals(numberOfItems, (Integer) map.get(0));
+    @Test
+    public void testWriteBehind_callEvictBeforePersisting_onSameKey_thenCallRemove() throws Exception {
+        final MapStoreWithCounter mapStore = new MapStoreWithCounter<Integer, String>();
+        final IMap<Object, Object> map = MapUsingMapStoreBuilder.create()
+                .withMapStore(mapStore)
+                .withNodeCount(1)
+                .withBackupCount(0)
+                .withWriteDelaySeconds(100)
+                .withPartitionCount(1)
+                .build();
+        final int numberOfUpdates = 1000;
+        final int key = 0;
+        continuouslyUpdateKey(map, numberOfUpdates, key);
+        map.evict(0);
+        final Object previousValue = map.remove(0);
+        final int expectedLastValue = numberOfUpdates - 1;
+
+        assertFinalValueEquals(expectedLastValue, (Integer) previousValue);
+    }
+
+    @Test
+    public void testWriteBehind_callEvictBeforePersisting_onSameKey_thenCallRemoveMultipleTimes() throws Exception {
+        final MapStoreWithCounter mapStore = new MapStoreWithCounter<Integer, String>();
+        final IMap<Object, Object> map = MapUsingMapStoreBuilder.create()
+                .withMapStore(mapStore)
+                .withNodeCount(1)
+                .withBackupCount(0)
+                .withWriteDelaySeconds(100)
+                .withPartitionCount(1)
+                .build();
+        final int numberOfUpdates = 1000;
+        final int key = 0;
+        continuouslyUpdateKey(map, numberOfUpdates, key);
+        map.evict(0);
+        map.remove(0);
+        final Object previousValue = map.remove(0);
+
+        assertNull(null, previousValue);
     }
 
     private void assertFinalValueEquals(final int expected, final int actual) {
@@ -86,7 +129,32 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
     }
 
 
-    private static class MapWithMapStoreBuilder<K, V> {
+    private void populateMap(IMap map, int numberOfItems) {
+        for (int i = 0; i < numberOfItems; i++) {
+            map.put(i, i);
+        }
+    }
+
+    private void continuouslyUpdateKey(IMap map, int numberOfUpdates, int key) {
+        for (int i = 0; i < numberOfUpdates; i++) {
+            map.put(key, i);
+        }
+    }
+
+    private void evictMap(IMap map, int numberOfItems) {
+        for (int i = 0; i < numberOfItems; i++) {
+            map.evict(i);
+        }
+    }
+
+    private void assertFinalValueEqualsForEachEntry(IMap map, int numberOfItems) {
+        for (int i = 0; i < numberOfItems; i++) {
+            assertFinalValueEquals(i, (Integer) map.get(i));
+        }
+    }
+
+
+    private static class MapUsingMapStoreBuilder<K, V> {
 
         private HazelcastInstance[] nodes;
 
@@ -102,15 +170,15 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
 
         private int writeDelaySeconds = 0;
 
-        private MapWithMapStoreBuilder() {
+        private MapUsingMapStoreBuilder() {
         }
 
-        public static <K, V> MapWithMapStoreBuilder<K, V> create() {
-            return new MapWithMapStoreBuilder<K, V>();
+        public static <K, V> MapUsingMapStoreBuilder<K, V> create() {
+            return new MapUsingMapStoreBuilder<K, V>();
         }
 
 
-        public MapWithMapStoreBuilder<K, V> mapName(String mapName) {
+        public MapUsingMapStoreBuilder<K, V> mapName(String mapName) {
             if (mapName == null) {
                 throw new IllegalArgumentException("mapName is null");
             }
@@ -118,7 +186,7 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
             return this;
         }
 
-        public MapWithMapStoreBuilder<K, V> withNodeCount(int nodeCount) {
+        public MapUsingMapStoreBuilder<K, V> withNodeCount(int nodeCount) {
             if (nodeCount < 1) {
                 throw new IllegalArgumentException("nodeCount < 1");
             }
@@ -126,7 +194,7 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
             return this;
         }
 
-        public MapWithMapStoreBuilder<K, V> withPartitionCount(int partitionCount) {
+        public MapUsingMapStoreBuilder<K, V> withPartitionCount(int partitionCount) {
             if (partitionCount < 1) {
                 throw new IllegalArgumentException("partitionCount < 1");
             }
@@ -134,7 +202,7 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
             return this;
         }
 
-        public MapWithMapStoreBuilder<K, V> withBackupCount(int backupCount) {
+        public MapUsingMapStoreBuilder<K, V> withBackupCount(int backupCount) {
             if (backupCount < 0) {
                 throw new IllegalArgumentException("backupCount < 1");
             }
@@ -143,12 +211,12 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
         }
 
 
-        public MapWithMapStoreBuilder<K, V> withMapStore(MapStore<K, V> mapStore) {
+        public MapUsingMapStoreBuilder<K, V> withMapStore(MapStore<K, V> mapStore) {
             this.mapStore = mapStore;
             return this;
         }
 
-        public MapWithMapStoreBuilder<K, V> withWriteDelaySeconds(int writeDelaySeconds) {
+        public MapUsingMapStoreBuilder<K, V> withWriteDelaySeconds(int writeDelaySeconds) {
             if (writeDelaySeconds < 0) {
                 throw new IllegalArgumentException("writeDelaySeconds < 0");
             }
@@ -178,13 +246,13 @@ public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
     }
 
 
-    public static class CounterMapStore<K, V> implements MapStore<K, V> {
+    public static class MapStoreWithCounter<K, V> implements MapStore<K, V> {
 
         protected final Map<K, V> store = new ConcurrentHashMap();
 
         protected AtomicInteger countStore = new AtomicInteger(0);
 
-        public CounterMapStore() {
+        public MapStoreWithCounter() {
         }
 
         @Override

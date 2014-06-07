@@ -54,55 +54,36 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     }
 
     /**
+     * Used to put staging area {@link com.hazelcast.map.DefaultRecordStore#evictionStagingArea}
+     *
+     * @param value to put.
+     * @param storeTime target store time
+     * @param <K> the key type.
+     * @param <V> the value type.
+     * @return new delayed entry object with a null key.
+     */
+    public static <K, V> DelayedEntry<K, V> createWithNullKey(V value, long storeTime) {
+        return new DelayedEntry<K, V>(null, value, storeTime, 0);
+    }
+
+    /**
      * Used for tests.
      */
     public static <K, V> DelayedEntry<K, V> createEmpty() {
         return new DelayedEntry<K, V>(null, null, 0L, 0);
     }
 
-
-    @Override
-    public String toString() {
-        return String.format("DelayedEntry={key:%s, value:%s}", this.getKey(), this.getValue());
-    }
-
-
-
-    /**
-     * TODO this compareTo is implementation specific, think about to make it better.
-     * This comparator used for sorting in here {@link com.hazelcast.map.DefaultRecordStore#evictionStagingArea}.
-     *
-     * @param o entry to compare.
-     * @return 0 if equals, -1 if smaller than, otherwise 1.
-     */
-    @Override
-    public int compareTo(Object o) {
-        final DelayedEntry entry = (DelayedEntry) o;
-        if (this.key.hashCode() == entry.hashCode()) {
-            return 0;
-        }
-        return storeTime < entry.getStoreTime() ? -1 : 1;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        if (!super.equals(o)) {
-            return false;
-        }
-        DelayedEntry entry = (DelayedEntry) o;
-        return value.equals(entry.value);
-    }
-
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + value.hashCode();
-        return result;
+        return getKey().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        final DelayedEntry anotherEntry = (DelayedEntry) obj;
+        if (this.getKey().hashCode() == anotherEntry.getKey().hashCode()) {
+            return true;
+        }
+        return false;
     }
 }

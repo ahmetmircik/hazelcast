@@ -49,7 +49,7 @@ public class ClearExpiredOperation extends AbstractOperation implements Partitio
         final boolean isOwnerPartition = isOwner();
         for (final RecordStore recordStore : recordStores.values()) {
             if (recordStore.size() > 0 && recordStore.isExpirable()) {
-                recordStore.evictExpireds(expirationPercentage, isOwnerPartition);
+                recordStore.evictExpiredEntries(expirationPercentage, isOwnerPartition);
             }
         }
     }

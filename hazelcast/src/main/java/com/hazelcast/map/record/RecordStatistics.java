@@ -32,11 +32,10 @@ public class RecordStatistics implements DataSerializable {
     // TODO is volatile needed? if yes then hits should be atomicnumber
     protected int hits;
     protected long lastStoredTime;
-    protected long creationTime;
     protected long expirationTime;
 
     public RecordStatistics() {
-        creationTime = Clock.currentTimeMillis();
+
     }
 
     public int getHits() {
@@ -45,14 +44,6 @@ public class RecordStatistics implements DataSerializable {
 
     public void setHits(int hits) {
         this.hits = hits;
-    }
-
-    public long getCreationTime() {
-        return creationTime;
-    }
-
-    public void setCreationTime(long creationTime) {
-        this.creationTime = creationTime;
     }
 
     public long getExpirationTime() {
@@ -88,14 +79,12 @@ public class RecordStatistics implements DataSerializable {
     public void writeData(ObjectDataOutput out) throws IOException {
         out.writeInt(hits);
         out.writeLong(lastStoredTime);
-        out.writeLong(creationTime);
         out.writeLong(expirationTime);
     }
 
     public void readData(ObjectDataInput in) throws IOException {
         hits = in.readInt();
         lastStoredTime = in.readLong();
-        creationTime = in.readLong();
         expirationTime = in.readLong();
     }
 

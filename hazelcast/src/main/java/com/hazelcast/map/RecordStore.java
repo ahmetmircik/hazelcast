@@ -139,13 +139,13 @@ public interface RecordStore {
      * @param percentage of max expirables according to the record store size.
      * @param owner      <code>true</code> if an owner partition, otherwise <code>false</code>.
      */
-    void evictExpireds(int percentage, boolean owner);
+    void evictExpiredEntries(int percentage, boolean owner);
 
     void removeFromWriteBehindWaitingDeletions(Data key);
 
     /**
      * @return <code>true</code> if record store has at least one candidate entry
-     * for expiration else return <code>true</code>.
+     * for expiration else return <code>false</code>.
      */
     boolean isExpirable();
 

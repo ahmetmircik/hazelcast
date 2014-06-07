@@ -16,12 +16,10 @@
 
 package com.hazelcast.map.writebehind;
 
-import java.util.Arrays;
-
 /**
  * @param <K> the key type.
  */
-abstract class AbstractDelayedEntry<K> implements Comparable {
+public abstract class AbstractDelayedEntry<K> {
 
     protected final K key;
 
@@ -63,10 +61,12 @@ abstract class AbstractDelayedEntry<K> implements Comparable {
         return key != null && storeTime == delayedEntry.storeTime && key.equals(delayedEntry.getKey());
     }
 
-
     @Override
-    public int hashCode() {
-        long[] elements = {key.hashCode(), storeTime};
-        return Arrays.hashCode(elements);
+    public String toString() {
+        return "AbstractDelayedEntry{" +
+                "key=" + key +
+                ", storeTime=" + storeTime +
+                ", partitionId=" + partitionId +
+                '}';
     }
 }

@@ -14,7 +14,7 @@ class BoundedArrayWriteBehindQueue<T> extends ArrayWriteBehindQueue<T> {
     /**
      * upper bound which is used to provide back-pressure.
      */
-    private static final int DEFAULT_MAX_SIZE = 2048;
+    private static final int DEFAULT_MAX_SIZE = Integer.MAX_VALUE;
 
     private final int maxSize;
 

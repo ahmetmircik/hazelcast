@@ -32,11 +32,11 @@ public final class EntryViews {
         simpleEntryView.setLastAccessTime(record.getLastAccessTime());
         simpleEntryView.setLastUpdateTime(record.getLastUpdateTime());
         simpleEntryView.setTtl(record.getTtl());
+        simpleEntryView.setCreationTime(record.getCreationTime());
 
         final RecordStatistics statistics = record.getStatistics();
         if (statistics != null) {
             simpleEntryView.setHits(statistics.getHits());
-            simpleEntryView.setCreationTime(statistics.getCreationTime());
             simpleEntryView.setExpirationTime(statistics.getExpirationTime());
             simpleEntryView.setLastStoredTime(statistics.getLastStoredTime());
         }
