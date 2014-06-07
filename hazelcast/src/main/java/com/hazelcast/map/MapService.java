@@ -453,7 +453,7 @@ public class MapService implements ManagedService, MigrationAwareService,
         Record record = mapContainer.getRecordFactory().newRecord(dataKey, value);
         record.setLastAccessTime(now);
         record.setLastUpdateTime(now);
-//        record.setC
+        record.setCreationTime(now);
         final long ttlFromMapConfig = getTimeToLive(mapContainer);
         if (ttl < 0L && ttlFromMapConfig > 0L) {
             record.setTtl(ttlFromMapConfig);
