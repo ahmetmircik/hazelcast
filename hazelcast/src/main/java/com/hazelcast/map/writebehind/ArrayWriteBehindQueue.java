@@ -116,7 +116,7 @@ class ArrayWriteBehindQueue<T> implements WriteBehindQueue<T> {
     @Override
     public List<T> removeAll() {
         final List<T> list = asList();
-        clear();
+        this.list.clear();
         return list;
     }
 

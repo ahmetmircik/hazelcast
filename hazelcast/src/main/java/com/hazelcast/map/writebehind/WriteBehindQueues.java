@@ -19,6 +19,7 @@ package com.hazelcast.map.writebehind;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A class providing static factory methods that create write behind queues.
@@ -28,14 +29,12 @@ public final class WriteBehindQueues {
     private WriteBehindQueues() {
     }
 
-    public static <T> WriteBehindQueue<T> createBoundedArrayWriteBehindQueue() {
-        return new BoundedArrayWriteBehindQueue<T>();
+    public static <T> WriteBehindQueue<T> createBoundedArrayWriteBehindQueue(int maxSizePerNode, AtomicInteger counter) {
+        return new BoundedArrayWriteBehindQueue<T>(maxSizePerNode, counter);
     }
 
-    public static <T> WriteBehindQueue<T> createDefaultWriteBehindQueue(boolean isWBehindEnabled) {
-        return isWBehindEnabled
-                ? (WriteBehindQueue<T>) createSafeWriteBehindQueue(createBoundedArrayWriteBehindQueue())
-                : (WriteBehindQueue<T>) emptyWriteBehindQueue();
+    public static <T> WriteBehindQueue<T> createDefaultWriteBehindQueue(int maxSizePerNode, AtomicInteger counter) {
+        return (WriteBehindQueue<T>) createSafeWriteBehindQueue(createBoundedArrayWriteBehindQueue(maxSizePerNode, counter));
     }
 
     public static <T> WriteBehindQueue<T> emptyWriteBehindQueue() {

@@ -42,6 +42,7 @@ import com.hazelcast.map.MapService;
 import com.hazelcast.map.MapStoreWrapper;
 import com.hazelcast.map.RecordStore;
 import com.hazelcast.map.proxy.MapProxyImpl;
+import com.hazelcast.map.writebehind.ReachedMaxSizeException;
 import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.test.AssertTask;
@@ -1533,8 +1534,21 @@ public class MapStoreTest extends HazelcastTestSupport {
         assertEquals("bar", map.get("foo"));
     }
 
+    @Test(expected = ReachedMaxSizeException.class)
+    public void testWriteBehindQueueMaxSizePerNode() throws Exception {
+        System.setProperty(GroupProperties.PROP_MAX_PER_NODE_SIZE_OF_WRITE_BEHIND_QUEUE, "100");
+        TestMapStore testMapStore = new TestMapStore(1, 1, 1);
+        testMapStore.setLoadAllKeys(false);
+        Config config = newConfig(testMapStore, 100);
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(1);
+        HazelcastInstance node = nodeFactory.newHazelcastInstance(config);
+        IMap map = node.getMap("default");
+        for (int i = 0; i < 101; i++) {
+            map.put(i,i);
+        }
+    }
 
-    public static class RecordingMapStore implements MapStore<String, String> {
+        public static class RecordingMapStore implements MapStore<String, String> {
 
         private static final boolean DEBUG = false;
 

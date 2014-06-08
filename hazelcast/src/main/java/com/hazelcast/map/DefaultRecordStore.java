@@ -75,12 +75,12 @@ public class DefaultRecordStore implements RecordStore {
     private final ConcurrentMap<Data, Record> records = new ConcurrentHashMap<Data, Record>(1000);
     private final MapContainer mapContainer;
     private final MapService mapService;
-    private final LockStore lockStore;
     private final RecordFactory recordFactory;
     private final ILogger logger;
     private final SizeEstimator sizeEstimator;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
     private final WriteBehindQueue<DelayedEntry> writeBehindQueue;
+    private LockStore lockStore;
     private long lastEvictionTime;
     /**
      * Flag for checking if this record store has at least one candidate entry
@@ -121,10 +121,10 @@ public class DefaultRecordStore implements RecordStore {
      * <p/>
      * Method {@link com.hazelcast.map.DefaultRecordStore#cleanupEvictionStagingArea} will try to evict this staging area.
      */
-    private final ConcurrentMap<Integer, DelayedEntry> evictionStagingArea;
+    private final Map<Integer, DelayedEntry> evictionStagingArea;
 
     /**
-     * used for lru eviction.
+     * used in LRU eviction logic.
      */
     private long lruAccessSequenceNumber;
 
@@ -135,19 +135,13 @@ public class DefaultRecordStore implements RecordStore {
         this.mapContainer = mapService.getMapContainer(name);
         this.logger = mapService.getNodeEngine().getLogger(this.getName());
         this.recordFactory = mapContainer.getRecordFactory();
-        this.writeBehindQueue = WriteBehindQueues.createDefaultWriteBehindQueue(mapContainer.isWriteBehindMapStoreEnabled());
-        this.writeBehindWaitingDeletions = mapContainer.isWriteBehindMapStoreEnabled()
-                ? Collections.newSetFromMap(new ConcurrentHashMap()) : (Set<Data>) Collections.EMPTY_SET;
-        NodeEngine nodeEngine = mapService.getNodeEngine();
-        final LockService lockService = nodeEngine.getSharedService(LockService.SERVICE_NAME);
-        this.lockStore = lockService == null ? null
-                : lockService.createLockStore(partitionId, new DefaultObjectNamespace(MapService.SERVICE_NAME, name));
+        this.lockStore = createLockStore();
         this.sizeEstimator = SizeEstimators.createMapSizeEstimator();
-        loadFromMapStore(nodeEngine);
-        this.expirable = mapContainer.getMapConfig().getMaxIdleSeconds() > 0
-                || mapContainer.getMapConfig().getTimeToLiveSeconds() > 0;
-        this.evictionStagingArea = mapContainer.isWriteBehindMapStoreEnabled() ? new ConcurrentHashMap<Integer, DelayedEntry>()
-                : null;
+        this.writeBehindQueue = createWriteBehindQueue();
+        this.writeBehindWaitingDeletions = createWriteBehindWaitingDeletionsSet();
+        this.expirable = isRecordStoreExpirable();
+        this.evictionStagingArea = createEvictionStagingArea();
+        loadFromMapStore();
     }
 
     public boolean isLoaded() {
@@ -546,6 +540,7 @@ public class DefaultRecordStore implements RecordStore {
         resetAccessSequenceNumber();
         writeBehindQueue.clear();
         writeBehindWaitingDeletions.clear();
+        evictionStagingArea.clear();
     }
 
     private void resetAccessSequenceNumber() {
@@ -1070,7 +1065,8 @@ public class DefaultRecordStore implements RecordStore {
         return oldValue;
     }
 
-    private void loadFromMapStore(NodeEngine nodeEngine) {
+    private void loadFromMapStore() {
+        final NodeEngine nodeEngine = mapService.getNodeEngine();
         final AtomicBoolean loadOccurred = loaded;
         if (!mapContainer.isMapStoreEnabled() || loadOccurred.get()) {
             return;
@@ -1514,6 +1510,46 @@ public class DefaultRecordStore implements RecordStore {
                 indexService.removeEntryIndex(key);
             }
         }
+    }
+
+    private WriteBehindQueue<DelayedEntry> createWriteBehindQueue() {
+        final boolean writeBehindMapStoreEnabled = mapContainer.isWriteBehindMapStoreEnabled();
+        if (!writeBehindMapStoreEnabled) {
+            return WriteBehindQueues.emptyWriteBehindQueue();
+        }
+        final AtomicInteger counter = mapService.getWriteBehindQueueItemCounter();
+        final int maxPerNodeWriteBehindQueueSize = mapService.getMaxPerNodeSizeOfWriteBehindQueue();
+        return WriteBehindQueues.createDefaultWriteBehindQueue(maxPerNodeWriteBehindQueueSize, counter);
+    }
+
+    private Map<Integer, DelayedEntry> createEvictionStagingArea() {
+        final boolean writeBehindMapStoreEnabled = mapContainer.isWriteBehindMapStoreEnabled();
+        if (!writeBehindMapStoreEnabled) {
+            return Collections.emptyMap();
+        }
+        return new ConcurrentHashMap<Integer, DelayedEntry>();
+    }
+
+    private Set<Data> createWriteBehindWaitingDeletionsSet() {
+        final boolean writeBehindMapStoreEnabled = mapContainer.isWriteBehindMapStoreEnabled();
+        if (!writeBehindMapStoreEnabled) {
+            return Collections.emptySet();
+        }
+        return Collections.newSetFromMap(new ConcurrentHashMap());
+    }
+
+    private boolean isRecordStoreExpirable() {
+        return mapContainer.getMapConfig().getMaxIdleSeconds() > 0
+                || mapContainer.getMapConfig().getTimeToLiveSeconds() > 0;
+    }
+
+    private LockStore createLockStore() {
+        NodeEngine nodeEngine = mapService.getNodeEngine();
+        final LockService lockService = nodeEngine.getSharedService(LockService.SERVICE_NAME);
+        if (lockService == null) {
+            return null;
+        }
+        return lockService.createLockStore(partitionId, new DefaultObjectNamespace(MapService.SERVICE_NAME, name));
     }
 
     private final class MapLoadAllTask implements Runnable {

@@ -102,6 +102,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
@@ -123,6 +124,10 @@ public class MapService implements ManagedService, MigrationAwareService,
     private final AtomicReference<List<Integer>> ownedPartitions;
     private final Map<String, MapMergePolicy> mergePolicyMap;
     private final ExpirationManager expirationManager;
+    /**
+     * Holds per node total item count in all write behind queues.
+     */
+    private final AtomicInteger writeBehindQueueItemCounter;
 
     public MapService(NodeEngine nodeEngine) {
         this.nodeEngine = nodeEngine;
@@ -135,6 +140,7 @@ public class MapService implements ManagedService, MigrationAwareService,
         mergePolicyMap.put(PassThroughMergePolicy.class.getName(), new PassThroughMergePolicy());
         mergePolicyMap.put(LatestUpdateMapMergePolicy.class.getName(), new LatestUpdateMapMergePolicy());
         expirationManager = new ExpirationManager(this);
+        writeBehindQueueItemCounter = new AtomicInteger(0);
     }
 
     private final ConcurrentMap<String, LocalMapStatsImpl> statsMap = new ConcurrentHashMap<String, LocalMapStatsImpl>(1000);
@@ -1044,4 +1050,11 @@ public class MapService implements ManagedService, MigrationAwareService,
         return (value > 0) ? value : 0;
     }
 
+    public AtomicInteger getWriteBehindQueueItemCounter() {
+        return writeBehindQueueItemCounter;
+    }
+
+    public int getMaxPerNodeSizeOfWriteBehindQueue() {
+        return nodeEngine.getGroupProperties().MAX_PER_NODE_SIZE_OF_WRITE_BEHIND_QUEUE.getInteger();
+    }
 }
