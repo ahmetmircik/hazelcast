@@ -112,12 +112,12 @@ public class DefaultRecordStore implements RecordStore {
     private final Set<Data> writeBehindWaitingDeletions;
 
     /**
-     * A temporary living space for evicted data if we are using a write-behind map store.
-     * We search this space for a key before map store.
-     * All read operations will use here to return last set value on a specific key, since there is a possibility that
-     * WBQ {@link com.hazelcast.map.writebehind.WriteBehindQueue} may contain more than one waiting operations
-     * on a specific key and eviction should trigger a map store flush for the waiting operations.
-     * This is for strong data consistency.
+     * A temporary living space for evicted data if we are using a write-behind map store. Because every eviction triggers a
+     * map store flush and in write-behind mode this flush operation should not cause any inconsistencies like reading a stale value
+     * from map store. To prevent this kind of inconsistencies, first we are searching an evicted entry in this space and if it is not there,
+     * we are asking map store to load it. All read operations will use this staging area to return last set value on a specific key,
+     * since there is a possibility that WBQ {@link com.hazelcast.map.writebehind.WriteBehindQueue} may contain more than one waiting operations
+     * on a specific key.
      * <p/>
      * Method {@link com.hazelcast.map.DefaultRecordStore#cleanupEvictionStagingArea} will try to evict this staging area.
      */
