@@ -1538,7 +1538,6 @@ public class MapStoreTest extends HazelcastTestSupport {
     @Test(expected = ReachedMaxSizeException.class)
     public void testWriteBehindQueueMaxSizePerNode() throws Exception {
         TestMapStore testMapStore = new TestMapStore(1, 1, 1);
-        testMapStore.setLoadAllKeys(false);
         Config config = newConfig(testMapStore, 100);
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(1);
         HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
