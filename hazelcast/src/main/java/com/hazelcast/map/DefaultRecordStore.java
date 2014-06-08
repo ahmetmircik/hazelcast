@@ -560,7 +560,7 @@ public class DefaultRecordStore implements RecordStore {
 
     private Object evict0(Data key) {
         Record record = records.get(key);
-        Object value;
+        Object value = null;
         if (record != null) {
             value = record.getValue();
             final long lastUpdateTime = record.getLastUpdateTime();
@@ -570,7 +570,7 @@ public class DefaultRecordStore implements RecordStore {
             deleteRecord(key);
             removeIndex(key);
         }
-        return valuesData();
+        return value;
     }
 
     @Override
