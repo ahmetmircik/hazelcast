@@ -56,10 +56,10 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     /**
      * Used to put staging area {@link com.hazelcast.map.DefaultRecordStore#evictionStagingArea}
      *
-     * @param value to put.
+     * @param value     to put.
      * @param storeTime target store time
-     * @param <K> the key type.
-     * @param <V> the value type.
+     * @param <K>       the key type.
+     * @param <V>       the value type.
      * @return new delayed entry object with a null key.
      */
     public static <K, V> DelayedEntry<K, V> createWithNullKey(V value, long storeTime) {
@@ -74,16 +74,13 @@ public final class DelayedEntry<K, V> extends AbstractDelayedEntry<K> {
     }
 
     @Override
-    public int hashCode() {
-        return getKey().hashCode();
+    public String toString() {
+        return "DelayedEntry{" +
+                "key=" + key +
+                ", value=" + value +
+                ", storeTime=" + storeTime +
+                ", partitionId=" + getPartitionId() +
+                '}';
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        final DelayedEntry anotherEntry = (DelayedEntry) obj;
-        if (this.getKey().hashCode() == anotherEntry.getKey().hashCode()) {
-            return true;
-        }
-        return false;
-    }
 }

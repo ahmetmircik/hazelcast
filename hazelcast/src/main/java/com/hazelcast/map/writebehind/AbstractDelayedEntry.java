@@ -19,7 +19,7 @@ package com.hazelcast.map.writebehind;
 /**
  * @param <K> the key type.
  */
-public abstract class AbstractDelayedEntry<K> {
+abstract class AbstractDelayedEntry<K> {
 
     protected final K key;
 
@@ -62,11 +62,7 @@ public abstract class AbstractDelayedEntry<K> {
     }
 
     @Override
-    public String toString() {
-        return "AbstractDelayedEntry{" +
-                "key=" + key +
-                ", storeTime=" + storeTime +
-                ", partitionId=" + partitionId +
-                '}';
+    public int hashCode() {
+        return key.hashCode();
     }
 }
