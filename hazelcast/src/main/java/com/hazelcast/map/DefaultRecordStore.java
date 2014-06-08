@@ -246,6 +246,9 @@ public class DefaultRecordStore implements RecordStore {
         clearRecordsMap(Collections.<Data, Record>emptyMap());
         resetSizeEstimator();
         resetAccessSequenceNumber();
+        writeBehindQueue.clear();
+        writeBehindWaitingDeletions.clear();
+        evictionStagingArea.clear();
     }
 
     private void clearRecordsMap(Map<Data, Record> excludeRecords) {

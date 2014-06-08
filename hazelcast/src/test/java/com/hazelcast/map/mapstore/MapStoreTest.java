@@ -35,6 +35,7 @@ import com.hazelcast.core.PostProcessingMapStore;
 import com.hazelcast.core.TransactionalMap;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.instance.HazelcastInstanceProxy;
+import com.hazelcast.instance.Node;
 import com.hazelcast.instance.TestUtil;
 import com.hazelcast.map.AbstractEntryProcessor;
 import com.hazelcast.map.MapContainer;
@@ -1536,14 +1537,15 @@ public class MapStoreTest extends HazelcastTestSupport {
 
     @Test(expected = ReachedMaxSizeException.class)
     public void testWriteBehindQueueMaxSizePerNode() throws Exception {
-        System.setProperty(GroupProperties.PROP_MAX_PER_NODE_SIZE_OF_WRITE_BEHIND_QUEUE, "100");
         TestMapStore testMapStore = new TestMapStore(1, 1, 1);
         testMapStore.setLoadAllKeys(false);
         Config config = newConfig(testMapStore, 100);
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(1);
-        HazelcastInstance node = nodeFactory.newHazelcastInstance(config);
-        IMap map = node.getMap("default");
-        for (int i = 0; i < 101; i++) {
+        HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
+        final Node node = getNode(instance);
+        final int maxSize = node.getGroupProperties().MAX_PER_NODE_SIZE_OF_WRITE_BEHIND_QUEUE.getInteger();
+        IMap map = instance.getMap("default");
+        for (int i = 0; i < maxSize + 1; i++) {
             map.put(i,i);
         }
     }
