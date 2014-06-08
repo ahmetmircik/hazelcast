@@ -6,7 +6,6 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.MapStore;
 import com.hazelcast.instance.GroupProperties;
-import com.hazelcast.map.writebehind.DelayedEntry;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
@@ -20,7 +19,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -29,19 +27,6 @@ import static org.junit.Assert.assertNull;
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
 public class WriteBehindMapStoreWithEvictionsTest extends HazelcastTestSupport {
-
-    @Test
-    public void testDelayedEntry_readFromMap() throws Exception {
-        final ConcurrentMap<DelayedEntry, Object> map = new ConcurrentHashMap<DelayedEntry, Object>();
-        for (int i = 0; i < 10000; i++) {
-            final DelayedEntry<Integer, Long> delayedEntry = DelayedEntry.createWithNullValue(i, 1L + (1 + i));
-            map.put(delayedEntry, delayedEntry.getStoreTime());
-        }
-        for (int i = 0; i < 10000; i++) {
-            final DelayedEntry<Integer, Object> delayedEntry = DelayedEntry.createWithNullValue(i, 1L + (1 + i));
-            assertFinalValueEquals((1 + (1 + i)), ((Long) map.get(delayedEntry)).intValue());
-        }
-    }
 
     @Test
     public void testWriteBehind_callEvictBeforePersisting() throws Exception {

@@ -46,23 +46,4 @@ abstract class AbstractDelayedEntry<K> {
         return partitionId;
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final AbstractDelayedEntry delayedEntry = (AbstractDelayedEntry) obj;
-        return key != null && storeTime == delayedEntry.storeTime && key.equals(delayedEntry.getKey());
-    }
-
-    @Override
-    public int hashCode() {
-        return key.hashCode();
-    }
 }
