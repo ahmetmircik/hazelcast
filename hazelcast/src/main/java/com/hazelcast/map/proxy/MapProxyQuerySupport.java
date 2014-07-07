@@ -159,7 +159,7 @@ public class MapProxyQuerySupport {
      * @return {@link QueryResultSet}
      */
     public Set query2(final Predicate predicate,
-                     final IterationType iterationType, final boolean dataResult) {
+                      final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
@@ -259,6 +259,22 @@ public class MapProxyQuerySupport {
         }
     }
 
+    private List<Integer> addResultsOfPredicate2(List<Future> futures, Set result) {
+        final List<Integer> partitionIds = new ArrayList<Integer>();
+        for (Future future : futures) {
+            final QueryResult queryResult = getQueryResultOrNull(future);
+            if (queryResult == null) {
+                continue;
+            }
+            final List<Integer> tmpPartitionIds = queryResult.getPartitionIds();
+            if (tmpPartitionIds != null) {
+                partitionIds.addAll(tmpPartitionIds);
+                result.addAll(queryResult.getResult());
+            }
+        }
+        return partitionIds;
+    }
+
     private QueryResult getQueryResultOrNull(Future future) {
         QueryResult queryResult = null;
         try {
@@ -286,28 +302,14 @@ public class MapProxyQuerySupport {
         final NodeEngine nodeEngine = this.nodeEngine;
         OperationService operationService = nodeEngine.getOperationService();
         final SerializationService ss = nodeEngine.getSerializationService();
-        Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         Set<Integer> plist = new HashSet<Integer>(partitionCount);
         Set result = new QueryResultSet(ss, iterationType, dataResult);
         List<Integer> missingList = new ArrayList<Integer>();
         try {
-            List<Future> flist = new ArrayList<Future>();
-            for (MemberImpl member : members) {
-                Future future = operationService
-                        .invokeOnTarget(SERVICE_NAME, new QueryOperation(name, predicate), member.getAddress());
-                flist.add(future);
-            }
-            for (Future future : flist) {
-                QueryResult queryResult = (QueryResult) future.get();
-                if (queryResult != null) {
-                    final List<Integer> partitionIds = queryResult.getPartitionIds();
-                    if (partitionIds != null) {
-                        plist.addAll(partitionIds);
-                        result.addAll(queryResult.getResult());
-                    }
-                }
-            }
+            List<Future> futures = queryOnMembers(predicate, nodeEngine);
+            final List<Integer> pids = addResultsOfPredicate2(futures, result);
+            plist.addAll(pids);
             if (plist.size() == partitionCount) {
                 return result;
             }
