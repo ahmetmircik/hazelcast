@@ -119,7 +119,7 @@ public class MapProxyQuerySupport {
     public Set queryWithPagingPredicate(PagingPredicate pagingPredicate, final IterationType iterationType) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        Set<Integer> partitionIds = newSetPopulatedWithPartitionIds(partitionCount);
+        Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         pagingPredicate.setIterationType(iterationType);
         if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
             pagingPredicate.previousPage();
@@ -163,16 +163,16 @@ public class MapProxyQuerySupport {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        final Set<Integer> partitionIds = newSetPopulatedWithPartitionIds(partitionCount);
+        final Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         final Set result = new QueryResultSet(serializationService, iterationType, dataResult);
         try {
             final List<Future> futures = queryOnMembers(predicate, nodeEngine);
             addResultsOfPredicate(futures, result, partitionIds);
+            System.out.println("partitionIds = " + partitionIds.size());
             if (partitionIds.isEmpty()) {
                 return result;
             }
         } catch (Throwable t) {
-            t.printStackTrace();
             nodeEngine.getLogger(getClass()).warning("Exception while querying ", t);
         }
 
@@ -230,7 +230,7 @@ public class MapProxyQuerySupport {
 
     /**
      * For paging predicates.
-     * Adds results to result set and removes returned partition ids.
+     * Adds results to result set and removes queried partition ids.
      */
     private void addResultsOfPagingPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
             throws ExecutionException, InterruptedException {
@@ -252,12 +252,12 @@ public class MapProxyQuerySupport {
 
     /**
      * For predicates except paging predicates.
-     * Adds results to result set and removes returned partition ids.
+     * Adds results to result set and removes queried partition ids.
      */
     private void addResultsOfPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
             throws ExecutionException, InterruptedException {
         for (Future future : futures) {
-            QueryResult queryResult = (QueryResult) future.get();
+            final QueryResult queryResult = (QueryResult) future.get();
             if (queryResult == null) {
                 continue;
             }
@@ -270,7 +270,7 @@ public class MapProxyQuerySupport {
         }
     }
 
-    private Set<Integer> newSetPopulatedWithPartitionIds(int partitionCount) {
+    private Set<Integer> createSetPopulatedWithPartitionIds(int partitionCount) {
         final Set<Integer> partitionIds = new HashSet<Integer>(partitionCount);
         for (int i = 0; i < partitionCount; i++) {
             partitionIds.add(i);
