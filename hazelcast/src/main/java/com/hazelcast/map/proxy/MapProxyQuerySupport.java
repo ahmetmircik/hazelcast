@@ -303,33 +303,22 @@ public class MapProxyQuerySupport {
         OperationService operationService = nodeEngine.getOperationService();
         final SerializationService ss = nodeEngine.getSerializationService();
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        Set<Integer> plist = new HashSet<Integer>(partitionCount);
+        Set<Integer> plist = createSetPopulatedWithPartitionIds(partitionCount);
         Set result = new QueryResultSet(ss, iterationType, dataResult);
-        List<Integer> missingList = new ArrayList<Integer>();
         try {
             List<Future> futures = queryOnMembers(predicate, nodeEngine);
             final List<Integer> pids = addResultsOfPredicate2(futures, result);
-            plist.addAll(pids);
-            if (plist.size() == partitionCount) {
+            plist.removeAll(pids);
+            if (plist.isEmpty()) {
                 return result;
             }
-            for (int i = 0; i < partitionCount; i++) {
-                if (!plist.contains(i)) {
-                    missingList.add(i);
-                }
-            }
+
         } catch (Throwable t) {
-            missingList.clear();
-            for (int i = 0; i < partitionCount; i++) {
-                if (!plist.contains(i)) {
-                    missingList.add(i);
-                }
-            }
         }
 
+        final List<Future> futures = new ArrayList<Future>(plist.size());
         try {
-            List<Future> futures = new ArrayList<Future>(missingList.size());
-            for (Integer pid : missingList) {
+            for (Integer pid : plist) {
                 QueryPartitionOperation queryPartitionOperation = new QueryPartitionOperation(name, predicate);
                 queryPartitionOperation.setPartitionId(pid);
                 try {
