@@ -159,7 +159,7 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set query(final Predicate predicate,
+    public Set queryx(final Predicate predicate,
                      final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
@@ -282,5 +282,110 @@ public class MapProxyQuerySupport {
     private Object toObject(Object obj) {
         return nodeEngine.getSerializationService().toObject(obj);
     }
+
+    protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
+
+        final NodeEngine nodeEngine = this.nodeEngine;
+        OperationService operationService = nodeEngine.getOperationService();
+        final SerializationService ss = nodeEngine.getSerializationService();
+        Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
+        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
+        Set<Integer> plist = new HashSet<Integer>(partitionCount);
+        PagingPredicate pagingPredicate = null;
+        if (predicate instanceof PagingPredicate) {
+            pagingPredicate = (PagingPredicate) predicate;
+            pagingPredicate.setIterationType(iterationType);
+            if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
+                pagingPredicate.previousPage();
+                query(pagingPredicate, iterationType, dataResult);
+                pagingPredicate.nextPage();
+            }
+        }
+        Set result;
+        if (pagingPredicate == null) {
+            result = new QueryResultSet(ss, iterationType, dataResult);
+        } else {
+            result = new SortedQueryResultSet(pagingPredicate.getComparator(), iterationType, pagingPredicate.getPageSize());
+        }
+        List<Integer> missingList = new ArrayList<Integer>();
+        try {
+            List<Future> flist = new ArrayList<Future>();
+            for (MemberImpl member : members) {
+                Future future = operationService
+                        .invokeOnTarget(SERVICE_NAME, new QueryOperation(name, predicate), member.getAddress());
+                flist.add(future);
+            }
+            for (Future future : flist) {
+                QueryResult queryResult = (QueryResult) future.get();
+                if (queryResult != null) {
+                    final List<Integer> partitionIds = queryResult.getPartitionIds();
+                    if (partitionIds != null) {
+                        plist.addAll(partitionIds);
+                        if (pagingPredicate == null) {
+                            result.addAll(queryResult.getResult());
+                        } else {
+                            for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                                Object key = ss.toObject(queryResultEntry.getKeyData());
+                                Object value = ss.toObject(queryResultEntry.getValueData());
+                                result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                            }
+                        }
+                    }
+                }
+            }
+            if (plist.size() == partitionCount) {
+                if (pagingPredicate != null) {
+                    PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
+                }
+                return result;
+            }
+            for (int i = 0; i < partitionCount; i++) {
+                if (!plist.contains(i)) {
+                    missingList.add(i);
+                }
+            }
+        } catch (Throwable t) {
+            missingList.clear();
+            for (int i = 0; i < partitionCount; i++) {
+                if (!plist.contains(i)) {
+                    missingList.add(i);
+                }
+            }
+        }
+
+        try {
+            List<Future> futures = new ArrayList<Future>(missingList.size());
+            for (Integer pid : missingList) {
+                QueryPartitionOperation queryPartitionOperation = new QueryPartitionOperation(name, predicate);
+                queryPartitionOperation.setPartitionId(pid);
+                try {
+                    Future f =
+                            operationService.invokeOnPartition(SERVICE_NAME, queryPartitionOperation, pid);
+                    futures.add(f);
+                } catch (Throwable t) {
+                    throw ExceptionUtil.rethrow(t);
+                }
+            }
+            for (Future future : futures) {
+                QueryResult queryResult = (QueryResult) future.get();
+                if (pagingPredicate == null) {
+                    result.addAll(queryResult.getResult());
+                } else {
+                    for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                        Object key = ss.toObject(queryResultEntry.getKeyData());
+                        Object value = ss.toObject(queryResultEntry.getValueData());
+                        result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            throw ExceptionUtil.rethrow(t);
+        }
+        if (pagingPredicate != null) {
+            PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
+        }
+        return result;
+    }
+
 
 }
