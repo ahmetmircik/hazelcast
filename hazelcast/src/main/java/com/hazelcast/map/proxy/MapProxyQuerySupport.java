@@ -306,8 +306,7 @@ public class MapProxyQuerySupport {
         Set result = new QueryResultSet(ss, iterationType, dataResult);
         try {
             List<Future> futures = queryOnMembers(predicate, nodeEngine);
-            final List<Integer> pids = addResultsOfPredicate2(futures, result);
-            plist.removeAll(pids);
+            addResultsOfPredicate(futures, result,plist);
             if (plist.isEmpty()) {
                 return result;
             }
