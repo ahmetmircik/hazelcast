@@ -539,11 +539,18 @@ public class BasicMapTest extends HazelcastTestSupport {
         map.put("key1", "value1");
         map.put("key2", "value2");
         map.put("key3", "value3");
-        HashSet<String> actual = new HashSet<String>();
-        actual.add("key1");
-        actual.add("key2");
-        actual.add("key3");
-        assertEquals(map.keySet(), actual);
+
+        List<String> listExpected = new ArrayList<String>();
+        listExpected.add("key1");
+        listExpected.add("key2");
+        listExpected.add("key3");
+
+        final List<String> list = new ArrayList<String>(map.keySet());
+
+        Collections.sort(list);
+        Collections.sort(listExpected);
+
+        assertEquals(listExpected, list);
     }
 
     @Test
@@ -552,11 +559,18 @@ public class BasicMapTest extends HazelcastTestSupport {
         map.put("key1", "value1");
         map.put("key2", "value2");
         map.put("key3", "value3");
-        HashSet<String> actual = new HashSet<String>();
-        actual.add("key1");
-        actual.add("key2");
-        actual.add("key3");
-        assertEquals(map.keySet(), actual);
+
+        List<String> listExpected = new ArrayList<String>();
+        listExpected.add("key1");
+        listExpected.add("key2");
+        listExpected.add("key3");
+
+        final List<String> list = new ArrayList<String>(map.keySet());
+
+        Collections.sort(list);
+        Collections.sort(listExpected);
+
+        assertEquals(listExpected, list);
     }
 
     @Test
