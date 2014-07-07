@@ -64,7 +64,7 @@ public class MapProxyQuerySupport {
         try {
             final Future future = queryLocal(pagingPredicate, nodeEngine);
             final List<Future> singletonList = Collections.singletonList(future);
-            addPagingPredicateResults(singletonList, result, partitionIds);
+            addResultsOfPagingPredicate(singletonList, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate,
                         ((SortedQueryResultSet) result).last());
@@ -72,7 +72,7 @@ public class MapProxyQuerySupport {
             }
 
             final List<Future> futures = queryOnPartitions(pagingPredicate, partitionIds, nodeEngine);
-            addPagingPredicateResults(futures, result, partitionIds);
+            addResultsOfPagingPredicate(futures, result, partitionIds);
 
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
@@ -97,12 +97,12 @@ public class MapProxyQuerySupport {
         try {
             final Future future = queryLocal(predicate, nodeEngine);
             final List<Future> singletonList = Collections.singletonList(future);
-            addPredicateResults(singletonList, result, partitionIds);
+            addResultsOfPredicate(singletonList, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 return result;
             }
             List<Future> futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
-            addPredicateResults(futures, result, partitionIds);
+            addResultsOfPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
@@ -118,7 +118,6 @@ public class MapProxyQuerySupport {
      */
     public Set queryWithPagingPredicate(PagingPredicate pagingPredicate, final IterationType iterationType) {
         final NodeEngine nodeEngine = this.nodeEngine;
-        final Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         Set<Integer> partitionIds = newSetPopulatedWithPartitionIds(partitionCount);
         pagingPredicate.setIterationType(iterationType);
@@ -130,8 +129,8 @@ public class MapProxyQuerySupport {
         final Set result = new SortedQueryResultSet(pagingPredicate.getComparator(),
                 iterationType, pagingPredicate.getPageSize());
         try {
-            final List<Future> futures = queryOnMembers(pagingPredicate, members, nodeEngine);
-            addPagingPredicateResults(futures, result, partitionIds);
+            final List<Future> futures = queryOnMembers(pagingPredicate, nodeEngine);
+            addResultsOfPagingPredicate(futures, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
                 return result;
@@ -142,7 +141,7 @@ public class MapProxyQuerySupport {
 
         try {
             final List<Future> futures = queryOnPartitions(pagingPredicate, partitionIds, nodeEngine);
-            addPagingPredicateResults(futures, result, partitionIds);
+            addResultsOfPagingPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
@@ -159,27 +158,27 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set queryx(final Predicate predicate,
-                     final IterationType iterationType, final boolean dataResult) {
+    public Set query(final Predicate predicate,
+                      final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
-        final Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        Set<Integer> partitionIds = newSetPopulatedWithPartitionIds(partitionCount);
+        final Set<Integer> partitionIds = newSetPopulatedWithPartitionIds(partitionCount);
         final Set result = new QueryResultSet(serializationService, iterationType, dataResult);
         try {
-            final List<Future> futures = queryOnMembers(predicate, members, nodeEngine);
-            addPredicateResults(futures, result, partitionIds);
+            final List<Future> futures = queryOnMembers(predicate, nodeEngine);
+            addResultsOfPredicate(futures, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 return result;
             }
         } catch (Throwable t) {
+            t.printStackTrace();
             nodeEngine.getLogger(getClass()).warning("Exception while querying ", t);
         }
 
         try {
             final List<Future> futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
-            addPredicateResults(futures, result, partitionIds);
+            addResultsOfPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
@@ -195,8 +194,8 @@ public class MapProxyQuerySupport {
         return future;
     }
 
-    private List<Future> queryOnMembers(Predicate predicate,
-                                        Collection<MemberImpl> members, NodeEngine nodeEngine) {
+    private List<Future> queryOnMembers(Predicate predicate, NodeEngine nodeEngine) {
+        final Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         final List<Future> futures = new ArrayList<Future>(members.size());
         final OperationService operationService = nodeEngine.getOperationService();
         for (MemberImpl member : members) {
@@ -233,7 +232,7 @@ public class MapProxyQuerySupport {
      * For paging predicates.
      * Adds results to result set and removes returned partition ids.
      */
-    private void addPagingPredicateResults(List<Future> futures, Set result, Collection<Integer> partitionIds)
+    private void addResultsOfPagingPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
             throws ExecutionException, InterruptedException {
         for (Future future : futures) {
             QueryResult queryResult = (QueryResult) future.get();
@@ -255,16 +254,17 @@ public class MapProxyQuerySupport {
      * For predicates except paging predicates.
      * Adds results to result set and removes returned partition ids.
      */
-    private void addPredicateResults(List<Future> futures, Set result, Collection<Integer> partitionIds)
+    private void addResultsOfPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
             throws ExecutionException, InterruptedException {
         for (Future future : futures) {
             QueryResult queryResult = (QueryResult) future.get();
             if (queryResult == null) {
                 continue;
             }
-            final List<Integer> tmpPartitionIdList = queryResult.getPartitionIds();
-            if (tmpPartitionIdList != null) {
-                partitionIds.removeAll(tmpPartitionIdList);
+            final List<Integer> tmpPartitionIds = queryResult.getPartitionIds();
+            if (tmpPartitionIds != null) {
+                partitionIds.removeAll(tmpPartitionIds);
+
                 result.addAll(queryResult.getResult());
             }
         }
@@ -283,8 +283,7 @@ public class MapProxyQuerySupport {
         return nodeEngine.getSerializationService().toObject(obj);
     }
 
-    protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
-
+    protected Set queryx(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         OperationService operationService = nodeEngine.getOperationService();
         final SerializationService ss = nodeEngine.getSerializationService();
