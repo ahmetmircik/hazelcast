@@ -50,14 +50,14 @@ public class MapProxyQuerySupport {
      * @param iterationType   type of {@link IterationType}
      * @return {@link SortedQueryResultSet}
      */
-    public Set queryLocalPagingPredicate(final PagingPredicate pagingPredicate,
-                                         final IterationType iterationType) {
+    public Set queryLocalWithPagingPredicate(final PagingPredicate pagingPredicate,
+                                             final IterationType iterationType) {
         final NodeEngine nodeEngine = this.nodeEngine;
         List<Integer> partitionIds = nodeEngine.getPartitionService().getMemberPartitions(nodeEngine.getThisAddress());
         pagingPredicate.setIterationType(iterationType);
         if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
             pagingPredicate.previousPage();
-            queryLocalPagingPredicate(pagingPredicate, iterationType);
+            queryLocalWithPagingPredicate(pagingPredicate, iterationType);
             pagingPredicate.nextPage();
         }
         final Set result = new SortedQueryResultSet(pagingPredicate.getComparator(),
@@ -92,7 +92,7 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set queryLocalPredicate(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
+    public Set queryLocal(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final List<Integer> partitionIds = nodeEngine.getPartitionService().getMemberPartitions(nodeEngine.getThisAddress());
         final SerializationService serializationService = nodeEngine.getSerializationService();
@@ -121,7 +121,7 @@ public class MapProxyQuerySupport {
      * @param iterationType   type of {@link IterationType}
      * @return {@link SortedQueryResultSet}
      */
-    public Set queryPagingPredicate(PagingPredicate pagingPredicate, final IterationType iterationType) {
+    public Set queryWithPagingPredicate(PagingPredicate pagingPredicate, final IterationType iterationType) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
@@ -129,7 +129,7 @@ public class MapProxyQuerySupport {
         pagingPredicate.setIterationType(iterationType);
         if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
             pagingPredicate.previousPage();
-            queryPagingPredicate(pagingPredicate, iterationType);
+            queryWithPagingPredicate(pagingPredicate, iterationType);
             pagingPredicate.nextPage();
         }
         final Set result = new SortedQueryResultSet(pagingPredicate.getComparator(),
@@ -166,8 +166,8 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set queryPredicate(final Predicate predicate,
-                              final IterationType iterationType, final boolean dataResult) {
+    public Set query(final Predicate predicate,
+                     final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
         final Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();

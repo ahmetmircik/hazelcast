@@ -126,7 +126,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected final LocalMapStatsImpl localMapStats;
     protected final LockProxySupport lockSupport;
     protected final PartitioningStrategy partitionStrategy;
-    private final MapProxyQuerySupport mapProxyQuerySupport;
+    private final MapProxyQuerySupport querySupport;
 
     protected MapProxySupport(final String name, final MapService service, NodeEngine nodeEngine) {
         super(nodeEngine, service);
@@ -135,7 +135,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         partitionStrategy = service.getMapServiceContext().getMapContainer(name).getPartitioningStrategy();
         localMapStats = service.getMapServiceContext().getLocalMapStatsProvider().getLocalMapStatsImpl(name);
         lockSupport = new LockProxySupport(new DefaultObjectNamespace(MapService.SERVICE_NAME, name));
-        mapProxyQuerySupport = new MapProxyQuerySupport(name, nodeEngine);
+        querySupport = new MapProxyQuerySupport(name, nodeEngine);
     }
 
     @Override
@@ -969,6 +969,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         return result;
     }
 
+
     public ICompletableFuture executeOnKeyInternal(Data key, EntryProcessor entryProcessor, ExecutionCallback callback) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
@@ -1044,19 +1045,17 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
 
     protected Set queryLocal(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         if (predicate instanceof PagingPredicate) {
-            return mapProxyQuerySupport.queryLocalPagingPredicate((PagingPredicate) predicate, iterationType);
+            return querySupport.queryLocalWithPagingPredicate((PagingPredicate) predicate, iterationType);
         }
-        return mapProxyQuerySupport.queryLocalPredicate(predicate, iterationType, dataResult);
+        return querySupport.queryLocal(predicate, iterationType, dataResult);
     }
-
 
     protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         if (predicate instanceof PagingPredicate) {
-            return mapProxyQuerySupport.queryPagingPredicate((PagingPredicate) predicate, iterationType);
+            return querySupport.queryWithPagingPredicate((PagingPredicate) predicate, iterationType);
         }
-        return mapProxyQuerySupport.queryPredicate(predicate, iterationType, dataResult);
+        return querySupport.query(predicate, iterationType, dataResult);
     }
-
 
     public void addIndex(final String attribute, final boolean ordered) {
         final NodeEngine nodeEngine = getNodeEngine();
