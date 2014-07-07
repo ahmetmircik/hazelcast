@@ -300,7 +300,6 @@ public class MapProxyQuerySupport {
 
     protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
-        OperationService operationService = nodeEngine.getOperationService();
         final SerializationService ss = nodeEngine.getSerializationService();
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         Set<Integer> plist = createSetPopulatedWithPartitionIds(partitionCount);
@@ -318,21 +317,8 @@ public class MapProxyQuerySupport {
 
         final List<Future> futures = new ArrayList<Future>(plist.size());
         try {
-            for (Integer pid : plist) {
-                QueryPartitionOperation queryPartitionOperation = new QueryPartitionOperation(name, predicate);
-                queryPartitionOperation.setPartitionId(pid);
-                try {
-                    Future f =
-                            operationService.invokeOnPartition(SERVICE_NAME, queryPartitionOperation, pid);
-                    futures.add(f);
-                } catch (Throwable t) {
-                    throw ExceptionUtil.rethrow(t);
-                }
-            }
-            for (Future future : futures) {
-                QueryResult queryResult = (QueryResult) future.get();
-                result.addAll(queryResult.getResult());
-            }
+            queryOnPartitions(predicate, plist, nodeEngine);
+            addResultsOfPredicate2(futures, result);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
