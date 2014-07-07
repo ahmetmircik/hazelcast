@@ -11,6 +11,7 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.QueryResultEntry;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.OperationService;
+import com.hazelcast.util.EmptyStatement;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.QueryResultSet;
@@ -23,7 +24,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import static com.hazelcast.map.MapService.SERVICE_NAME;
@@ -159,29 +159,20 @@ public class MapProxyQuerySupport {
      * @return {@link QueryResultSet}
      */
     public Set query(final Predicate predicate,
-                      final IterationType iterationType, final boolean dataResult) {
+                     final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         final Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         final Set result = new QueryResultSet(serializationService, iterationType, dataResult);
-        try {
-            final List<Future> futures = queryOnMembers(predicate, nodeEngine);
-            addResultsOfPredicate(futures, result, partitionIds);
-            System.out.println("partitionIds = " + partitionIds.size());
-            if (partitionIds.isEmpty()) {
-                return result;
-            }
-        } catch (Throwable t) {
-            nodeEngine.getLogger(getClass()).warning("Exception while querying ", t);
+        List<Future> futures = queryOnMembers(predicate, nodeEngine);
+        addResultsOfPredicate(futures, result, partitionIds);
+        if (partitionIds.isEmpty()) {
+            return result;
         }
 
-        try {
-            final List<Future> futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
-            addResultsOfPredicate(futures, result, partitionIds);
-        } catch (Throwable t) {
-            throw ExceptionUtil.rethrow(t);
-        }
+        futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
+        addResultsOfPredicate(futures, result, partitionIds);
         return result;
     }
 
@@ -232,19 +223,19 @@ public class MapProxyQuerySupport {
      * For paging predicates.
      * Adds results to result set and removes queried partition ids.
      */
-    private void addResultsOfPagingPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
-            throws ExecutionException, InterruptedException {
+    private void addResultsOfPagingPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds) {
         for (Future future : futures) {
-            QueryResult queryResult = (QueryResult) future.get();
-            if (queryResult != null) {
-                List<Integer> tmpPartitionIds = queryResult.getPartitionIds();
-                if (tmpPartitionIds != null) {
-                    partitionIds.removeAll(tmpPartitionIds);
-                    for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
-                        Object key = toObject(queryResultEntry.getKeyData());
-                        Object value = toObject(queryResultEntry.getValueData());
-                        result.add(new AbstractMap.SimpleImmutableEntry(key, value));
-                    }
+            final QueryResult queryResult = getQueryResultOrNull(future);
+            if (queryResult == null) {
+                continue;
+            }
+            List<Integer> tmpPartitionIds = queryResult.getPartitionIds();
+            if (tmpPartitionIds != null) {
+                partitionIds.removeAll(tmpPartitionIds);
+                for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                    Object key = toObject(queryResultEntry.getKeyData());
+                    Object value = toObject(queryResultEntry.getValueData());
+                    result.add(new AbstractMap.SimpleImmutableEntry(key, value));
                 }
             }
         }
@@ -254,10 +245,9 @@ public class MapProxyQuerySupport {
      * For predicates except paging predicates.
      * Adds results to result set and removes queried partition ids.
      */
-    private void addResultsOfPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds)
-            throws ExecutionException, InterruptedException {
+    private void addResultsOfPredicate(List<Future> futures, Set result, Collection<Integer> partitionIds) {
         for (Future future : futures) {
-            final QueryResult queryResult = (QueryResult) future.get();
+            final QueryResult queryResult = getQueryResultOrNull(future);
             if (queryResult == null) {
                 continue;
             }
@@ -268,6 +258,16 @@ public class MapProxyQuerySupport {
                 result.addAll(queryResult.getResult());
             }
         }
+    }
+
+    private QueryResult getQueryResultOrNull(Future future) {
+        QueryResult queryResult = null;
+        try {
+            queryResult = (QueryResult) future.get();
+        } catch (Throwable t) {
+            EmptyStatement.ignore(t);
+        }
+        return queryResult;
     }
 
     private Set<Integer> createSetPopulatedWithPartitionIds(int partitionCount) {
