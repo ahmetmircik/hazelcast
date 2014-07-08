@@ -160,8 +160,8 @@ public class MapProxyQuerySupport {
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         final Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         final Set result = new QueryResultSet(serializationService, iterationType, dataResult);
-        List<Future> futures = queryOnMembers(predicate, nodeEngine);
         try {
+            List<Future> futures = queryOnMembers(predicate, nodeEngine);
             addResultsOfPredicate(futures, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 return result;
