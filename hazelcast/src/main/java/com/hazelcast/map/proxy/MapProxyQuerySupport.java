@@ -11,7 +11,6 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.QueryResultEntry;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.OperationService;
-import com.hazelcast.util.EmptyStatement;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.QueryResultSet;
@@ -158,7 +157,7 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set query2(final Predicate predicate,
+    public Set query(final Predicate predicate,
                       final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
@@ -175,6 +174,33 @@ public class MapProxyQuerySupport {
         addResultsOfPredicate(futures, result, partitionIds);
         return result;
     }
+
+    protected Set query2(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
+        final NodeEngine nodeEngine = this.nodeEngine;
+        final SerializationService ss = nodeEngine.getSerializationService();
+        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
+        Set<Integer> plist = createSetPopulatedWithPartitionIds(partitionCount);
+        Set result = new QueryResultSet(ss, iterationType, dataResult);
+        try {
+            List<Future> futures = queryOnMembers(predicate, nodeEngine);
+            addResultsOfPredicate(futures, result, plist);
+            if (plist.isEmpty()) {
+                return result;
+            }
+
+        } catch (Throwable t) {
+        }
+
+        final List<Future> futures = new ArrayList<Future>(plist.size());
+        try {
+            queryOnPartitions(predicate, plist, nodeEngine);
+            addResultsOfPredicate(futures, result, plist);
+        } catch (Throwable t) {
+            throw ExceptionUtil.rethrow(t);
+        }
+        return result;
+    }
+
 
     private Future queryLocal(Predicate predicate, NodeEngine nodeEngine) {
         final OperationService operationService = nodeEngine.getOperationService();
@@ -251,9 +277,9 @@ public class MapProxyQuerySupport {
             if (queryResult == null) {
                 continue;
             }
-            final List<Integer> tmpPartitionIds = queryResult.getPartitionIds();
-            if (tmpPartitionIds != null) {
-                partitionIds.removeAll(tmpPartitionIds);
+            final List<Integer> queriedPartitionIds = queryResult.getPartitionIds();
+            if (queriedPartitionIds != null) {
+                partitionIds.removeAll(queriedPartitionIds);
                 result.addAll(queryResult.getResult());
             }
         }
@@ -280,7 +306,7 @@ public class MapProxyQuerySupport {
         try {
             queryResult = (QueryResult) future.get();
         } catch (Throwable t) {
-            EmptyStatement.ignore(t);
+            nodeEngine.getLogger(getClass()).warning("Could not get result", t);
         }
         return queryResult;
     }
@@ -296,32 +322,6 @@ public class MapProxyQuerySupport {
 
     private Object toObject(Object obj) {
         return nodeEngine.getSerializationService().toObject(obj);
-    }
-
-    protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
-        final NodeEngine nodeEngine = this.nodeEngine;
-        final SerializationService ss = nodeEngine.getSerializationService();
-        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        Set<Integer> plist = createSetPopulatedWithPartitionIds(partitionCount);
-        Set result = new QueryResultSet(ss, iterationType, dataResult);
-        try {
-            List<Future> futures = queryOnMembers(predicate, nodeEngine);
-            addResultsOfPredicate(futures, result,plist);
-            if (plist.isEmpty()) {
-                return result;
-            }
-
-        } catch (Throwable t) {
-        }
-
-        final List<Future> futures = new ArrayList<Future>(plist.size());
-        try {
-            queryOnPartitions(predicate, plist, nodeEngine);
-            addResultsOfPredicate2(futures, result);
-        } catch (Throwable t) {
-            throw ExceptionUtil.rethrow(t);
-        }
-        return result;
     }
 
 
