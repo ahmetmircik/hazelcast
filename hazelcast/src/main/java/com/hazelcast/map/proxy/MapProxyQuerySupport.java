@@ -157,7 +157,7 @@ public class MapProxyQuerySupport {
      *                      <code>false</code> for object types.
      * @return {@link QueryResultSet}
      */
-    public Set query(final Predicate predicate,
+    public Set query2(final Predicate predicate,
                       final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService serializationService = nodeEngine.getSerializationService();
@@ -175,26 +175,25 @@ public class MapProxyQuerySupport {
         return result;
     }
 
-    protected Set query2(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
+    protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = this.nodeEngine;
         final SerializationService ss = nodeEngine.getSerializationService();
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        Set<Integer> plist = createSetPopulatedWithPartitionIds(partitionCount);
+        Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         Set result = new QueryResultSet(ss, iterationType, dataResult);
         try {
             List<Future> futures = queryOnMembers(predicate, nodeEngine);
-            addResultsOfPredicate(futures, result, plist);
-            if (plist.isEmpty()) {
+            addResultsOfPredicate(futures, result, partitionIds);
+            if (partitionIds.isEmpty()) {
                 return result;
             }
 
         } catch (Throwable t) {
         }
 
-        final List<Future> futures = new ArrayList<Future>(plist.size());
         try {
-            queryOnPartitions(predicate, plist, nodeEngine);
-            addResultsOfPredicate(futures, result, plist);
+            List<Future> futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
+            addResultsOfPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
