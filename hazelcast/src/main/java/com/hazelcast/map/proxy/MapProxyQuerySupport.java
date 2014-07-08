@@ -181,19 +181,16 @@ public class MapProxyQuerySupport {
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         Set<Integer> partitionIds = createSetPopulatedWithPartitionIds(partitionCount);
         Set result = new QueryResultSet(ss, iterationType, dataResult);
-        try {
-            List<Future> futures = queryOnMembers(predicate, nodeEngine);
-            addResultsOfPredicate(futures, result, partitionIds);
-            if (partitionIds.isEmpty()) {
-                return result;
-            }
-
-        } catch (Throwable t) {
+        List<Future> futures = queryOnMembers(predicate, nodeEngine);
+        final List<Integer> integers = addResultsOfPredicate2(futures, result);
+        partitionIds.removeAll(integers);
+        if (partitionIds.isEmpty()) {
+            return result;
         }
 
         try {
-            List<Future> futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
-            addResultsOfPredicate(futures, result, partitionIds);
+            futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
+            addResultsOfPredicate2(futures, result);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
