@@ -171,9 +171,9 @@ public class MapProxyQuerySupport {
         } catch (Throwable t) {
             nodeEngine.getLogger(getClass()).warning("Could not get results", t);
         }
-        if (partitionIds.isEmpty()) {
-            return result;
-        }
+//        if (partitionIds.isEmpty()) {
+//            return result;
+//        }
 
         futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
         try {
