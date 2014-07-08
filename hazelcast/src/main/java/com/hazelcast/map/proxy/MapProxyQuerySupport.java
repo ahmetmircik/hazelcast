@@ -62,7 +62,7 @@ public class MapProxyQuerySupport {
         final Set result = new SortedQueryResultSet(pagingPredicate.getComparator(),
                 iterationType, pagingPredicate.getPageSize());
         try {
-            final Future future = queryLocal(pagingPredicate, nodeEngine);
+            final Future future = queryLocalMember(pagingPredicate, nodeEngine);
             final List<Future> singletonList = Collections.singletonList(future);
             addResultsOfPagingPredicate(singletonList, result, partitionIds);
             if (partitionIds.isEmpty()) {
@@ -95,7 +95,7 @@ public class MapProxyQuerySupport {
         final SerializationService serializationService = nodeEngine.getSerializationService();
         final Set result = new QueryResultSet(serializationService, iterationType, dataResult);
         try {
-            final Future future = queryLocal(predicate, nodeEngine);
+            final Future future = queryLocalMember(predicate, nodeEngine);
             final List<Future> singletonList = Collections.singletonList(future);
             addResultsOfPredicate(singletonList, result, partitionIds);
             if (partitionIds.isEmpty()) {
@@ -129,18 +129,13 @@ public class MapProxyQuerySupport {
         final Set result = new SortedQueryResultSet(pagingPredicate.getComparator(),
                 iterationType, pagingPredicate.getPageSize());
         try {
-            final List<Future> futures = queryOnMembers(pagingPredicate, nodeEngine);
+            List<Future> futures = queryOnMembers(pagingPredicate, nodeEngine);
             addResultsOfPagingPredicate(futures, result, partitionIds);
             if (partitionIds.isEmpty()) {
                 PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
                 return result;
             }
-        } catch (Throwable t) {
-            nodeEngine.getLogger(getClass()).warning("Exception while querying ", t);
-        }
-
-        try {
-            final List<Future> futures = queryOnPartitions(pagingPredicate, partitionIds, nodeEngine);
+            futures = queryOnPartitions(pagingPredicate, partitionIds, nodeEngine);
             addResultsOfPagingPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
@@ -168,15 +163,10 @@ public class MapProxyQuerySupport {
         List<Future> futures = queryOnMembers(predicate, nodeEngine);
         try {
             addResultsOfPredicate(futures, result, partitionIds);
-        } catch (Throwable t) {
-            nodeEngine.getLogger(getClass()).warning("Could not get results", t);
-        }
-//        if (partitionIds.isEmpty()) {
-//            return result;
-//        }
-
-        futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
-        try {
+            if (partitionIds.isEmpty()) {
+                return result;
+            }
+            futures = queryOnPartitions(predicate, partitionIds, nodeEngine);
             addResultsOfPredicate(futures, result, partitionIds);
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
@@ -184,7 +174,7 @@ public class MapProxyQuerySupport {
         return result;
     }
 
-    private Future queryLocal(Predicate predicate, NodeEngine nodeEngine) {
+    private Future queryLocalMember(Predicate predicate, NodeEngine nodeEngine) {
         final OperationService operationService = nodeEngine.getOperationService();
         final Future future = operationService
                 .invokeOnTarget(SERVICE_NAME,
