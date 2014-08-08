@@ -15,7 +15,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <hazelcast-all.version>3.3-RC2</hazelcast-all.version>
+        <hazelcast-all.version>3.3-RC4-SNAPSHOT</hazelcast-all.version>
         <junit.version>4.2</junit.version>
     </properties>
 
