@@ -26,7 +26,7 @@ public class Client
             throws IOException, ExecutionException, InterruptedException {
 
         ClientConfig clientConfig = new XmlClientConfigBuilder("hazelcast-client.xml").build();
-        clientConfig.getGroupConfig().setName("ahmet");
+//        clientConfig.getGroupConfig().setName("ahmet");
         HazelcastInstance hazelcastClient = HazelcastClient.newHazelcastClient(clientConfig);
         initMaps(hazelcastClient);
         populateWithFactory(60000);
