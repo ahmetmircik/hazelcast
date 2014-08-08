@@ -66,7 +66,7 @@ public class Client
         System.out.println("Query avg time of 10 queries was : " + stats.getMean() + " ms\n");
         System.out.println("Max time of 10 queries was : " + stats.getMax() + " ms\n");
         System.out.println("Query variance of 10 queries was : " + stats.getVariance() + "\n");
-        Sstem.out.println("Query STD of 10 queries was: " + stats.getStandardDeviation() +  "\n");
+        System.out.println("Query STD of 10 queries was: " + stats.getStandardDeviation() +  "\n");
     }
 
     private static void initMaps(HazelcastInstance client) {
