@@ -35,6 +35,7 @@ public class Client
 
     }
 
+
     private static void runIMapSQLBasedQuery(int queries) throws InterruptedException, ExecutionException {
         double[] total = new double[10];
         for(int i =  0; i < queries; i++) {
