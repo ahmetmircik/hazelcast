@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2008-2013, Hazelcast, Inc. All Rights Reserved.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~ http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<!--
+    The default Hazelcast configuration. This is used when:
+
+    - no hazelcast.xml if present
+
+-->
+<hazelcast xsi:schemaLocation="http://www.hazelcast.com/schema/config hazelcast-config-3.3.xsd"
+           xmlns="http://www.hazelcast.com/schema/config"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <management-center enabled="false">http://localhost:8080/mancenter</management-center>
+    <network>
+        <port auto-increment="true" port-count="100">5701</port>
+        <outbound-ports>
+            <!--
+            Allowed port range when connecting to other nodes.
+            0 or * means use system provided port.
+            -->
+            <ports>0</ports>
+        </outbound-ports>
+        <join>
+            <multicast enabled="true">
+                <multicast-group>224.2.2.3</multicast-group>
+                <multicast-port>54327</multicast-port>
+            </multicast>
+            <tcp-ip enabled="false">
+                <interface>127.0.0.1</interface>
+            </tcp-ip>
+            <aws enabled="false">
+                <access-key>my-access-key</access-key>
+                <secret-key>my-secret-key</secret-key>
+                <!--optional, default is us-east-1 -->
+                <region>us-west-1</region>
+                <!--optional, default is ec2.amazonaws.com. If set, region shouldn't be set as it will override this property -->
+                <host-header>ec2.amazonaws.com</host-header>
+                <!-- optional, only instances belonging to this group will be discovered, default will try all running instances -->
+                <security-group-name>hazelcast-sg</security-group-name>
+                <tag-key>type</tag-key>
+                <tag-value>hz-nodes</tag-value>
+            </aws>
+        </join>
+    </network>
+
+    <partition-group enabled="false"/>
+
+    <executor-service name="exec1">
+        <pool-size>10</pool-size>
+        <queue-capacity>30</queue-capacity>
+    </executor-service>
+
+    <map name="quicksearch">
+        <read-backup-data>true</read-backup-data>
+        <in-memory-format>OBJECT</in-memory-format>
+        <backup-count>1</backup-count>
+        <indexes>
+            <index ordered="true">media_content_approval_instruction</index>
+            <index ordered="true">media_clock_approval_instruction</index>
+            <index ordered="true">media_instruction_approval_instruction</index>
+            <index ordered="true">media_house_nr_instruction</index>
+            <index ordered="true">approval_advert_state</index>
+            <index ordered="true">content_approval_media_state</index>
+            <index ordered="true">clock_approval_media_state</index>
+            <index ordered="true">num_instruction_rejected</index>
+            <index ordered="true">num_instruction_approval_not_performed</index>
+            <index ordered="true">b_p_code</index>
+            <index ordered="true">division_id</index>
+            <index ordered="true">media_id</index>
+            <index ordered="true">copy_code</index>
+            <index ordered="true">copy_code_id</index>
+            <index ordered="true">copy_envelope_id</index>
+            <index ordered="true">quality_check_state</index>
+            <index ordered="true">proxy_creation_state</index>
+            <index ordered="true">time_delivered</index>
+            <index ordered="true">region_id</index>
+            <index ordered="true">first_air_date</index>
+            <index ordered="true">qc_proxy_approval_time</index>
+            <index ordered="true">media_house_nr</index>
+            <index ordered="true">media_destination_id</index>
+            <index ordered="true">media_slave_destination_id</index>
+            <index ordered="true">film_length</index>
+            <index ordered="true">media_type_media_extension_id</index>
+            <index ordered="true">locality_id</index>
+            <index ordered="true">sponsorship_locality_id</index>
+        </indexes>
+    </map>
+
+    <serialization>
+        <portable-version>0</portable-version>
+        <portable-factories>
+            <portable-factory factory-id="2">com.craftedbytes.domain.PortableFactoryImpl</portable-factory>
+        </portable-factories>
+    </serialization>
+
+    <services enable-defaults="true" />
+
+</hazelcast>
