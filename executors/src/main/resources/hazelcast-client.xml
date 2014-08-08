@@ -25,6 +25,9 @@
         <aws enabled="false" connection-timeout-seconds="11">
             <!--AWS configuration details-->
         </aws>
+        <socket-options>
+            <buffer-size>64</buffer-size>
+        </socket-options>
     </network>
 
     <!--local executor pool size-->
