@@ -51,4 +51,5 @@ abstract class Factory {
     }
 
     abstract SampleObject create(int intVal);
+
 }
