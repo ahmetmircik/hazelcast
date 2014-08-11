@@ -67,38 +67,38 @@
 
     <map name="quicksearch">
         <read-backup-data>true</read-backup-data>
-        <in-memory-format>OBJECT</in-memory-format>
+        <in-memory-format>BINARY</in-memory-format>
         <backup-count>1</backup-count>
-        <indexes>
-            <index ordered="true">media_content_approval_instruction</index>
-            <index ordered="true">media_clock_approval_instruction</index>
-            <index ordered="true">media_instruction_approval_instruction</index>
-            <index ordered="true">media_house_nr_instruction</index>
-            <index ordered="true">approval_advert_state</index>
-            <index ordered="true">content_approval_media_state</index>
-            <index ordered="true">clock_approval_media_state</index>
-            <index ordered="true">num_instruction_rejected</index>
-            <index ordered="true">num_instruction_approval_not_performed</index>
-            <index ordered="true">b_p_code</index>
-            <index ordered="true">division_id</index>
-            <index ordered="true">media_id</index>
-            <index ordered="true">copy_code</index>
-            <index ordered="true">copy_code_id</index>
-            <index ordered="true">copy_envelope_id</index>
-            <index ordered="true">quality_check_state</index>
-            <index ordered="true">proxy_creation_state</index>
-            <index ordered="true">time_delivered</index>
-            <index ordered="true">region_id</index>
-            <index ordered="true">first_air_date</index>
-            <index ordered="true">qc_proxy_approval_time</index>
-            <index ordered="true">media_house_nr</index>
-            <index ordered="true">media_destination_id</index>
-            <index ordered="true">media_slave_destination_id</index>
-            <index ordered="true">film_length</index>
-            <index ordered="true">media_type_media_extension_id</index>
-            <index ordered="true">locality_id</index>
-            <index ordered="true">sponsorship_locality_id</index>
-        </indexes>
+        <!--<indexes>-->
+            <!--<index ordered="true">media_content_approval_instruction</index>-->
+            <!--<index ordered="true">media_clock_approval_instruction</index>-->
+            <!--<index ordered="true">media_instruction_approval_instruction</index>-->
+            <!--<index ordered="true">media_house_nr_instruction</index>-->
+            <!--<index ordered="true">approval_advert_state</index>-->
+            <!--<index ordered="true">content_approval_media_state</index>-->
+            <!--<index ordered="true">clock_approval_media_state</index>-->
+            <!--<index ordered="true">num_instruction_rejected</index>-->
+            <!--<index ordered="true">num_instruction_approval_not_performed</index>-->
+            <!--<index ordered="true">b_p_code</index>-->
+            <!--<index ordered="true">division_id</index>-->
+            <!--<index ordered="true">media_id</index>-->
+            <!--<index ordered="true">copy_code</index>-->
+            <!--<index ordered="true">copy_code_id</index>-->
+            <!--<index ordered="true">copy_envelope_id</index>-->
+            <!--<index ordered="true">quality_check_state</index>-->
+            <!--<index ordered="true">proxy_creation_state</index>-->
+            <!--<index ordered="true">time_delivered</index>-->
+            <!--<index ordered="true">region_id</index>-->
+            <!--<index ordered="true">first_air_date</index>-->
+            <!--<index ordered="true">qc_proxy_approval_time</index>-->
+            <!--<index ordered="true">media_house_nr</index>-->
+            <!--<index ordered="true">media_destination_id</index>-->
+            <!--<index ordered="true">media_slave_destination_id</index>-->
+            <!--<index ordered="true">film_length</index>-->
+            <!--<index ordered="true">media_type_media_extension_id</index>-->
+            <!--<index ordered="true">locality_id</index>-->
+            <!--<index ordered="true">sponsorship_locality_id</index>-->
+        <!--</indexes>-->
     </map>
 
     <serialization>
