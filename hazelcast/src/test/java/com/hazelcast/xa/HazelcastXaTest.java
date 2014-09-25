@@ -24,6 +24,7 @@ import com.hazelcast.core.TransactionalMap;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.test.HazelcastSerialClassRunner;
+import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.transaction.TransactionContext;
 import com.hazelcast.transaction.TransactionOptions;
@@ -50,6 +51,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.test.HazelcastTestSupport.assertOpenEventually;
+import static com.hazelcast.test.HazelcastTestSupport.sleepSeconds;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -281,13 +283,13 @@ public class HazelcastXaTest {
         final XAResource resource = instance.newTransactionContext().getXaResource();
         final boolean result = resource.setTransactionTimeout(100);
         assertTrue(result);
-        assertEquals(100,resource.getTransactionTimeout());
+        assertEquals(100, resource.getTransactionTimeout());
 
         // set back to default timeout value
         resource.setTransactionTimeout(0);
 
         long defaultTimeoutInSeconds = TimeUnit.MILLISECONDS.toSeconds(TransactionOptions.DEFAULT_TIMEOUT_MILLIS);
-        assertEquals(defaultTimeoutInSeconds,resource.getTransactionTimeout());
+        assertEquals(defaultTimeoutInSeconds, resource.getTransactionTimeout());
     }
 
 
@@ -336,6 +338,40 @@ public class HazelcastXaTest {
     }
 
     @Test
+    @Repeat(5)
+    public void testParallel_withMultipleNodes() throws Exception {
+        final HazelcastInstance node1 = Hazelcast.newHazelcastInstance();
+        final HazelcastInstance node2 = Hazelcast.newHazelcastInstance();
+
+        final int size = 20;
+        ExecutorService executorService = Executors.newFixedThreadPool(5);
+        final CountDownLatch latch = new CountDownLatch(size);
+        for (int i = 0; i < size; i++) {
+            final int criteria = i;
+            executorService.execute(new Runnable() {
+                public void run() {
+                    try {
+                        final HazelcastInstance node = (criteria % 2 == 0 ? node1 : node2);
+                        txn(node);
+                    } catch (Exception e) {
+                        logger.severe("Exception during txn", e);
+                    } finally {
+                        latch.countDown();
+                    }
+                }
+            });
+        }
+        node2.shutdown();
+
+        assertOpenEventually(latch);
+        final IMap m = node1.getMap("m");
+        for (int i = 0; i < 10; i++) {
+            assertFalse(m.isLocked(i));
+        }
+    }
+
+
+    @Test
     public void testSequential() throws Exception {
         final HazelcastInstance instance = Hazelcast.newHazelcastInstance();
         txn(instance);
@@ -355,6 +391,7 @@ public class HazelcastXaTest {
         try {
             final TransactionalMap m = context.getMap("m");
             m.put(random.nextInt(10), "value");
+            sleepSeconds(1);
         } catch (Exception e) {
             logger.severe("Exception during transaction", e);
             error = true;
