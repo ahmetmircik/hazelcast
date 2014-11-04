@@ -53,15 +53,21 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         eventType = getEventType();
         mapEventPublisher.publishEvent(getCallerAddress(), name, eventType, dataKey, dataOldValue, dataValue);
         invalidateNearCaches();
+        publishWANReplicationEvent(mapServiceContext, mapEventPublisher);
+        evict(false);
+    }
+
+    private boolean publishWANReplicationEvent(MapServiceContext mapServiceContext, MapEventPublisher mapEventPublisher) {
         if (mapContainer.getWanReplicationPublisher() != null && mapContainer.getWanMergePolicy() != null) {
             Record record = recordStore.getRecord(dataKey);
             if (record == null) {
-                return;
+                return true;
             }
             final Data valueConvertedData = mapServiceContext.toData(dataValue);
             final EntryView entryView = EntryViews.createSimpleEntryView(dataKey, valueConvertedData, record);
             mapEventPublisher.publishWanReplicationUpdate(name, entryView);
         }
+        return false;
     }
 
     private EntryEventType getEventType() {
