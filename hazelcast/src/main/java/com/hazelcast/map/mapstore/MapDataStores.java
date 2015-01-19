@@ -11,7 +11,7 @@ import com.hazelcast.map.mapstore.writethrough.WriteThroughStore;
 import com.hazelcast.nio.serialization.SerializationService;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.hazelcast.map.mapstore.writebehind.WriteBehindQueues.createDefaultWriteBehindQueue;
 import static com.hazelcast.map.mapstore.writebehind.WriteBehindQueues.createSafeBoundedArrayWriteBehindQueue;
@@ -53,8 +53,8 @@ public final class MapDataStores {
     }
 
     private static WriteBehindQueue pickWriteBehindQueue(MapServiceContext mapServiceContext, boolean writeCoalescing) {
-        final int capacity = mapServiceContext.getNodeEngine().getGroupProperties().MAP_WRITE_BEHIND_QUEUE_CAPACITY.getInteger();
-        final AtomicInteger counter = mapServiceContext.getWriteBehindQueueItemCounter();
+        final long capacity = mapServiceContext.getNodeEngine().getGroupProperties().MAP_WRITE_BEHIND_QUEUE_CAPACITY.getLong();
+        final AtomicLong counter = mapServiceContext.getWriteBehindQueueItemCounter();
         return writeCoalescing ? createDefaultWriteBehindQueue()
                 : createSafeBoundedArrayWriteBehindQueue(capacity, counter);
     }

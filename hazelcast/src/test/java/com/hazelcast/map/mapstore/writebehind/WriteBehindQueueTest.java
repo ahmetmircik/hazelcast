@@ -11,10 +11,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import static com.hazelcast.map.mapstore.writebehind.WriteBehindQueues.createSafeBoundedArrayWriteBehindQueue;
 import static com.hazelcast.map.mapstore.writebehind.WriteBehindQueues.createDefaultWriteBehindQueue;
+import static com.hazelcast.map.mapstore.writebehind.WriteBehindQueues.createSafeBoundedArrayWriteBehindQueue;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastParallelClassRunner.class)
@@ -46,7 +46,7 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
 
     @Test(expected = ReachedMaxSizeException.class)
     public void testWBQMaxSizeException_withMultipleWBQ() {
-        final AtomicInteger counter = new AtomicInteger(0);
+        final AtomicLong counter = new AtomicLong(0);
         final WriteBehindQueue<DelayedEntry> queue1 = createBoundedWBQ(counter);
         final WriteBehindQueue<DelayedEntry> queue2 = createBoundedWBQ(counter);
         final WriteBehindQueue<DelayedEntry> queue3 = createBoundedWBQ(counter);
@@ -60,7 +60,7 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
 
     @Test
     public void testWBQ_counter_is_zero() {
-        final AtomicInteger counter = new AtomicInteger(0);
+        final AtomicLong counter = new AtomicLong(0);
         final WriteBehindQueue<DelayedEntry> queue = createBoundedWBQ(counter);
         fillQueue(queue, 100);
         queue.clear();
@@ -83,7 +83,7 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
 
     @Test
     public void testCounter_offer_thenRemove() {
-        final AtomicInteger counter = new AtomicInteger(0);
+        final AtomicLong counter = new AtomicLong(0);
         final WriteBehindQueue<DelayedEntry> queue = createBoundedWBQ(counter);
         fillQueue(queue, 1000);
         queue.removeAll();
@@ -143,12 +143,12 @@ public class WriteBehindQueueTest extends HazelcastTestSupport {
     }
 
     private WriteBehindQueue createBoundedWBQ() {
-        final AtomicInteger counter = new AtomicInteger(0);
+        final AtomicLong counter = new AtomicLong(0);
         return createBoundedWBQ(counter);
     }
 
-    private WriteBehindQueue createBoundedWBQ(AtomicInteger counter) {
-        final int maxSizePerNode = 1000;
+    private WriteBehindQueue createBoundedWBQ(AtomicLong counter) {
+        final long maxSizePerNode = 1000;
         return createSafeBoundedArrayWriteBehindQueue(maxSizePerNode, counter);
     }
 

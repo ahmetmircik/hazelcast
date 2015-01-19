@@ -8,7 +8,7 @@ import com.hazelcast.spi.NodeEngine;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Context which is needed by a map service.
@@ -70,7 +70,7 @@ public interface MapServiceContext extends MapServiceContextSupport,
      */
     boolean isOwnedKey(Data key);
 
-    AtomicInteger getWriteBehindQueueItemCounter();
+    AtomicLong getWriteBehindQueueItemCounter();
 
     ExpirationManager getExpirationManager();
 

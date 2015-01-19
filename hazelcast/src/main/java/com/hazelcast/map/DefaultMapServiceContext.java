@@ -1,8 +1,8 @@
 package com.hazelcast.map;
 
+import com.hazelcast.core.HazelcastException;
 import com.hazelcast.map.eviction.EvictionOperator;
 import com.hazelcast.map.eviction.ExpirationManager;
-import com.hazelcast.core.HazelcastException;
 import com.hazelcast.map.merge.MergePolicyProvider;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
@@ -17,7 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -40,7 +40,7 @@ public class DefaultMapServiceContext extends AbstractMapServiceContextSupport i
      * This is used by owner and backups together so it should be defined
      * getting this into account.
      */
-    private final AtomicInteger writeBehindQueueItemCounter = new AtomicInteger(0);
+    private final AtomicLong writeBehindQueueItemCounter = new AtomicLong(0);
     private final ExpirationManager expirationManager;
     private final NearCacheProvider nearCacheProvider;
     private final LocalMapStatsProvider localMapStatsProvider;
@@ -205,7 +205,7 @@ public class DefaultMapServiceContext extends AbstractMapServiceContextSupport i
     }
 
     @Override
-    public AtomicInteger getWriteBehindQueueItemCounter() {
+    public AtomicLong getWriteBehindQueueItemCounter() {
         return writeBehindQueueItemCounter;
     }
 

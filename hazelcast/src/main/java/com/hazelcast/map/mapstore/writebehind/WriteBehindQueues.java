@@ -19,7 +19,7 @@ package com.hazelcast.map.mapstore.writebehind;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A class providing static factory methods that create write behind queues.
@@ -29,7 +29,7 @@ public final class WriteBehindQueues {
     private WriteBehindQueues() {
     }
 
-    public static WriteBehindQueue createSafeBoundedArrayWriteBehindQueue(int maxSizePerNode, AtomicInteger counter) {
+    public static WriteBehindQueue createSafeBoundedArrayWriteBehindQueue(long maxSizePerNode, AtomicLong counter) {
         return createSafeWriteBehindQueue(new BoundedArrayWriteBehindQueue(maxSizePerNode, counter));
     }
 

@@ -3,7 +3,7 @@ package com.hazelcast.map.mapstore.writebehind;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A bounded queue which throws {@link com.hazelcast.map.mapstore.writebehind.ReachedMaxSizeException}
@@ -16,20 +16,20 @@ class BoundedArrayWriteBehindQueue extends ArrayWriteBehindQueue {
     /**
      * Per node write behind queue item counter.
      */
-    private final AtomicInteger writeBehindQueueItemCounter;
+    private final AtomicLong writeBehindQueueItemCounter;
 
     /**
      * Allowed max size per node which is used to provide back-pressure.
      */
-    private final int maxSize;
+    private final long maxSize;
 
-    BoundedArrayWriteBehindQueue(int maxSize, AtomicInteger writeBehindQueueItemCounter) {
+    BoundedArrayWriteBehindQueue(long maxSize, AtomicLong writeBehindQueueItemCounter) {
         super();
         this.maxSize = maxSize;
         this.writeBehindQueueItemCounter = writeBehindQueueItemCounter;
     }
 
-    BoundedArrayWriteBehindQueue(List<DelayedEntry> list, int maxSize, AtomicInteger writeBehindQueueItemCounter) {
+    BoundedArrayWriteBehindQueue(List<DelayedEntry> list, long maxSize, AtomicLong writeBehindQueueItemCounter) {
         super(list);
         this.maxSize = maxSize;
         this.writeBehindQueueItemCounter = writeBehindQueueItemCounter;
