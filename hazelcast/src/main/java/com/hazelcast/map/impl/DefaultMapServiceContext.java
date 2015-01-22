@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Default implementation of map service context.
  */
-public class DefaultMapServiceContext extends AbstractMapServiceContextSupport implements MapServiceContext {
+public class DefaultMapServiceContext extends AbstractMapServiceContext {
 
     private final PartitionContainer[] partitionContainers;
     private final ConcurrentMap<String, MapContainer> mapContainers;
@@ -57,7 +57,6 @@ public class DefaultMapServiceContext extends AbstractMapServiceContextSupport i
 
     public DefaultMapServiceContext(NodeEngine nodeEngine) {
         super(nodeEngine);
-        setMapServiceContext(this);
         final int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         this.partitionContainers = new PartitionContainer[partitionCount];
         this.mapContainers = new ConcurrentHashMap<String, MapContainer>();
