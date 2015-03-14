@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015, Hazelcast, Inc. All Rights Reserved.
+ * Copyright (c) 2008-2013, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,12 @@ package com.hazelcast.config;
 import com.hazelcast.map.merge.PutIfAbsentMapMergePolicy;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import static com.hazelcast.util.ValidationUtil.isFalse;
 import static com.hazelcast.util.ValidationUtil.isNotNull;
 
 /**
@@ -119,6 +123,8 @@ public class MapConfig {
 
     private List<MapIndexConfig> mapIndexConfigs;
 
+    private Map<String, QueryCacheConfig> queryCacheConfigs;
+
     private boolean statisticsEnabled = true;
 
     private PartitioningStrategyConfig partitioningStrategyConfig;
@@ -133,6 +139,10 @@ public class MapConfig {
     }
 
     public MapConfig(MapConfig config) {
+        copyFromConfig(config);
+    }
+
+    private void copyFromConfig(MapConfig config) {
         this.name = config.name;
         this.backupCount = config.backupCount;
         this.asyncBackupCount = config.asyncBackupCount;
@@ -152,6 +162,7 @@ public class MapConfig {
         this.wanReplicationRef = config.wanReplicationRef != null ? new WanReplicationRef(config.wanReplicationRef) : null;
         this.listenerConfigs = new ArrayList<EntryListenerConfig>(config.getEntryListenerConfigs());
         this.mapIndexConfigs = new ArrayList<MapIndexConfig>(config.getMapIndexConfigs());
+        this.queryCacheConfigs = new HashMap<String, QueryCacheConfig>(config.getQueryCacheConfigs());
         this.partitioningStrategyConfig = config.partitioningStrategyConfig != null
                 ? new PartitioningStrategyConfig(config.getPartitioningStrategyConfig()) : null;
     }
@@ -505,6 +516,30 @@ public class MapConfig {
         return this;
     }
 
+    public MapConfig addQueryCacheConfig(QueryCacheConfig queryCacheConfig) {
+        String queryCacheName = queryCacheConfig.getName();
+        Map<String, QueryCacheConfig> queryCacheConfigs = getQueryCacheConfigs();
+        isFalse(queryCacheConfigs.containsKey(queryCacheName),
+                "A query cache already exists with name = [" + queryCacheName + ']');
+
+        queryCacheConfigs.put(queryCacheName, queryCacheConfig);
+        return this;
+
+    }
+
+    public Map<String, QueryCacheConfig> getQueryCacheConfigs() {
+        if (queryCacheConfigs == null) {
+            queryCacheConfigs = new ConcurrentHashMap<String, QueryCacheConfig>();
+        }
+        return queryCacheConfigs;
+    }
+
+    public MapConfig setQueryCacheConfigs(Map<String, QueryCacheConfig> queryCacheConfigs) {
+        isNotNull(queryCacheConfigs, "queryCacheConfigs");
+        this.queryCacheConfigs = queryCacheConfigs;
+        return this;
+    }
+
     public PartitioningStrategyConfig getPartitioningStrategyConfig() {
         return partitioningStrategyConfig;
     }
@@ -628,6 +663,7 @@ public class MapConfig {
         sb.append(", wanReplicationRef=").append(wanReplicationRef);
         sb.append(", listenerConfigs=").append(listenerConfigs);
         sb.append(", mapIndexConfigs=").append(mapIndexConfigs);
+        sb.append(", queryCacheConfigs=").append(queryCacheConfigs);
         sb.append('}');
         return sb.toString();
     }
