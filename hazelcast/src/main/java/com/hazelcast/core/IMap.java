@@ -18,6 +18,7 @@ package com.hazelcast.core;
 
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.MapInterceptor;
+import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.mapreduce.JobTracker;
 import com.hazelcast.mapreduce.aggregation.Aggregation;
@@ -1183,4 +1184,9 @@ public interface IMap<K, V>
     <SuppliedValue, Result> Result aggregate(Supplier<K, V, SuppliedValue> supplier,
                                              Aggregation<K, SuppliedValue, Result> aggregation,
                                              JobTracker jobTracker);
+
+
+    QueryCache<K, V> getQueryCache(String name, Predicate<K, V> predicate, boolean includeValue);
+
+    QueryCache<K, V> getQueryCache(String name, MapListener mapListener, Predicate<K, V> predicate, boolean includeValue);
 }
