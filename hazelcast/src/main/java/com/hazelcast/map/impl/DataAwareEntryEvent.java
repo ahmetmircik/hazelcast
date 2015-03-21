@@ -35,7 +35,7 @@ public class DataAwareEntryEvent extends EntryEvent {
 
     private final transient Data dataOldValue;
 
-    private final transient SerializationService serializationService;
+    private transient SerializationService serializationService;
 
     public DataAwareEntryEvent(Member from, int eventType,
                                String source, Data dataKey,
@@ -83,5 +83,9 @@ public class DataAwareEntryEvent extends EntryEvent {
 
     private void writeObject(ObjectOutputStream out) throws IOException {
         throw new NotSerializableException();
+    }
+
+    public void setSerializationService(SerializationService serializationService) {
+        this.serializationService = serializationService;
     }
 }
