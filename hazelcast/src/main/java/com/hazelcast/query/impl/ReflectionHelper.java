@@ -62,6 +62,10 @@ public final class ReflectionHelper {
     }
 
     public static AttributeType getAttributeType(Class klass) {
+        if (klass == null) {
+            return null;
+        }
+
         if (klass == String.class) {
             return AttributeType.STRING;
         } else if (klass == int.class || klass == Integer.class) {
@@ -123,6 +127,10 @@ public final class ReflectionHelper {
     }
 
     private static Getter createGetter(Object obj, String attribute) {
+        if (obj == null || obj == IndexImpl.NULL) {
+            return new NullGetter();
+        }
+
         final Class targetClazz = obj.getClass();
         Class clazz = targetClazz;
         Getter getter = get(clazz, attribute);
@@ -221,6 +229,28 @@ public final class ReflectionHelper {
         abstract Class getReturnType();
 
         abstract boolean isCacheable();
+    }
+
+    private static class NullGetter extends Getter {
+
+        public NullGetter() {
+            super(null);
+        }
+
+        @Override
+        Object getValue(Object obj) throws Exception {
+            return null;
+        }
+
+        @Override
+        Class getReturnType() {
+            return null;
+        }
+
+        @Override
+        boolean isCacheable() {
+            return false;
+        }
     }
 
     private static class MethodGetter extends Getter {
