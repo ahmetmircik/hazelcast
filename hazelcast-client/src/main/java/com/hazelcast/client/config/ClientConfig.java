@@ -22,6 +22,7 @@ import com.hazelcast.config.GroupConfig;
 import com.hazelcast.config.ListenerConfig;
 import com.hazelcast.config.NativeMemoryConfig;
 import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.config.QueryCacheConfig;
 import com.hazelcast.config.SerializationConfig;
 import com.hazelcast.config.SocketInterceptorConfig;
 import com.hazelcast.config.matcher.MatchingPointConfigPatternMatcher;
@@ -30,11 +31,14 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.security.Credentials;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.hazelcast.util.ValidationUtil.checkFalse;
 
 /**
  * Main configuration to setup a Hazelcast Client
@@ -95,6 +99,8 @@ public class ClientConfig {
     private ManagedContext managedContext;
 
     private ClassLoader classLoader;
+
+    private Map<String, Map<String, QueryCacheConfig>> queryCacheConfigsPerMap;
 
     public void setConfigPatternMatcher(ConfigPatternMatcher configPatternMatcher) {
         if (configPatternMatcher == null) {
@@ -620,6 +626,31 @@ public class ClientConfig {
         this.nativeMemoryConfig = nativeMemoryConfig;
         return this;
     }
+
+    public ClientConfig addQueryCacheConfig(String mapName, QueryCacheConfig queryCacheConfig) {
+        Map<String, Map<String, QueryCacheConfig>> queryCacheConfigsPerMap = getQueryCacheConfigs();
+        String queryCacheName = queryCacheConfig.getName();
+        Map<String, QueryCacheConfig> queryCacheConfigs = queryCacheConfigsPerMap.get(mapName);
+        if (queryCacheConfigs != null) {
+            checkFalse(queryCacheConfigs.containsKey(queryCacheName),
+                    "A query cache already exists with name = [" + queryCacheName + ']');
+        } else {
+            queryCacheConfigs = new HashMap<String, QueryCacheConfig>();
+            queryCacheConfigsPerMap.put(queryCacheName, queryCacheConfigs);
+        }
+
+        queryCacheConfigs.put(queryCacheName, queryCacheConfig);
+        return this;
+
+    }
+
+    public Map<String, Map<String, QueryCacheConfig>> getQueryCacheConfigs() {
+        if (queryCacheConfigsPerMap == null) {
+            queryCacheConfigsPerMap = new HashMap<String, Map<String, QueryCacheConfig>>();
+        }
+        return queryCacheConfigsPerMap;
+    }
+
 
     private <T> T lookupByPattern(Map<String, T> configPatterns, String itemName) {
         T candidate = configPatterns.get(itemName);
