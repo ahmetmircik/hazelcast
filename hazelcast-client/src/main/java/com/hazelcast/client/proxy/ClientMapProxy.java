@@ -38,6 +38,7 @@ import com.hazelcast.core.Member;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.MapInterceptor;
+import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.impl.ListenerAdapter;
 import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.MapKeySet;
@@ -132,7 +133,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.util.ValidationUtil.checkNotNull;
 
-public final class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
+public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
 
     protected static final String NULL_KEY_IS_NOT_ALLOWED = "Null key is not allowed!";
     protected static final String NULL_VALUE_IS_NOT_ALLOWED = "Null value is not allowed!";
@@ -1012,6 +1013,17 @@ public final class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V
     }
 
     @Override
+    public QueryCache<K, V> getQueryCache(String name, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public QueryCache<K, V> getQueryCache(String name, MapListener mapListener, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
+    }
+
+
+    @Override
     public Map<K, Object> executeOnKeys(Set<K> keys, EntryProcessor entryProcessor) {
         Set<Data> dataKeys = new HashSet<Data>(keys.size());
         for (K key : keys) {
@@ -1248,6 +1260,7 @@ public final class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V
             getContext().getListenerService().stopListening(request, registrationId);
         }
     }
+
 
     @Override
     public String toString() {
