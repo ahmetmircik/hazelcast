@@ -240,16 +240,36 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                 return fromBackup;
             }
         }
+        long previousCount = getCount(key);
         final GetOperation operation = new GetOperation(name, key);
         operation.setThreadId(ThreadUtil.getThreadId());
         final Data value = (Data) invokeOperation(key, operation);
+        if (isStale(key, previousCount)) {
+            return value;
+        }
 
         if (nearCacheEnabled) {
             if (notOwnerPartitionForKey(key) || cacheKeyAnyway()) {
-                return putNearCache(key, value);
+                Object o = putNearCache(key, value);
+                if (isStale(key, previousCount)) {
+                    invalidateNearCache(key);
+                    return value;
+                }
+
+                return o;
             }
         }
         return value;
+    }
+
+    private boolean isStale(Data key, long previousCount) {
+        long currentCount = getCount(key);
+        System.out.println("key = " + toObject(key) + ", currentCount = " + currentCount + ", previousCount = " + previousCount);
+
+        if (currentCount > previousCount + 1) {
+            return true;
+        }
+        return false;
     }
 
     private boolean notOwnerPartitionForKey(Data key) {
@@ -270,6 +290,13 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         final MapServiceContext mapServiceContext = mapService.getMapServiceContext();
         final NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
         return nearCacheProvider.putNearCache(name, key, value);
+    }
+
+    private long getCount(Data key) {
+        final MapService mapService = getService();
+        final MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+        final NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
+        return nearCacheProvider.getCount(name, key);
     }
 
 

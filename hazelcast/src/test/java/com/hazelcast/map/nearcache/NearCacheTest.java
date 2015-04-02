@@ -55,6 +55,7 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
+
 public class NearCacheTest extends HazelcastTestSupport {
 
     @Test
@@ -615,7 +616,7 @@ public class NearCacheTest extends HazelcastTestSupport {
         final Config config = createNearCachedMapConfig(mapName);
         final HazelcastInstance instance = createHazelcastInstance(config);
         final IMap<Integer, Integer> map = instance.getMap(mapName);
-        final int mapSize = 3;
+        final int mapSize = 1;
         final CountDownLatch latch = new CountDownLatch(mapSize);
 
         addListener(map, latch);
@@ -672,7 +673,7 @@ public class NearCacheTest extends HazelcastTestSupport {
             }
         };
 
-        assertTrueEventually(assertionTask);
+        assertTrueEventually(assertionTask,13);
     }
 
     private Config createNearCachedMapConfig(String mapName) {

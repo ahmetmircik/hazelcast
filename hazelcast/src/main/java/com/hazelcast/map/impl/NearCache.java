@@ -226,7 +226,16 @@ public class NearCache {
         }
     }
 
+    private HitCounter counter = new HitCounter(271);
+
+    public long getCount(Data key) {
+        return counter.getCount(key);
+    }
+
+
     public void invalidate(Data key) {
+        counter.setCount(key);
+
         final NearCacheRecord record = cache.remove(key);
         // if a mapping exists for the key.
         if (record != null) {
