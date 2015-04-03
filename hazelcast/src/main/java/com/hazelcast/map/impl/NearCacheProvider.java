@@ -69,6 +69,14 @@ public class NearCacheProvider {
         return nearCache.put(key, value);
     }
 
+    public long getCount(String mapName, Data key) {
+        if (!isNearCacheEnabled(mapName)) {
+            return 0L;
+        }
+        NearCache nearCache = getNearCache(mapName);
+        return nearCache.getCount(key);
+    }
+
     public void invalidateNearCache(String mapName, Data key) {
         if (!isNearCacheEnabled(mapName)) {
             return;

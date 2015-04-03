@@ -240,16 +240,37 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                 return fromBackup;
             }
         }
+
+        long previousCount = nearCacheEnabled ? getCount(key) : 0L;
+
         final GetOperation operation = new GetOperation(name, key);
         operation.setThreadId(ThreadUtil.getThreadId());
         final Data value = (Data) invokeOperation(key, operation);
 
+
         if (nearCacheEnabled) {
+
+            if (maybeStale(key, previousCount)) {
+                return value;
+            }
+
             if (notOwnerPartitionForKey(key) || cacheKeyAnyway()) {
-                return putNearCache(key, value);
+                Object returnedValue = putNearCache(key, value);
+
+                if (maybeStale(key, previousCount)) {
+                    removeNearCache(key);
+                    return value;
+                }
+
+                return returnedValue;
             }
         }
         return value;
+    }
+
+    private boolean maybeStale(Data key, long previousCount) {
+        long currentCount = getCount(key);
+        return currentCount > previousCount + 1;
     }
 
     private boolean notOwnerPartitionForKey(Data key) {
@@ -270,6 +291,13 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         final MapServiceContext mapServiceContext = mapService.getMapServiceContext();
         final NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
         return nearCacheProvider.putNearCache(name, key, value);
+    }
+
+    private long getCount(Data key) {
+        final MapService mapService = getService();
+        final MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+        final NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
+        return nearCacheProvider.getCount(name, key);
     }
 
 
@@ -1148,6 +1176,13 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             return;
         }
         getService().getMapServiceContext().getNearCacheProvider().invalidateNearCache(name, key);
+    }
+
+    private void removeNearCache(Data key) {
+        if (key == null) {
+            return;
+        }
+        getService().getMapServiceContext().getNearCacheProvider().getNearCache(name).remove(key);
     }
 
     private void invalidateNearCache(Collection<Data> keys) {

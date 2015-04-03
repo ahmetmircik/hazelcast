@@ -63,6 +63,7 @@ public class NearCache {
     private final NearCacheStatsImpl nearCacheStats;
     private final SerializationService serializationService;
     private final Comparator<NearCacheRecord> selectedComparator;
+    private final InvalidationCounter invalidationCounter;
 
     private SizeEstimator nearCacheSizeEstimator;
 
@@ -86,6 +87,8 @@ public class NearCache {
         nearCacheStats = new NearCacheStatsImpl();
         lastCleanup = Clock.currentTimeMillis();
         serializationService = nodeEngine.getSerializationService();
+        int partitionCount = nodeEngine.getGroupProperties().PARTITION_COUNT.getInteger();
+        invalidationCounter = new InvalidationCounter(partitionCount);
     }
 
     // this operation returns the given value in near-cache memory format (data or object)
@@ -187,11 +190,7 @@ public class NearCache {
                             for (Map.Entry<Data, NearCacheRecord> entry : cache.entrySet()) {
                                 if (entry.getValue().isExpired(maxIdleMillis, timeToLiveMillis)) {
                                     final Data key = entry.getKey();
-                                    final NearCacheRecord record = cache.remove(key);
-                                    //if a mapping exists.
-                                    if (record != null) {
-                                        updateSizeEstimator(-calculateCost(record));
-                                    }
+                                    remove(key);
                                 }
                             }
                         } finally {
@@ -226,7 +225,17 @@ public class NearCache {
         }
     }
 
+    public long getCount(Data key) {
+        return invalidationCounter.getCount(key);
+    }
+
+
     public void invalidate(Data key) {
+        invalidationCounter.increase(key);
+        remove(key);
+    }
+
+    public void remove(Data key) {
         final NearCacheRecord record = cache.remove(key);
         // if a mapping exists for the key.
         if (record != null) {
