@@ -129,6 +129,12 @@ class MapEventPublisherSupport implements MapEventPublisher {
         publishEventInternal(registrations, eventData, partitionId);
     }
 
+    @Override
+    public void hintMapEvent(Address caller, String mapName, EntryEventType eventType,
+                             int numberOfEntriesAffected, int partitionId) {
+        // NOP
+    }
+
     private List<EventRegistration> initRegistrationsWithoutValue(List<EventRegistration> registrationsWithoutValue,
                                                                   Result result) {
         if (registrationsWithoutValue != null) {
@@ -158,8 +164,8 @@ class MapEventPublisherSupport implements MapEventPublisher {
         return !(collection == null || collection.isEmpty());
     }
 
-    private Result applyEventFilter(EventFilter filter, boolean syntheticEvent, Data dataKey,
-                                    Data dataOldValue, Data dataValue, EntryEventType eventType) {
+    protected Result applyEventFilter(EventFilter filter, boolean syntheticEvent, Data dataKey,
+                                      Data dataOldValue, Data dataValue, EntryEventType eventType) {
 
         if (filter instanceof MapPartitionLostEventFilter) {
             return Result.NONE;
@@ -286,7 +292,7 @@ class MapEventPublisherSupport implements MapEventPublisher {
                 dataKey, dataNewValue, dataOldValue, eventType);
     }
 
-    private static enum Result {
+    protected enum Result {
         VALUE_INCLUDED,
         NO_VALUE_INCLUDED,
         NONE

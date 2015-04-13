@@ -25,4 +25,10 @@ public interface MapEventPublisher {
                       Data dataKey, Data dataOldValue, Data dataValue);
 
     void publishMapPartitionLostEvent(Address caller, String mapName, int partitionId);
+
+    /**
+     * Only gives a hint which indicates that a map-wide operation has just been executed on this partition.
+     * This method should not publish an event.
+     */
+    void hintMapEvent(Address caller, String mapName, EntryEventType eventType, int numberOfEntriesAffected, int partitionId);
 }
