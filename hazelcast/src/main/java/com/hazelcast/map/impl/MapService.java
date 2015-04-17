@@ -19,6 +19,7 @@ package com.hazelcast.map.impl;
 import com.hazelcast.core.DistributedObject;
 import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.partition.InternalPartitionLostEvent;
+import com.hazelcast.spi.ClientAwareService;
 import com.hazelcast.spi.EventPublishingService;
 import com.hazelcast.spi.ManagedService;
 import com.hazelcast.spi.MigrationAwareService;
@@ -58,7 +59,7 @@ import java.util.Properties;
 public class MapService implements ManagedService, MigrationAwareService,
         TransactionalService, RemoteService, EventPublishingService<EventData, ListenerAdapter>,
         PostJoinAwareService, SplitBrainHandlerService, ReplicationSupportingService, StatisticsAwareService,
-        PartitionAwareService {
+        PartitionAwareService, ClientAwareService {
 
     /**
      * Service name of map service used
@@ -76,6 +77,7 @@ public class MapService implements ManagedService, MigrationAwareService,
     private ReplicationSupportingService replicationSupportingService;
     private StatisticsAwareService statisticsAwareService;
     private PartitionAwareService mapPartitionAwareService;
+    private ClientAwareService mapClientAwareService;
     private MapServiceContext mapServiceContext;
 
     public MapService() {
@@ -215,7 +217,16 @@ public class MapService implements ManagedService, MigrationAwareService,
         this.statisticsAwareService = statisticsAwareService;
     }
 
-    public void setMapPartitionAwareService(PartitionAwareService mapPartitionAwareService) {
+    void setMapPartitionAwareService(PartitionAwareService mapPartitionAwareService) {
         this.mapPartitionAwareService = mapPartitionAwareService;
+    }
+
+    void setMapClientAwareService(ClientAwareService mapClientAwareService) {
+        this.mapClientAwareService = mapClientAwareService;
+    }
+
+    @Override
+    public void clientDisconnected(String clientUuid) {
+
     }
 }
