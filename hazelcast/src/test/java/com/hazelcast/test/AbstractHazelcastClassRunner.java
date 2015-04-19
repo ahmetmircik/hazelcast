@@ -19,6 +19,13 @@ package com.hazelcast.test;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.test.annotation.Repeat;
+import org.junit.After;
+import org.junit.internal.runners.statements.RunAfters;
+import org.junit.runners.BlockJUnit4ClassRunner;
+import org.junit.runners.model.FrameworkMethod;
+import org.junit.runners.model.InitializationError;
+import org.junit.runners.model.MultipleFailureException;
+import org.junit.runners.model.Statement;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
@@ -30,14 +37,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-import org.junit.After;
-import org.junit.internal.runners.statements.RunAfters;
-import org.junit.runners.BlockJUnit4ClassRunner;
-import org.junit.runners.model.FrameworkMethod;
-import org.junit.runners.model.InitializationError;
-import org.junit.runners.model.MultipleFailureException;
-import org.junit.runners.model.Statement;
-
 public abstract class AbstractHazelcastClassRunner extends BlockJUnit4ClassRunner {
 
     protected static final boolean DISABLE_THREAD_DUMP_ON_FAILURE =
@@ -45,8 +44,8 @@ public abstract class AbstractHazelcastClassRunner extends BlockJUnit4ClassRunne
 
     static {
         final String logging = "hazelcast.logging.type";
+        System.setProperty(logging, "log4j");
         if (System.getProperty(logging) == null) {
-            System.setProperty(logging, "log4j");
         }
         if (System.getProperty(TestEnvironment.HAZELCAST_TEST_USE_NETWORK) == null) {
             System.setProperty(TestEnvironment.HAZELCAST_TEST_USE_NETWORK, "false");

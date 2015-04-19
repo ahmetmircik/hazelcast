@@ -31,14 +31,21 @@ import static com.hazelcast.query.QueryConstants.THIS_ATTRIBUTE_NAME;
  */
 public class QueryEntry implements QueryableEntry {
 
-    private final SerializationService serializationService;
-    private final Data indexKey;
+    private Data indexKey;
     private Data keyData;
     private Object keyObject;
     private Data valueData;
     private Object valueObject;
+    private SerializationService serializationService;
+
+    public QueryEntry() {
+    }
 
     public QueryEntry(SerializationService serializationService, Data indexKey, Object key, Object value) {
+        setFields(serializationService, indexKey, key, value);
+    }
+
+    public void setFields(SerializationService serializationService, Data indexKey, Object key, Object value) {
         if (indexKey == null) {
             throw new IllegalArgumentException("index keyData cannot be null");
         }

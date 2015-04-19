@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl;
 
+import com.hazelcast.spi.ClientAwareService;
 import com.hazelcast.spi.EventPublishingService;
 import com.hazelcast.spi.ManagedService;
 import com.hazelcast.spi.MigrationAwareService;
@@ -86,12 +87,6 @@ class DefaultMapServiceContextAwareFactory extends AbstractMapServiceContextAwar
         return new MapReplicationSupportingService(getMapServiceContext());
     }
 
-    /**
-     * Creates a new {@link com.hazelcast.spi.StatisticsAwareService} for {@link com.hazelcast.map.impl.MapService}.
-     *
-     * @return Creates a new {@link com.hazelcast.spi.StatisticsAwareService} implementation.
-     * @see com.hazelcast.spi.StatisticsAwareService
-     */
     @Override
     StatisticsAwareService createStatisticsAwareService() {
         return new MapStatisticsAwareService(getMapServiceContext());
@@ -100,6 +95,11 @@ class DefaultMapServiceContextAwareFactory extends AbstractMapServiceContextAwar
     @Override
     MapPartitionAwareService createPartitionAwareService() {
         return new MapPartitionAwareService(getMapServiceContext());
+    }
+
+    @Override
+    ClientAwareService createClientAwareService() {
+        return new MapClientAwareService(getMapServiceContext());
     }
 
 }
