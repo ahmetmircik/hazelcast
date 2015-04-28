@@ -64,6 +64,14 @@ public class QueryResultSet extends AbstractSet implements IdentifiedDataSeriali
         return entries.add(entry);
     }
 
+    public boolean remove(QueryResultEntry entry) {
+        return entries.remove(entry);
+    }
+
+    public boolean contains(QueryResultEntry entry) {
+        return entries.contains(entry);
+    }
+
     @Override
     public boolean add(Object entry) {
         return entries.add((QueryResultEntry) entry);
@@ -127,7 +135,7 @@ public class QueryResultSet extends AbstractSet implements IdentifiedDataSeriali
 
         StringBuilder sb = new StringBuilder();
         sb.append('[');
-        for (;;) {
+        for (; ; ) {
             Object e = i.next();
             sb.append(e == this ? "(this Collection)" : e);
             if (!i.hasNext()) {

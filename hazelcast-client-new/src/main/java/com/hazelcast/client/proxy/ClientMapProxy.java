@@ -102,6 +102,7 @@ import com.hazelcast.logging.Logger;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.MapPartitionLostEvent;
+import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.impl.ListenerAdapter;
 import com.hazelcast.map.impl.SimpleEntryView;
 import com.hazelcast.map.listener.MapListener;
@@ -1129,6 +1130,17 @@ public final class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V
             throw new HazelcastException(e);
         }
     }
+
+    @Override
+    public QueryCache<K, V> getQueryCache(String name, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public QueryCache<K, V> getQueryCache(String name, MapListener mapListener, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
+    }
+
 
     @Override
     public Map<K, Object> executeOnKeys(Set<K> keys, EntryProcessor entryProcessor) {

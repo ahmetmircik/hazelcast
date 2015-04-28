@@ -22,13 +22,11 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.QuickTest;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
-
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -43,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.URL;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -634,7 +633,7 @@ public class XMLConfigBuilderTest extends HazelcastTestSupport {
         return "<hazelcast>\n" +
                 "<map name=\"" + mapName + "\">\n" +
                 "<partition-lost-listeners>\n" +
-                "<partition-lost-listener>"+ listenerName +"</partition-lost-listener>\n" +
+                "<partition-lost-listener>" + listenerName + "</partition-lost-listener>\n" +
                 "</partition-lost-listeners>\n" +
                 "</map>\n" +
                 "</hazelcast>\n";
@@ -723,5 +722,65 @@ public class XMLConfigBuilderTest extends HazelcastTestSupport {
         assertEquals(2, targetEndpoints.size());
         assertTrue(targetEndpoints.contains("20.30.40.50:5701"));
         assertTrue(targetEndpoints.contains("20.30.40.50:5702"));
+    }
+
+
+    @Test
+    public void testQueryCacheFullConfig() {
+        String xml =
+                "<hazelcast>"
+                        + "<map name=\"test\">"
+                        + "<query-caches>"
+                        + "<query-cache name=\"cache-name\">"
+                        + "<entry-listeners>"
+                        + "<entry-listener include-value=\"true\" " +
+                        "local=\"false\">com.hazelcast.examples.EntryListener</entry-listener>"
+                        + "</entry-listeners>"
+                        + "<include-value>true</include-value>"
+                        + "<batch-size>1</batch-size>"
+                        + "<buffer-size>16</buffer-size>"
+                        + "<delay-seconds>0</delay-seconds>"
+                        + "<in-memory-format>BINARY</in-memory-format>"
+                        + "<coalesce>false</coalesce>"
+                        + "<populate>true</populate>"
+                        + "<indexes>"
+                        + "<index ordered=\"false\">name</index>"
+                        + "</indexes>"
+                        + "<predicate type=\"class-name\"> "
+                        + "com.hazelcast.examples.SimplePredicate"
+                        + "</predicate>"
+                        + "<eviction eviction-policy=\"LRU\" max-size-policy=\"ENTRY_COUNT\" size=\"133\"/>"
+                        + "</query-cache>"
+                        + "</query-caches>"
+                        + "</map>"
+                        + "</hazelcast>";
+        Config config = buildConfig(xml);
+        QueryCacheConfig queryCacheConfig = config.getMapConfig("test").getQueryCacheConfigs().get("cache-name");
+        EntryListenerConfig entryListenerConfig = queryCacheConfig.getEntryListenerConfigs().get(0);
+
+        assertTrue(entryListenerConfig.isIncludeValue());
+        assertFalse(entryListenerConfig.isLocal());
+        assertEquals("com.hazelcast.examples.EntryListener", entryListenerConfig.getClassName());
+        assertTrue(queryCacheConfig.isIncludeValue());
+        assertEquals(1, queryCacheConfig.getBatchSize());
+        assertEquals(16, queryCacheConfig.getBufferSize());
+        assertEquals(0, queryCacheConfig.getDelaySeconds());
+        assertEquals(InMemoryFormat.BINARY, queryCacheConfig.getInMemoryFormat());
+        assertFalse(queryCacheConfig.isCoalesce());
+        assertTrue(queryCacheConfig.isPopulate());
+        assertIndexesEqual(queryCacheConfig);
+        assertEquals("com.hazelcast.examples.SimplePredicate", queryCacheConfig.getPredicateConfig().getClassName());
+        assertEquals(EvictionPolicy.LRU, queryCacheConfig.getEvictionConfig().getEvictionPolicy());
+        assertEquals(EvictionConfig.MaxSizePolicy.ENTRY_COUNT, queryCacheConfig.getEvictionConfig().getMaxSizePolicy());
+        assertEquals(133, queryCacheConfig.getEvictionConfig().getSize());
+    }
+
+    private void assertIndexesEqual(QueryCacheConfig queryCacheConfig) {
+        Iterator<MapIndexConfig> iterator = queryCacheConfig.getMapIndexConfigs().iterator();
+        while (iterator.hasNext()) {
+            MapIndexConfig mapIndexConfig = iterator.next();
+            assertEquals("name", mapIndexConfig.getAttribute());
+            assertFalse(mapIndexConfig.isOrdered());
+        }
     }
 }

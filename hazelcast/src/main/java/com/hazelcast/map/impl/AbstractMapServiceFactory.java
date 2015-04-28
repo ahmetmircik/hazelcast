@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl;
 
+import com.hazelcast.spi.ClientAwareService;
 import com.hazelcast.spi.EventPublishingService;
 import com.hazelcast.spi.ManagedService;
 import com.hazelcast.spi.MigrationAwareService;
@@ -117,6 +118,15 @@ abstract class AbstractMapServiceFactory implements MapServiceFactory {
      */
     abstract PartitionAwareService createPartitionAwareService();
 
+
+    /**
+     * Creates a new {@link ClientAwareService} for {@link MapService}.
+     *
+     * @return Creates a new {@link ClientAwareService} implementation.
+     * @see com.hazelcast.spi.ClientAwareService
+     */
+    abstract ClientAwareService createClientAwareService();
+
     /**
      * Returns a {@link MapService} object by populating it with required
      * auxiliary services.
@@ -136,6 +146,7 @@ abstract class AbstractMapServiceFactory implements MapServiceFactory {
         ReplicationSupportingService replicationSupportingService = createReplicationSupportingService();
         StatisticsAwareService statisticsAwareService = createStatisticsAwareService();
         PartitionAwareService partitionAwareService = createPartitionAwareService();
+        ClientAwareService clientAwareService = createClientAwareService();
 
         checkNotNull(mapServiceContext, "mapServiceContext should not be null");
         checkNotNull(managedService, "managedService should not be null");
@@ -148,6 +159,7 @@ abstract class AbstractMapServiceFactory implements MapServiceFactory {
         checkNotNull(replicationSupportingService, "replicationSupportingService should not be null");
         checkNotNull(statisticsAwareService, "statisticsAwareService should not be null");
         checkNotNull(partitionAwareService, "partitionAwareService should not be null");
+        checkNotNull(clientAwareService, "clientAwareService should not be null");
 
         MapService mapService = new MapService();
         mapService.setManagedService(managedService);
@@ -161,6 +173,7 @@ abstract class AbstractMapServiceFactory implements MapServiceFactory {
         mapService.setStatisticsAwareService(statisticsAwareService);
         mapService.setMapServiceContext(mapServiceContext);
         mapService.setMapPartitionAwareService(partitionAwareService);
+        mapService.setMapClientAwareService(clientAwareService);
         mapServiceContext.setService(mapService);
         return mapService;
     }

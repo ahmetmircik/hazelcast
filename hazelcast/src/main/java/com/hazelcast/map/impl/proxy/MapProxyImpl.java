@@ -26,6 +26,7 @@ import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.core.IMap;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.MapInterceptor;
+import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.SimpleEntryView;
 import com.hazelcast.map.listener.MapListener;
@@ -672,6 +673,16 @@ public class MapProxyImpl<K, V> extends MapProxySupport implements IMap<K, V>, I
             //todo: not what we want because it can lead to wrapping of even hazelcastexception
             throw new HazelcastException(e);
         }
+    }
+
+    @Override
+    public QueryCache<K, V> getQueryCache(String name, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public QueryCache<K, V> getQueryCache(String name, MapListener mapListener, Predicate<K, V> predicate, boolean includeValue) {
+        throw new UnsupportedOperationException();
     }
 
     protected Object invoke(Operation operation, int partitionId) throws Throwable {

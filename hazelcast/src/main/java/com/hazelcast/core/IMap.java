@@ -19,6 +19,7 @@ package com.hazelcast.core;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.MapInterceptor;
+import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.QueryResultSizeExceededException;
 import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.map.listener.MapPartitionLostListener;
@@ -915,8 +916,6 @@ public interface IMap<K, V>
      * @param listener the added MapPartitionLostListener.
      * @return returns the registration id for the MapPartitionLostListener.
      * @throws java.lang.NullPointerException if listener is null.
-     *
-     *
      * @see #removePartitionLostListener(String)
      */
     String addPartitionLostListener(MapPartitionLostListener listener);
@@ -1383,4 +1382,30 @@ public interface IMap<K, V>
     <SuppliedValue, Result> Result aggregate(Supplier<K, V, SuppliedValue> supplier,
                                              Aggregation<K, SuppliedValue, Result> aggregation,
                                              JobTracker jobTracker);
+
+
+    /**
+     * Creates an always up to date snapshot of this {@code IMap}.
+     *
+     * @param name         the name of {@code QueryCache}
+     * @param predicate    the predicate for filtering entries.
+     * @param includeValue {@code true} if this {@code QueryCache} is allowed to cache values of entries, otherwise {@code false}
+     * @return the {@code QueryCache} instance with the supplied {@code name}
+     * @see QueryCache
+     * @since 3.5
+     */
+    QueryCache<K, V> getQueryCache(String name, Predicate<K, V> predicate, boolean includeValue);
+
+    /**
+     * Creates an up to date snapshot of this {@code IMap}.
+     *
+     * @param name         the name of {@code QueryCache}
+     * @param mapListener  the {@code MapListener} which will be used to listen this {@code QueryCache}
+     * @param predicate    the predicate for filtering entries.
+     * @param includeValue {@code true} if this {@code QueryCache} is allowed to cache values of entries, otherwise {@code false}
+     * @return the {@code QueryCache} instance with the supplied {@code name}
+     * @see QueryCache
+     * @since 3.5
+     */
+    QueryCache<K, V> getQueryCache(String name, MapListener mapListener, Predicate<K, V> predicate, boolean includeValue);
 }
