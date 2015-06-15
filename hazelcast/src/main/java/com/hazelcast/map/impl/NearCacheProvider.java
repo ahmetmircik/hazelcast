@@ -30,6 +30,8 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * Provides near cache specific functionality.
@@ -50,10 +52,12 @@ public class NearCacheProvider {
 
     private final MapServiceContext mapServiceContext;
     private final NodeEngine nodeEngine;
+    private final Executor executor;
 
     public NearCacheProvider(MapServiceContext mapServiceContext, NodeEngine nodeEngine) {
         this.mapServiceContext = mapServiceContext;
         this.nodeEngine = nodeEngine;
+        this.executor = Executors.newSingleThreadExecutor();
     }
 
     public NearCache getNearCache(String mapName) {
@@ -176,6 +180,10 @@ public class NearCacheProvider {
         }
         NearCache nearCache = getNearCache(mapName);
         return nearCache.get(key);
+    }
+
+    public Executor getNearCacheExecutor() {
+        return executor;
     }
 }
 

@@ -268,7 +268,7 @@ public final class OperationServiceImpl implements InternalOperationService {
         return new PartitionInvocation(
                 nodeEngine, serviceName, op, partitionId, DEFAULT_REPLICA_INDEX,
                 DEFAULT_TRY_COUNT, DEFAULT_TRY_PAUSE_MILLIS,
-                DEFAULT_CALL_TIMEOUT, null, DEFAULT_DESERIALIZE_RESULT).invoke();
+                DEFAULT_CALL_TIMEOUT, null, null, DEFAULT_DESERIALIZE_RESULT).invoke();
     }
 
     @Override
@@ -276,7 +276,7 @@ public final class OperationServiceImpl implements InternalOperationService {
     public <E> InternalCompletableFuture<E> invokeOnTarget(String serviceName, Operation op, Address target) {
         return new TargetInvocation(nodeEngine, serviceName, op, target, DEFAULT_TRY_COUNT,
                 DEFAULT_TRY_PAUSE_MILLIS,
-                DEFAULT_CALL_TIMEOUT, null, DEFAULT_DESERIALIZE_RESULT).invoke();
+                DEFAULT_CALL_TIMEOUT, null, null, DEFAULT_DESERIALIZE_RESULT).invoke();
     }
 
     @Override
@@ -284,7 +284,7 @@ public final class OperationServiceImpl implements InternalOperationService {
     public <V> void asyncInvokeOnPartition(String serviceName, Operation op, int partitionId, ExecutionCallback<V> callback) {
         new PartitionInvocation(nodeEngine, serviceName, op, partitionId, DEFAULT_REPLICA_INDEX,
                 DEFAULT_TRY_COUNT, DEFAULT_TRY_PAUSE_MILLIS,
-                DEFAULT_CALL_TIMEOUT, callback, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
+                DEFAULT_CALL_TIMEOUT, callback, null, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
     }
 
     @Override
@@ -292,7 +292,7 @@ public final class OperationServiceImpl implements InternalOperationService {
     public <V> void asyncInvokeOnTarget(String serviceName, Operation op, Address target, ExecutionCallback<V> callback) {
         new TargetInvocation(nodeEngine, serviceName, op, target, DEFAULT_TRY_COUNT,
                 DEFAULT_TRY_PAUSE_MILLIS,
-                DEFAULT_CALL_TIMEOUT, callback, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
+                DEFAULT_CALL_TIMEOUT, callback, null, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
     }
 
     // =============================== processing operation  ===============================
