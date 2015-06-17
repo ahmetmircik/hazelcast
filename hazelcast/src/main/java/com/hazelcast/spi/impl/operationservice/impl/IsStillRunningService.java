@@ -36,13 +36,13 @@ import static com.hazelcast.spi.ExecutionService.SYSTEM_EXECUTOR;
 /**
  * Checks if an Operation is still running. This is useful when an operation isn't executed (e.g. got lost due to an
  * OOME on the remote side) and no response is ever send.
- *
+ * <p/>
  * The behavior needs to be cleaned up.
- *
+ * <p/>
  * Currently we only detect if an operation is actually running, not if it is in a queue somewhere. So it can mean that you
  * assume an operation isn't running, even though it is queued. Another issue is that the actual IsStillRunningOperation
  * isn't executed quick enough and then the system still decides that the operation isn't running.
- *
+ * <p/>
  * Instead of letting every invocation ask the remote system if an operation is still running, let the remote system
  * send a batch of all the call-id's for a particular member of the operations that are running.
  */
@@ -63,6 +63,7 @@ public class IsStillRunningService {
 
     /**
      * Checks if an operation is still running.
+     *
      * @param invocation The invocation for this operation.
      * @return true if the operation is running, false otherwise.
      */
@@ -74,7 +75,7 @@ public class IsStillRunningService {
 
             Invocation inv = new TargetInvocation(
                     invocation.nodeEngine, invocation.serviceName, isStillExecuting,
-                    invocation.getTarget(), 0, 0, IS_EXECUTING_CALL_TIMEOUT, null, true);
+                    invocation.getTarget(), 0, 0, IS_EXECUTING_CALL_TIMEOUT, null, null, true);
             Future f = inv.invoke();
             invocation.logger.warning("Asking if operation execution has been started: " + invocation);
             executing = (Boolean) invocation.nodeEngine.toObject(f.get(IS_EXECUTING_CALL_TIMEOUT, TimeUnit.MILLISECONDS));
@@ -87,6 +88,7 @@ public class IsStillRunningService {
 
     /**
      * Sets operation timeout to invocation result if the operation is not running.
+     *
      * @param invocation The invocation to check
      */
     public void timeoutInvocationIfNotExecuting(final Invocation invocation) {
@@ -113,10 +115,11 @@ public class IsStillRunningService {
 
     /**
      * Checks if an operation is still running.
+     *
      * @param callerAddress The caller address for this operation.
-     * @param callerUuid The caller Uuid for this operation.
-     * @param serviceName The service name for this operation.
-     * @param identifier The object identifier for this operation.
+     * @param callerUuid    The caller Uuid for this operation.
+     * @param serviceName   The service name for this operation.
+     * @param identifier    The object identifier for this operation.
      * @return true if the operation is running, false otherwise.
      */
     public boolean isOperationExecuting(Address callerAddress, String callerUuid, String serviceName, Object identifier) {
@@ -141,8 +144,9 @@ public class IsStillRunningService {
      * If the partition id isn't set, then we iterate over all generic-operationthread and check if one of them is running
      * the given operation. So this is more expensive, but in most cases this should not be an issue since most of the data
      * is hot in cache.
-     * @param callerAddress The caller address for this operation.
-     * @param partitionId The id of the partition where this operation resides.
+     *
+     * @param callerAddress   The caller address for this operation.
+     * @param partitionId     The id of the partition where this operation resides.
      * @param operationCallId The call id for this operation.
      * @return true if the operation is running, false otherwise.
      */
@@ -245,7 +249,7 @@ public class IsStillRunningService {
         public void run() {
             Invocation inv = new TargetInvocation(
                     invocation.nodeEngine, invocation.serviceName, isStillRunningOperation,
-                    invocation.getTarget(), 0, 0, IS_EXECUTING_CALL_TIMEOUT, callback, true);
+                    invocation.getTarget(), 0, 0, IS_EXECUTING_CALL_TIMEOUT, callback, null, true);
 
             invocation.logger.warning("Asking if operation execution has been started: " + toString());
             inv.invoke();

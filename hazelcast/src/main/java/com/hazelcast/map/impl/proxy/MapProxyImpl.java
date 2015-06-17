@@ -47,6 +47,7 @@ import com.hazelcast.query.TruePredicate;
 import com.hazelcast.spi.InitializingObject;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
+import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.executor.DelegatingFuture;
 
@@ -76,10 +77,12 @@ public class MapProxyImpl<K, V> extends MapProxySupport implements IMap<K, V>, I
 
     @Override
     public V get(Object k) {
-        checkNotNull(k, NULL_KEY_IS_NOT_ALLOWED);
-
-        Data key = toData(k, partitionStrategy);
-        return (V) toObject(getInternal(key));
+        Future<V> future = getAsync((K) k);
+        try {
+            return future.get();
+        } catch (Throwable e) {
+            throw ExceptionUtil.rethrow(e);
+        }
     }
 
     @Override

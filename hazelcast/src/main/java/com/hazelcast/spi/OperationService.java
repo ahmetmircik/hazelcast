@@ -16,11 +16,13 @@
 
 package com.hazelcast.spi;
 
+import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.nio.Address;
 import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 /**
  * The OperationService is responsible for executing operations.
@@ -119,7 +121,6 @@ public interface OperationService {
      *
      * @param op the operation to check.
      * @return true if the operation is allowed to run on the calling thread, false otherwise.
-     *
      * @deprecated since 3.5 since not needed anymore.
      */
     @Deprecated
@@ -159,6 +160,10 @@ public interface OperationService {
      */
     Map<Integer, Object> invokeOnPartitions(String serviceName, OperationFactory operationFactory,
                                             Collection<Integer> partitions) throws Exception;
+
+
+    Map<Integer, Object> invokeOnPartitions(String serviceName, OperationFactory operationFactory,
+                                            Collection<Integer> partitions, Executor executor, ExecutionCallback callback) throws Exception;
 
     /**
      * Executes an operation remotely.

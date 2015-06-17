@@ -49,10 +49,10 @@ public class InvocationBuilderImpl extends InvocationBuilder {
 
         if (target == null) {
             return new PartitionInvocation(nodeEngine, serviceName, op, partitionId, replicaIndex,
-                    tryCount, tryPauseMillis, callTimeout, callback, resultDeserialized).invoke();
+                    tryCount, tryPauseMillis, callTimeout, callback, executor, resultDeserialized).invoke();
         } else {
             return new TargetInvocation(nodeEngine, serviceName, op, target, tryCount, tryPauseMillis,
-                    callTimeout, callback, resultDeserialized).invoke();
+                    callTimeout, callback, executor, resultDeserialized).invoke();
         }
     }
 }
