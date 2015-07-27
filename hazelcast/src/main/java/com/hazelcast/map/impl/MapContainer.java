@@ -24,7 +24,6 @@ import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
 import com.hazelcast.map.impl.record.DataRecordFactory;
-import com.hazelcast.map.impl.record.NativeRecordFactory;
 import com.hazelcast.map.impl.record.ObjectRecordFactory;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
@@ -55,31 +54,31 @@ import static com.hazelcast.map.impl.mapstore.MapStoreContextFactory.createMapSt
  */
 public class MapContainer {
 
-    private final RecordFactory recordFactory;
+    final MapServiceContext mapServiceContext;
 
-    private final MapServiceContext mapServiceContext;
+    final List<MapInterceptor> interceptors;
 
-    private final List<MapInterceptor> interceptors;
+    final Map<String, MapInterceptor> interceptorMap;
 
-    private final Map<String, MapInterceptor> interceptorMap;
+    final IndexService indexService = new IndexService();
 
-    private final IndexService indexService = new IndexService();
+    final SizeEstimator nearCacheSizeEstimator;
 
-    private final SizeEstimator nearCacheSizeEstimator;
+    final PartitioningStrategy partitioningStrategy;
 
-    private final PartitioningStrategy partitioningStrategy;
+    final MapStoreContext mapStoreContext;
 
-    private final MapStoreContext mapStoreContext;
+    final String name;
 
-    private WanReplicationPublisher wanReplicationPublisher;
+    final String quorumName;
 
-    private MapMergePolicy wanMergePolicy;
+    RecordFactory recordFactory;
 
-    private volatile MapConfig mapConfig;
+    WanReplicationPublisher wanReplicationPublisher;
 
-    private final String name;
+    MapMergePolicy wanMergePolicy;
 
-    private final String quorumName;
+    volatile MapConfig mapConfig;
 
     private final IFunction<Object, Data> toDataFunction = new IFunction<Object, Data>() {
         @Override
@@ -100,9 +99,7 @@ public class MapContainer {
         this.mapServiceContext = mapServiceContext;
         this.partitioningStrategy = createPartitioningStrategy();
         this.quorumName = mapConfig.getQuorumName();
-        final NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
-        recordFactory = createRecordFactory(nodeEngine);
-        initWanReplication(nodeEngine);
+        initWanReplication(mapServiceContext.getNodeEngine());
         interceptors = new CopyOnWriteArrayList<MapInterceptor>();
         interceptorMap = new ConcurrentHashMap<String, MapInterceptor>();
         nearCacheSizeEstimator = createNearCacheSizeEstimator();
@@ -110,7 +107,11 @@ public class MapContainer {
         mapStoreContext.start();
     }
 
-    private RecordFactory createRecordFactory(NodeEngine nodeEngine) {
+    void init() {
+        recordFactory = createRecordFactory(mapServiceContext.getNodeEngine());
+    }
+
+    RecordFactory createRecordFactory(NodeEngine nodeEngine) {
         RecordFactory recordFactory;
         switch (mapConfig.getInMemoryFormat()) {
             case BINARY:
@@ -118,10 +119,6 @@ public class MapContainer {
                 break;
             case OBJECT:
                 recordFactory = new ObjectRecordFactory(mapConfig, nodeEngine.getSerializationService());
-                break;
-            case NATIVE:
-                recordFactory = new NativeRecordFactory(mapConfig, nodeEngine.getOffHeapStorage(),
-                        nodeEngine.getSerializationService(), partitioningStrategy);
                 break;
             default:
                 throw new IllegalArgumentException("Invalid storage format: " + mapConfig.getInMemoryFormat());

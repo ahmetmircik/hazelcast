@@ -25,16 +25,14 @@ import org.junit.runners.model.Statement;
 import java.lang.reflect.Constructor;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.lang.Math.max;
-import static java.lang.Runtime.getRuntime;
-
 
 /**
  * Runs the tests in parallel with multiple threads.
  */
 public class HazelcastParallelClassRunner extends AbstractHazelcastClassRunner {
     private static final boolean SPAWN_MULTIPLE_THREADS = TestEnvironment.isMockNetwork() && !Boolean.getBoolean("multipleJVM");
-    private static final int MAX_THREADS = max(getRuntime().availableProcessors()/2, 1);
+    private static final int MAX_THREADS = !TestEnvironment.isMockNetwork() ? 1
+            : Math.max(Runtime.getRuntime().availableProcessors(), 1);
 
     private final AtomicInteger numThreads = new AtomicInteger(0);
     private final int maxThreads;
@@ -47,14 +45,14 @@ public class HazelcastParallelClassRunner extends AbstractHazelcastClassRunner {
     public HazelcastParallelClassRunner(Class<?> klass, Object[] parameters,
                                         String name) throws InitializationError {
         super(klass, parameters, name);
-        maxThreads =  getMaxThreads(klass);
+        maxThreads = getMaxThreads(klass);
     }
 
     private int getMaxThreads(Class<?> klass) {
         if (!SPAWN_MULTIPLE_THREADS) {
             return 1;
         }
-        
+
         TestProperties properties = klass.getAnnotation(TestProperties.class);
 
         if (properties != null) {
