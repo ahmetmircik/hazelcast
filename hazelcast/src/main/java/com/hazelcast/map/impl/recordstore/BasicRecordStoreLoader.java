@@ -245,11 +245,11 @@ class BasicRecordStoreLoader implements RecordStoreLoader {
         if (keys == null || keys.isEmpty()) {
             return;
         }
-        final Map<Data, Record> records = recordStore.getRecordMap();
+        InternalRecordStore<Data, Record> internalRecordStore = recordStore.getInternalRecordStore();
         final Iterator<Data> iterator = keys.iterator();
         while (iterator.hasNext()) {
             final Data nextKey = iterator.next();
-            if (records.containsKey(nextKey)) {
+            if (internalRecordStore.containsKey(nextKey)) {
                 iterator.remove();
             }
         }

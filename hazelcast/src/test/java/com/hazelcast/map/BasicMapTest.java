@@ -63,19 +63,24 @@ import static org.junit.Assert.fail;
 @Category(QuickTest.class)
 public class BasicMapTest extends HazelcastTestSupport {
 
-    private static final int instanceCount = 3;
-    private static final Random rand = new Random();
+    static final int instanceCount = 3;
+    static final Random rand = new Random();
 
-    private HazelcastInstance[] instances;
+    HazelcastInstance[] instances;
 
     @Before
     public void init() {
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(instanceCount);
-        Config config = new Config();
+        Config config = getConfig();
         instances = factory.newInstances(config);
     }
 
-    private HazelcastInstance getInstance() {
+    // this is overridden in another context.
+    Config getConfig() {
+        return new Config();
+    }
+
+    HazelcastInstance getInstance() {
         return instances[rand.nextInt(instanceCount)];
     }
 
