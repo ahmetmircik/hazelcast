@@ -33,14 +33,16 @@ import com.hazelcast.partition.InternalPartitionService;
 import com.hazelcast.spi.EventFilter;
 import com.hazelcast.spi.EventRegistration;
 import com.hazelcast.spi.NodeEngine;
+import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.util.ConcurrencyUtil;
 import com.hazelcast.util.ConstructorFunction;
 import com.hazelcast.util.ExceptionUtil;
-import com.hazelcast.spi.Operation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,8 +51,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.Collections;
-import java.util.LinkedHashSet;
 
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
@@ -61,16 +61,17 @@ import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 class MapServiceContextImpl implements MapServiceContext {
     private static final long DESTROY_TIMEOUT_SECONDS = 30;
 
-    private final NodeEngine nodeEngine;
-    private final PartitionContainer[] partitionContainers;
-    private final ConcurrentMap<String, MapContainer> mapContainers;
-    private final AtomicReference<Collection<Integer>> ownedPartitions;
-    private final ConstructorFunction<String, MapContainer> mapConstructor = new ConstructorFunction<String, MapContainer>() {
+    final NodeEngine nodeEngine;
+    final PartitionContainer[] partitionContainers;
+    final ConcurrentMap<String, MapContainer> mapContainers;
+    final AtomicReference<Collection<Integer>> ownedPartitions;
+    final ConstructorFunction<String, MapContainer> mapConstructor = new ConstructorFunction<String, MapContainer>() {
         public MapContainer createNew(String mapName) {
             final MapServiceContext mapServiceContext = getService().getMapServiceContext();
             final Config config = nodeEngine.getConfig();
             final MapConfig mapConfig = config.findMapConfig(mapName);
             final MapContainer mapContainer = new MapContainer(mapName, mapConfig, mapServiceContext);
+            mapContainer.init();
             return mapContainer;
         }
     };
@@ -80,20 +81,19 @@ class MapServiceContextImpl implements MapServiceContext {
      * This is used by owner and backups together so it should be defined
      * getting this into account.
      */
-    private final AtomicInteger writeBehindQueueItemCounter = new AtomicInteger(0);
-    private final ExpirationManager expirationManager;
-    private final NearCacheProvider nearCacheProvider;
-    private final LocalMapStatsProvider localMapStatsProvider;
-    private final MergePolicyProvider mergePolicyProvider;
-    private final MapContextQuerySupport mapContextQuerySupport;
-    private MapEventPublisher mapEventPublisher;
-    private EvictionOperator evictionOperator;
-    private MapService mapService;
+    final AtomicInteger writeBehindQueueItemCounter = new AtomicInteger(0);
+    final ExpirationManager expirationManager;
+    final NearCacheProvider nearCacheProvider;
+    final LocalMapStatsProvider localMapStatsProvider;
+    final MergePolicyProvider mergePolicyProvider;
+    final MapContextQuerySupport mapContextQuerySupport;
+    MapEventPublisher mapEventPublisher;
+    EvictionOperator evictionOperator;
+    MapService mapService;
 
     public MapServiceContextImpl(NodeEngine nodeEngine) {
         this.nodeEngine = nodeEngine;
-        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        this.partitionContainers = new PartitionContainer[partitionCount];
+        this.partitionContainers = createPartitionContainers();
         this.mapContainers = new ConcurrentHashMap<String, MapContainer>();
         this.ownedPartitions = new AtomicReference<Collection<Integer>>();
         this.expirationManager = new ExpirationManager(this, nodeEngine);
@@ -105,6 +105,13 @@ class MapServiceContextImpl implements MapServiceContext {
         this.mapContextQuerySupport = new BasicMapContextQuerySupport(this);
     }
 
+    // this method is overridden.
+    PartitionContainer[] createPartitionContainers() {
+        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
+        return new PartitionContainer[partitionCount];
+    }
+
+    // this method is overridden.
     MapEventPublisherImpl createMapEventPublisherSupport() {
         return new MapEventPublisherImpl(this);
     }
