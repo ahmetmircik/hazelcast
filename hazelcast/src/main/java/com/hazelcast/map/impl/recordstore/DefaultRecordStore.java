@@ -505,7 +505,6 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             if (!backup) {
                 mapServiceContext.interceptRemove(name, value);
             }
-            updateSizeEstimator(-calculateRecordHeapCost(record));
             removeIndex(key);
         }
         return value;

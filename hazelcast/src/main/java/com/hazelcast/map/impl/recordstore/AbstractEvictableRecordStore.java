@@ -34,7 +34,9 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.map.impl.ExpirationTimeSetter.*;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateExpirationWithDelay;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateMaxIdleMillis;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTime;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 
 /**
