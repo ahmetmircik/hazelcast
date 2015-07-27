@@ -36,23 +36,19 @@ import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.util.Clock;
 
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.map.impl.SizeEstimators.createMapSizeEstimator;
 
 /**
  * Contains record store common parts.
  */
-abstract class AbstractRecordStore implements RecordStore {
+abstract class AbstractRecordStore implements RecordStore<Record> {
 
     protected static final long DEFAULT_TTL = -1L;
 
-    // Concurrency level is 1 since at most one thread can write at a time.
-    protected final ConcurrentMap<Data, Record> records = new ConcurrentHashMap<Data, Record>(1000, 0.75f, 1);
+    protected final InternalRecordStore<Data, Record> internalRecordStore;
 
     protected final RecordFactory recordFactory;
 
@@ -76,6 +72,13 @@ abstract class AbstractRecordStore implements RecordStore {
         this.name = mapContainer.getName();
         this.recordFactory = mapContainer.getRecordFactory();
         this.sizeEstimator = createMapSizeEstimator();
+        this.internalRecordStore = createInternalRecordStore();
+    }
+
+    @Override
+    public InternalRecordStore createInternalRecordStore() {
+        // Concurrency level is 1 since at most one thread can write at a time.
+        return new InternalRecordStoreImpl();
     }
 
     @Override
@@ -223,22 +226,14 @@ abstract class AbstractRecordStore implements RecordStore {
         switch (inMemoryFormat) {
             case BINARY:
             case OBJECT:
-                records.clear();
+                internalRecordStore.clear();
                 if (excludeRecords != null && !excludeRecords.isEmpty()) {
-                    records.putAll(excludeRecords);
-                }
-                return;
-
-            case NATIVE:
-                Iterator<Record> iter = records.values().iterator();
-                while (iter.hasNext()) {
-                    Record record = iter.next();
-                    if (excludeRecords == null || !excludeRecords.containsKey(record.getKey())) {
-                        record.invalidate();
-                        iter.remove();
+                    Collection<Record> values = excludeRecords.values();
+                    for (Record record : values) {
+                        internalRecordStore.add(record);
                     }
                 }
-                return;
+                break;
 
             default:
                 throw new IllegalArgumentException("Unknown storage format: " + inMemoryFormat);
