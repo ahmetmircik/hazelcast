@@ -28,6 +28,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.EventService;
 import com.hazelcast.spi.NodeEngine;
+import com.hazelcast.util.Clock;
 import com.hazelcast.util.MemoryInfoAccessor;
 
 import java.util.Arrays;
@@ -78,6 +79,7 @@ public final class EvictionOperator {
     }
 
     public void removeEvictableRecords(RecordStore recordStore, int evictableSize, MapConfig mapConfig, boolean backup) {
+        long now = Clock.currentTimeMillis();
         final MapServiceContext mapServiceContext = this.mapServiceContext;
         final EvictionPolicy evictionPolicy = mapConfig.getEvictionPolicy();
         // criteria is a long value, like last access times or hits,
@@ -97,14 +99,11 @@ public final class EvictionOperator {
             final Record record = iterator.next();
             final long value = getEvictionCriteriaValue(record, evictionPolicy);
             if (value <= criteriaValue) {
-                final Data tmpKey = record.getKey();
-                final Object tmpValue = record.getValue();
-                if (evictIfNotLocked(tmpKey, recordStore, backup)) {
+                if (!recordStore.isRecordAccessible(record, now, backup)) {
+                    recordStore.doPostEvictOperations(record, backup);
+                    fireEvent(record, mapName, mapServiceContext);
+                    iterator.remove();
                     evictedRecordCounter++;
-                    if (!backup) {
-                        mapServiceContext.interceptAfterRemove(mapName, value);
-                        fireEvent(tmpKey, tmpValue, mapName, mapServiceContext);
-                    }
                 }
             }
             if (evictedRecordCounter >= evictableSize) {
@@ -152,31 +151,23 @@ public final class EvictionOperator {
         return index < 0 ? 0 : index;
     }
 
-    public void fireEvent(Data key, Object value, String mapName, MapServiceContext mapServiceContext) {
+    public void fireEvent(Record record, String mapName, MapServiceContext mapServiceContext) {
         if (!hasListener(mapName)) {
             return;
         }
         final MapEventPublisher mapEventPublisher = mapServiceContext.getMapEventPublisher();
         final NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
         final Address thisAddress = nodeEngine.getThisAddress();
-        final Data dataValue = mapServiceContext.toData(value);
+        final Data dataKey = record.getKey();
+        final Data dataValue = mapServiceContext.toData(record.getValue());
         mapEventPublisher.publishEvent(thisAddress, mapName, EntryEventType.EVICTED, true,
-                key, dataValue, null);
+                dataKey, dataValue, null);
     }
 
     private boolean hasListener(String mapName) {
         final EventService eventService = mapServiceContext.getNodeEngine().getEventService();
         return eventService.hasEventRegistration(SERVICE_NAME, mapName);
     }
-
-    private boolean evictIfNotLocked(Data key, RecordStore recordStore, boolean backup) {
-        if (recordStore.isLocked(key)) {
-            return false;
-        }
-        recordStore.evict(key, backup);
-        return true;
-    }
-
 
     public int evictableSize(int currentPartitionSize, MapConfig mapConfig) {
         final int maxSize = mapConfig.getMaxSizeConfig().getSize();
@@ -226,6 +217,5 @@ public final class EvictionOperator {
         }
         return value;
     }
-
 
 }
