@@ -37,13 +37,13 @@ import static com.hazelcast.map.impl.MapKeyLoaderUtil.getMaxSizePerNode;
 
 public class PartitionContainer {
 
-    private final MapService mapService;
+    final MapService mapService;
 
-    private final int partitionId;
+    final int partitionId;
 
-    private final ConcurrentMap<String, RecordStore> maps = new ConcurrentHashMap<String, RecordStore>(1000);
+    final ConcurrentMap<String, RecordStore> maps = new ConcurrentHashMap<String, RecordStore>(1000);
 
-    private final ConstructorFunction<String, RecordStore> recordStoreConstructor
+    final ConstructorFunction<String, RecordStore> recordStoreConstructor
             = new ConstructorFunction<String, RecordStore>() {
 
         @Override
@@ -74,9 +74,9 @@ public class PartitionContainer {
      * Flag to check if there is a {@link com.hazelcast.map.impl.operation.ClearExpiredOperation}
      * is running on this partition at this moment or not.
      */
-    private volatile boolean hasRunningCleanup;
+    volatile boolean hasRunningCleanup;
 
-    private volatile long lastCleanupTime;
+    volatile long lastCleanupTime;
 
     /**
      * Used when sorting partition containers in {@link com.hazelcast.map.impl.eviction.ExpirationManager}
@@ -85,7 +85,7 @@ public class PartitionContainer {
      * 1. We need an un-modified field during sorting.
      * 2. Decrease number of volatile reads.
      */
-    private long lastCleanupTimeCopy;
+    long lastCleanupTimeCopy;
 
     public PartitionContainer(final MapService mapService, final int partitionId) {
         this.mapService = mapService;

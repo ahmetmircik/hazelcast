@@ -34,7 +34,7 @@ import java.util.Set;
 /**
  * Defines a record-store.
  */
-public interface RecordStore {
+public interface RecordStore<V extends Record> {
 
     String getName();
 
@@ -44,7 +44,7 @@ public interface RecordStore {
 
     Object putIfAbsent(Data dataKey, Object value, long ttl);
 
-    Record putBackup(Data key, Object value);
+    V putBackup(Data key, Object value);
 
     /**
      * @param key          the key to be processed.
@@ -53,7 +53,7 @@ public interface RecordStore {
      * @param putTransient {@code true} if putting transient entry, otherwise {@code false}
      * @return previous record if exists otherwise null.
      */
-    Record putBackup(Data key, Object value, long ttl, boolean putTransient);
+    V putBackup(Data key, Object value, long ttl, boolean putTransient);
 
     boolean tryPut(Data dataKey, Object value, long ttl);
 
@@ -141,7 +141,7 @@ public interface RecordStore {
 
     boolean merge(Data dataKey, EntryView mergingEntryView, MapMergePolicy mergePolicy);
 
-    Record getRecord(Data key);
+    V getRecord(Data key);
 
     /**
      * Puts a data key and a record value to record-store.
@@ -151,21 +151,21 @@ public interface RecordStore {
      * @param record the value for record store.
      * @see com.hazelcast.map.impl.operation.MapReplicationOperation
      */
-    void putRecord(Data key, Record record);
+    void putRecord(Data key, V record);
 
     /**
      * Iterates over record store values.
      *
      * @return read only iterator for map values.
      */
-    Iterator<Record> iterator();
+    Iterator<V> iterator();
 
     /**
      * Iterates over record store values by respecting expiration.
      *
      * @return read only iterator for map values.
      */
-    Iterator<Record> iterator(long now, boolean backup);
+    Iterator<V> iterator(long now, boolean backup);
 
 
     /**
@@ -178,14 +178,14 @@ public interface RecordStore {
      * @param backup <code>true</code> if a backup partition, otherwise <code>false</code>.
      * @return read only iterator for map values.
      */
-    Iterator<Record> loadAwareIterator(long now, boolean backup);
+    Iterator<V> loadAwareIterator(long now, boolean backup);
 
     /**
      * Returns records map.
      *
      * @see RecordStoreLoader
      */
-    Map<Data, Record> getRecordMap();
+    InternalRecordStore<Data, V> getInternalRecordStore();
 
     Set<Data> keySet();
 
@@ -208,6 +208,8 @@ public interface RecordStore {
     boolean containsValue(Object testValue);
 
     Object evict(Data key, boolean backup);
+
+    Object evict(Data key, Record removedRecord, boolean backup);
 
     /**
      * Evicts all keys except locked ones.
@@ -281,9 +283,13 @@ public interface RecordStore {
      * @return live record or null
      * @see #get
      */
-    Record getRecordOrNull(Data key);
+    V getRecordOrNull(Data key);
+
+    boolean isRecordAccessible(Record record, long now, boolean backup);
 
     void evictEntries(long now, boolean backup);
+
+    Object doPostEvictOperations(Record removedRecord, boolean backup);
 
     /**
      * Loads all keys and values
@@ -292,6 +298,10 @@ public interface RecordStore {
      **/
     void loadAll(boolean replaceExistingValues);
 
-    /** Performs initial loading from a MapLoader if it has not been done before  **/
+    /**
+     * Performs initial loading from a MapLoader if it has not been done before
+     **/
     void maybeDoInitialLoad();
+
+    InternalRecordStore createInternalRecordStore();
 }
