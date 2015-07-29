@@ -43,11 +43,10 @@ import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.MapEventPublisher;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.nearcache.NearCache;
-import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.QueryEventFilter;
-import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.map.impl.nearcache.NearCache;
+import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.operation.AddIndexOperation;
 import com.hazelcast.map.impl.operation.AddInterceptorOperation;
 import com.hazelcast.map.impl.operation.BasePutOperation;
@@ -67,6 +66,7 @@ import com.hazelcast.map.impl.operation.LoadAllOperation;
 import com.hazelcast.map.impl.operation.LoadMapOperation;
 import com.hazelcast.map.impl.operation.MapFlushOperation;
 import com.hazelcast.map.impl.operation.MapGetAllOperationFactory;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MultipleEntryOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionCheckIfLoadedOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionWideEntryWithPredicateOperationFactory;
@@ -83,6 +83,7 @@ import com.hazelcast.map.impl.operation.SetOperation;
 import com.hazelcast.map.impl.operation.SizeOperationFactory;
 import com.hazelcast.map.impl.operation.TryPutOperation;
 import com.hazelcast.map.impl.operation.TryRemoveOperation;
+import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.map.listener.MapPartitionLostListener;
 import com.hazelcast.monitor.LocalMapStats;
@@ -145,10 +146,11 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected final LocalMapStatsImpl localMapStats;
     protected final LockProxySupport lockSupport;
     protected final PartitioningStrategy partitionStrategy;
+    private final MapOperationProvider operationProvider;
     private MapServiceContext mapServiceContext;
     private InternalPartitionService partitionService;
 
-    protected MapProxySupport(final String name, final MapService service, NodeEngine nodeEngine) {
+    protected MapProxySupport(String name, MapService service, NodeEngine nodeEngine) {
         super(nodeEngine, service);
         this.name = name;
         this.mapServiceContext = service.getMapServiceContext();
@@ -156,6 +158,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         localMapStats = mapServiceContext.getLocalMapStatsProvider().getLocalMapStatsImpl(name);
         this.partitionService = getNodeEngine().getPartitionService();
         lockSupport = new LockProxySupport(new DefaultObjectNamespace(MapService.SERVICE_NAME, name));
+        operationProvider = mapServiceContext.getMapOperationProvider(name);
     }
 
     @Override
@@ -391,7 +394,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected Data putInternal(final Data key, final Data value, final long ttl, final TimeUnit timeunit) {
-        PutOperation operation = new PutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        KeyBasedMapOperation operation = operationProvider.createPutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         Data previousValue = (Data) invokeOperation(key, operation);
         invalidateNearCache(key);
         return previousValue;
@@ -455,7 +458,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                                                         final long ttl, final TimeUnit timeunit) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        PutOperation operation = new PutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        KeyBasedMapOperation operation = operationProvider.createPutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             ICompletableFuture<Data> future
@@ -1227,6 +1230,10 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         return SERVICE_NAME;
     }
 
+    public PartitioningStrategy getPartitionStrategy() {
+        return partitionStrategy;
+    }
+
     private class MapExecutionCallbackAdapter implements ExecutionCallback {
 
         private final ExecutionCallback executionCallback;
@@ -1245,10 +1252,6 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         public void onFailure(Throwable t) {
             executionCallback.onFailure(t);
         }
-    }
-
-    public PartitioningStrategy getPartitionStrategy() {
-        return partitionStrategy;
     }
 }
 

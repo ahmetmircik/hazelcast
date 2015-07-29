@@ -23,7 +23,10 @@ import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.eviction.EvictionOperator;
 import com.hazelcast.map.impl.eviction.ExpirationManager;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MapPartitionDestroyOperation;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.listener.MapPartitionLostListener;
 import com.hazelcast.map.merge.MergePolicyProvider;
@@ -157,6 +160,11 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
+    public void setService(MapService mapService) {
+        this.mapService = mapService;
+    }
+
+    @Override
     public void clearPartitions() {
         final PartitionContainer[] containers = partitionContainers;
         for (PartitionContainer container : containers) {
@@ -271,9 +279,12 @@ class MapServiceContextImpl implements MapServiceContext {
         return evictionOperator;
     }
 
+    /**
+     * Used for testing purposes.
+     */
     @Override
-    public void setService(MapService mapService) {
-        this.mapService = mapService;
+    public void setEvictionOperator(EvictionOperator evictionOperator) {
+        this.evictionOperator = evictionOperator;
     }
 
     @Override
@@ -299,14 +310,6 @@ class MapServiceContextImpl implements MapServiceContext {
     @Override
     public LocalMapStatsProvider getLocalMapStatsProvider() {
         return localMapStatsProvider;
-    }
-
-    /**
-     * Used for testing purposes.
-     */
-    @Override
-    public void setEvictionOperator(EvictionOperator evictionOperator) {
-        this.evictionOperator = evictionOperator;
     }
 
     @Override
@@ -507,5 +510,15 @@ class MapServiceContextImpl implements MapServiceContext {
     @Override
     public boolean removePartitionLostListener(String mapName, String registrationId) {
         return nodeEngine.getEventService().deregisterListener(SERVICE_NAME, mapName, registrationId);
+    }
+
+    @Override
+    public MapOperationProvider getMapOperationProvider(String name) {
+        return DefaultMapOperationProvider.get();
+    }
+
+    @Override
+    public RecordStore createRecordStore(NodeEngine nodeEngine, MapContainer container, int partitionId, MapKeyLoader keyLoader) {
+        return new DefaultRecordStore(nodeEngine, container, partitionId, keyLoader);
     }
 }
