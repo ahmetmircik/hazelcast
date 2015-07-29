@@ -20,6 +20,7 @@ import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.map.impl.eviction.EvictionOperator;
 import com.hazelcast.map.impl.eviction.ExpirationManager;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.merge.MergePolicyProvider;
 import com.hazelcast.nio.serialization.Data;
@@ -111,4 +112,8 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport, 
      * @param evictionOperator {@link EvictionOperator} to be set.
      */
     void setEvictionOperator(EvictionOperator evictionOperator);
+
+    MapOperationProvider getMapOperationProvider(String name);
+
+    RecordStore createRecordStore(NodeEngine nodeEngine, MapContainer mapContainer, int partitionId, MapKeyLoader keyLoader);
 }
