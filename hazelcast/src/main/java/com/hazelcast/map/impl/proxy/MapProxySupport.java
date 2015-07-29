@@ -66,12 +66,12 @@ import com.hazelcast.map.impl.operation.LoadAllOperation;
 import com.hazelcast.map.impl.operation.LoadMapOperation;
 import com.hazelcast.map.impl.operation.MapFlushOperation;
 import com.hazelcast.map.impl.operation.MapGetAllOperationFactory;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MultipleEntryOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionCheckIfLoadedOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionWideEntryWithPredicateOperationFactory;
 import com.hazelcast.map.impl.operation.PutAllOperation;
 import com.hazelcast.map.impl.operation.PutIfAbsentOperation;
-import com.hazelcast.map.impl.operation.PutOperation;
 import com.hazelcast.map.impl.operation.PutTransientOperation;
 import com.hazelcast.map.impl.operation.RemoveIfSameOperation;
 import com.hazelcast.map.impl.operation.RemoveInterceptorOperation;
@@ -145,10 +145,11 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected final LocalMapStatsImpl localMapStats;
     protected final LockProxySupport lockSupport;
     protected final PartitioningStrategy partitionStrategy;
+    private final MapOperationProvider operationProvider;
     private MapServiceContext mapServiceContext;
     private InternalPartitionService partitionService;
 
-    protected MapProxySupport(final String name, final MapService service, NodeEngine nodeEngine) {
+    protected MapProxySupport(String name, MapService service, NodeEngine nodeEngine) {
         super(nodeEngine, service);
         this.name = name;
         this.mapServiceContext = service.getMapServiceContext();
@@ -157,7 +158,8 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         this.partitionService = getNodeEngine().getPartitionService();
 
         lockSupport = new LockProxySupport(new DefaultObjectNamespace(MapService.SERVICE_NAME, name),
-                    LockServiceImpl.getMaxLeaseTimeInMillis(nodeEngine.getGroupProperties()));
+                LockServiceImpl.getMaxLeaseTimeInMillis(nodeEngine.getGroupProperties()));
+        operationProvider = mapServiceContext.getMapOperationProvider(name);
     }
 
     @Override
@@ -393,7 +395,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected Data putInternal(final Data key, final Data value, final long ttl, final TimeUnit timeunit) {
-        PutOperation operation = new PutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        KeyBasedMapOperation operation = operationProvider.createPutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         Data previousValue = (Data) invokeOperation(key, operation);
         invalidateNearCache(key);
         return previousValue;
@@ -457,7 +459,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                                                         final long ttl, final TimeUnit timeunit) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        PutOperation operation = new PutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        KeyBasedMapOperation operation = operationProvider.createPutOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             ICompletableFuture<Data> future
@@ -1228,6 +1230,10 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         return SERVICE_NAME;
     }
 
+    public PartitioningStrategy getPartitionStrategy() {
+        return partitionStrategy;
+    }
+
     private class MapExecutionCallbackAdapter implements ExecutionCallback {
 
         private final ExecutionCallback executionCallback;
@@ -1246,10 +1252,6 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         public void onFailure(Throwable t) {
             executionCallback.onFailure(t);
         }
-    }
-
-    public PartitioningStrategy getPartitionStrategy() {
-        return partitionStrategy;
     }
 }
 

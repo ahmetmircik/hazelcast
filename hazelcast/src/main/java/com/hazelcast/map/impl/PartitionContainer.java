@@ -19,8 +19,6 @@ package com.hazelcast.map.impl;
 import com.hazelcast.concurrent.lock.LockService;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.instance.GroupProperties;
-import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.partition.InternalPartitionService;
 import com.hazelcast.spi.DefaultObjectNamespace;
@@ -62,9 +60,8 @@ public class PartitionContainer {
             keyLoader.setMaxSize(getMaxSizePerNode(mapConfig.getMaxSizeConfig()));
             keyLoader.setHasBackup(mapConfig.getBackupCount() > 0 || mapConfig.getAsyncBackupCount() > 0);
 
-            ILogger logger = nodeEngine.getLogger(DefaultRecordStore.class);
-            DefaultRecordStore recordStore = new DefaultRecordStore(mapContainer, partitionId, keyLoader, logger);
-            recordStore.startLoading();
+            RecordStore recordStore = serviceContext.createRecordStore(nodeEngine, mapContainer, partitionId, keyLoader);
+//            recordStore.startLoading();
 
             return recordStore;
         }
@@ -81,7 +78,7 @@ public class PartitionContainer {
     /**
      * Used when sorting partition containers in {@link com.hazelcast.map.impl.eviction.ExpirationManager}
      * A non-volatile copy of lastCleanupTime is used with two reasons.
-     * <p>
+     * <p/>
      * 1. We need an un-modified field during sorting.
      * 2. Decrease number of volatile reads.
      */

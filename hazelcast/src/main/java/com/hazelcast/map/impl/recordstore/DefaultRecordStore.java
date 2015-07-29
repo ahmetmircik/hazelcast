@@ -68,11 +68,11 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     private final Collection<Future> loadingFutures = new ArrayList<Future>();
 //    private final Deque<Data> invalidations = new ArrayDeque<Data>();
 
-    public DefaultRecordStore(MapContainer mapContainer, int partitionId,
-                              MapKeyLoader keyLoader, ILogger logger) {
+    public DefaultRecordStore(NodeEngine nodeEngine, MapContainer mapContainer, int partitionId,
+                              MapKeyLoader keyLoader) {
         super(mapContainer, partitionId);
 
-        this.logger = logger;
+        this.logger = nodeEngine.getLogger(getClass());
         this.keyLoader = keyLoader;
         this.lockStore = createLockStore();
         this.mapStoreContext = mapContainer.getMapStoreContext();
