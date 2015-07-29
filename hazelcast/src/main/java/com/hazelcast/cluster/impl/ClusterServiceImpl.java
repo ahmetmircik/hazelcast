@@ -25,7 +25,6 @@ import com.hazelcast.cluster.impl.operations.ConfigMismatchOperation;
 import com.hazelcast.cluster.impl.operations.FinalizeJoinOperation;
 import com.hazelcast.cluster.impl.operations.GroupMismatchOperation;
 import com.hazelcast.cluster.impl.operations.HeartbeatOperation;
-import com.hazelcast.cluster.impl.operations.JoinCheckOperation;
 import com.hazelcast.cluster.impl.operations.JoinRequestOperation;
 import com.hazelcast.cluster.impl.operations.MasterConfirmationOperation;
 import com.hazelcast.cluster.impl.operations.MasterDiscoveryOperation;
@@ -35,7 +34,6 @@ import com.hazelcast.cluster.impl.operations.PostJoinOperation;
 import com.hazelcast.cluster.impl.operations.SetMasterOperation;
 import com.hazelcast.cluster.impl.operations.TriggerMemberListPublishOperation;
 import com.hazelcast.core.Cluster;
-import com.hazelcast.core.HazelcastException;
 import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.core.InitialMembershipEvent;
 import com.hazelcast.core.InitialMembershipListener;
@@ -122,9 +120,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     public static final String SERVICE_NAME = "hz:core:clusterService";
 
     private static final String EXECUTOR_NAME = "hz:cluster";
-    private static final int HEARTBEAT_INTERVAL = 500;
     private static final long HEARTBEAT_LOG_THRESHOLD = 10000L;
-    private static final int PING_INTERVAL = 5000;
 
     private final Node node;
 
@@ -140,11 +136,13 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
     private final long maxWaitMillisBeforeJoin;
 
-    private final long heartbeatInterval;
-
     private final long maxNoHeartbeatMillis;
 
     private final long maxNoMasterConfirmationMillis;
+
+    private final long heartbeatIntervalMillis;
+
+    private final long pingIntervalMillis;
 
     private final boolean icmpEnabled;
 
@@ -163,14 +161,16 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
     private final AtomicBoolean preparingToMerge = new AtomicBoolean(false);
 
-    private volatile boolean joinInProgress = false;
+    private volatile boolean joinInProgress;
+
+    private long timeToStartJoin;
 
     @Probe(name = "lastHeartBeat")
-    private volatile long lastHeartBeat = 0L;
+    private volatile long lastHeartBeat;
 
-    private long timeToStartJoin = 0;
+    private long firstJoinRequest;
 
-    private long firstJoinRequest = 0;
+    private final ConcurrentMap<MemberImpl, Long> heartbeatTimes = new ConcurrentHashMap<MemberImpl, Long>();
 
     private final ConcurrentMap<MemberImpl, Long> masterConfirmationTimes = new ConcurrentHashMap<MemberImpl, Long>();
 
@@ -190,16 +190,17 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         thisAddress = node.getThisAddress();
         thisMember = node.getLocalMember();
         setMembers(thisMember);
+        sendMembershipEvents(Collections.<MemberImpl>emptySet(), Collections.singleton(thisMember));
         waitMillisBeforeJoin = node.groupProperties.WAIT_SECONDS_BEFORE_JOIN.getInteger() * 1000L;
         maxWaitMillisBeforeJoin = node.groupProperties.MAX_WAIT_SECONDS_BEFORE_JOIN.getInteger() * 1000L;
-        long heartbeatIntervalSeconds = node.groupProperties.HEARTBEAT_INTERVAL_SECONDS.getInteger();
-        heartbeatIntervalSeconds = heartbeatIntervalSeconds <= 0 ? 1 : heartbeatIntervalSeconds;
-        heartbeatInterval = heartbeatIntervalSeconds;
         maxNoHeartbeatMillis = node.groupProperties.MAX_NO_HEARTBEAT_SECONDS.getInteger() * 1000L;
         maxNoMasterConfirmationMillis = node.groupProperties.MAX_NO_MASTER_CONFIRMATION_SECONDS.getInteger() * 1000L;
         icmpEnabled = node.groupProperties.ICMP_ENABLED.getBoolean();
         icmpTtl = node.groupProperties.ICMP_TTL.getInteger();
         icmpTimeout = node.groupProperties.ICMP_TIMEOUT.getInteger();
+        long heartbeatInterval = node.groupProperties.HEARTBEAT_INTERVAL_SECONDS.getInteger();
+        heartbeatIntervalMillis = heartbeatInterval > 0 ? heartbeatInterval * 1000L : 1000L;
+        pingIntervalMillis = heartbeatIntervalMillis * 10;
         node.connectionManager.addConnectionListener(this);
 
         registerMetrics();
@@ -244,7 +245,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
             public void run() {
                 heartBeater();
             }
-        }, heartbeatInterval, heartbeatInterval, TimeUnit.SECONDS);
+        }, heartbeatIntervalMillis, heartbeatIntervalMillis, TimeUnit.MILLISECONDS);
 
         long masterConfirmationInterval = node.groupProperties.MASTER_CONFIRMATION_INTERVAL_SECONDS.getInteger();
         masterConfirmationInterval = masterConfirmationInterval <= 0 ? 1 : masterConfirmationInterval;
@@ -276,18 +277,6 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }
     }
 
-    public JoinRequest checkJoinInfo(Address target) {
-        Future f = nodeEngine.getOperationService().createInvocationBuilder(SERVICE_NAME,
-                new JoinCheckOperation(node.createJoinRequest()), target)
-                .setTryCount(1).invoke();
-        try {
-            return (JoinRequest) nodeEngine.toObject(f.get());
-        } catch (Exception e) {
-            logger.warning("Error during join check!", e);
-        }
-        return null;
-    }
-
     public boolean validateJoinMessage(JoinMessage joinMessage) throws Exception {
         boolean valid = Packet.VERSION == joinMessage.getPacketVersion();
         if (valid) {
@@ -317,12 +306,18 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     private void logIfConnectionToEndpointIsMissing(long now, MemberImpl member) {
-        if ((now - member.getLastRead()) >= PING_INTERVAL && (now - member.getLastPing()) >= PING_INTERVAL) {
+        long heartbeatTime = getHeartbeatTime(member);
+        if ((now - heartbeatTime) >= pingIntervalMillis) {
             Connection conn = node.connectionManager.getOrConnect(member.getAddress());
             if (conn == null || !conn.isAlive()) {
                 logger.warning("This node does not have a connection to " + member);
             }
         }
+    }
+
+    private long getHeartbeatTime(MemberImpl member) {
+        Long heartbeatTime = heartbeatTimes.get(member);
+        return heartbeatTime != null ? heartbeatTime : 0L;
     }
 
     private void heartBeater() {
@@ -337,7 +332,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
          */
         long clockJump = 0L;
         if (lastHeartBeat != 0L) {
-            clockJump = now - lastHeartBeat - TimeUnit.SECONDS.toMillis(heartbeatInterval);
+            clockJump = now - lastHeartBeat - heartbeatIntervalMillis;
             if (Math.abs(clockJump) > HEARTBEAT_LOG_THRESHOLD) {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
                 logger.info("System clock apparently jumped from " + sdf.format(new Date(lastHeartBeat)) + " to " +
@@ -377,7 +372,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
                     }
 
                     pingMemberIfRequired(now, member);
-                    sendHearBeatIfRequired(now, member);
+                    sendHeartbeat(member.getAddress());
                 } catch (Throwable e) {
                     logger.severe(e);
                 }
@@ -386,21 +381,28 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     private boolean removeMemberIfNotHeartBeating(long now, MemberImpl member) {
-        if ((now - member.getLastRead()) > maxNoHeartbeatMillis) {
+        long heartbeatTime = getHeartbeatTime(member);
+        if ((now - heartbeatTime) > maxNoHeartbeatMillis) {
             logger.warning("Removing " + member + " because it has not sent any heartbeats for " +
-                    maxNoHeartbeatMillis + " ms.");
+                    maxNoHeartbeatMillis + " ms. Last heartbeat time was " + new Date(heartbeatTime));
             removeAddress(member.getAddress());
             return true;
+        }
+        if (logger.isFinestEnabled() && (now - heartbeatTime) > heartbeatIntervalMillis * 10) {
+            logger.finest("Not receiving any heartbeats from " + member + " since " + new Date(heartbeatTime));
         }
         return false;
     }
 
     private boolean removeMemberIfMasterConfirmationExpired(long now, MemberImpl member) {
         Long lastConfirmation = masterConfirmationTimes.get(member);
-        if (lastConfirmation == null ||
-                (now - lastConfirmation > maxNoMasterConfirmationMillis)) {
+        if (lastConfirmation == null) {
+            lastConfirmation = 0L;
+        }
+        if (now - lastConfirmation > maxNoMasterConfirmationMillis) {
             logger.warning("Removing " + member + " because it has not sent any master confirmation " +
-                    " for " + maxNoMasterConfirmationMillis + " ms.");
+                    " for " + maxNoMasterConfirmationMillis + " ms. Last confirmation time was "
+                    + new Date(lastConfirmation));
             removeAddress(member.getAddress());
             return true;
         }
@@ -422,7 +424,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
                     }
 
                     pingMemberIfRequired(now, member);
-                    sendHearBeatIfRequired(now, member);
+                    sendHeartbeat(member.getAddress());
                 } catch (Throwable e) {
                     logger.severe(e);
                 }
@@ -434,23 +436,16 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         return member.getAddress().equals(getMasterAddress());
     }
 
-    private void sendHearBeatIfRequired(long now, MemberImpl member) {
-        if ((now - member.getLastWrite()) > HEARTBEAT_INTERVAL) {
-            sendHeartbeat(member.getAddress());
-        }
-    }
-
     private void pingMemberIfRequired(long now, MemberImpl member) {
-        if ((now - member.getLastRead()) >= PING_INTERVAL && (now - member.getLastPing()) >= PING_INTERVAL) {
+        if (!icmpEnabled) {
+            return;
+        }
+        if ((now - getHeartbeatTime(member)) >= pingIntervalMillis) {
             ping(member);
         }
     }
 
     private void ping(final MemberImpl memberImpl) {
-        memberImpl.didPing();
-        if (!icmpEnabled) {
-            return;
-        }
         nodeEngine.getExecutionService().execute(ExecutionService.SYSTEM_EXECUTOR, new Runnable() {
             public void run() {
                 try {
@@ -477,9 +472,11 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     private void sendHeartbeat(Address target) {
-        if (target == null) return;
+        if (target == null) {
+            return;
+        }
         try {
-            node.nodeEngine.getOperationService().send(new HeartbeatOperation(), target);
+            node.nodeEngine.getOperationService().send(new HeartbeatOperation(clusterClock.getClusterTime()), target);
         } catch (Exception e) {
             if (logger.isFinestEnabled()) {
                 logger.finest("Error while sending heartbeat -> "
@@ -488,7 +485,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }
     }
 
-    private void sendMasterConfirmation() {
+    public void sendMasterConfirmation() {
         if (!node.joined() || !node.isActive() || isMaster()) {
             return;
         }
@@ -505,14 +502,15 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         if (logger.isFinestEnabled()) {
             logger.finest("Sending MasterConfirmation to " + masterMember);
         }
-        nodeEngine.getOperationService().send(new MasterConfirmationOperation(), masterAddress);
+        nodeEngine.getOperationService().send(new MasterConfirmationOperation(clusterClock.getClusterTime()), masterAddress);
     }
 
     // Will be called just before this node becomes the master
     private void resetMemberMasterConfirmations() {
-        final Collection<MemberImpl> memberList = getMemberList();
+        long now = Clock.currentTimeMillis();
+        Collection<MemberImpl> memberList = getMemberList();
         for (MemberImpl member : memberList) {
-            masterConfirmationTimes.put(member, Clock.currentTimeMillis());
+            masterConfirmationTimes.put(member, now);
         }
     }
 
@@ -567,7 +565,6 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
             }
             if (node.isMaster()) {
                 setJoins.remove(new MemberInfo(deadAddress));
-                resetMemberMasterConfirmations();
             }
             final Connection conn = node.connectionManager.getConnection(deadAddress);
             if (destroyConnection && conn != null) {
@@ -613,18 +610,28 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         } else {
             node.setMasterAddress(null);
         }
+
         if (logger.isFinestEnabled()) {
             logger.finest("Now Master " + node.getMasterAddress());
         }
+
+        if (node.isMaster()) {
+            resetMemberMasterConfirmations();
+            clusterClock.reset();
+        } else {
+            sendMasterConfirmation();
+        }
     }
 
-    public void answerMasterQuestion(JoinMessage joinMessage) {
+    public void answerMasterQuestion(JoinMessage joinMessage, Connection connection) {
         if (!ensureValidConfiguration(joinMessage)) {
             return;
         }
 
         if (node.getMasterAddress() != null) {
-            sendMasterAnswer(joinMessage.getAddress());
+            if (!checkIfJoinRequestFromAnExistingMember(joinMessage, connection)) {
+                sendMasterAnswer(joinMessage.getAddress());
+            }
         } else {
             if (logger.isFinestEnabled()) {
                 logger.finest("Received a master question from " + joinMessage.getAddress()
@@ -664,7 +671,7 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
         lock.lock();
         try {
-            if (isJoinRequestFromAnExistingMember(joinRequest, connection)) {
+            if (checkIfJoinRequestFromAnExistingMember(joinRequest, connection)) {
                 return;
             }
 
@@ -767,17 +774,17 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }
     }
 
-    private boolean isJoinRequestFromAnExistingMember(JoinRequest joinRequest, Connection connection) {
-        MemberImpl member = getMember(joinRequest.getAddress());
+    private boolean checkIfJoinRequestFromAnExistingMember(JoinMessage joinMessage, Connection connection) {
+        MemberImpl member = getMember(joinMessage.getAddress());
         if (member == null) {
             return false;
         }
 
         Address target = member.getAddress();
-        if (joinRequest.getUuid().equals(member.getUuid())) {
+        if (joinMessage.getUuid().equals(member.getUuid())) {
             if (node.isMaster()) {
                 if (logger.isFinestEnabled()) {
-                    String message = "Ignoring join request, member already exists.. => " + joinRequest;
+                    String message = "Ignoring join request, member already exists.. => " + joinMessage;
                     logger.finest(message);
                 }
                 // send members update back to node trying to join again...
@@ -880,10 +887,16 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }
     }
 
-    public void acceptMasterConfirmation(MemberImpl member) {
+    public void acceptMasterConfirmation(MemberImpl member, long timestamp) {
         if (member != null) {
             if (logger.isFinestEnabled()) {
                 logger.finest("MasterConfirmation has been received from " + member);
+            }
+            long clusterTime = clusterClock.getClusterTime();
+            if (clusterTime - timestamp > maxNoMasterConfirmationMillis / 2) {
+                logger.warning("Ignoring master confirmation from " + member + ", since it's expired."
+                                + " Now: " + new Date(clusterTime) + ", Timestamp: " + new Date(timestamp));
+                return;
             }
             masterConfirmationTimes.put(member, Clock.currentTimeMillis());
         }
@@ -899,51 +912,11 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }, 10, TimeUnit.SECONDS);
     }
 
-    public void merge(Address newTargetAddress) {
+    public void merge(final Address newTargetAddress) {
         if (preparingToMerge.compareAndSet(true, false)) {
             node.getJoiner().setTargetAddress(newTargetAddress);
-            final LifecycleServiceImpl lifecycleService = node.hazelcastInstance.getLifecycleService();
-            lifecycleService.runUnderLifecycleLock(new Runnable() {
-                public void run() {
-                    lifecycleService.fireLifecycleEvent(MERGING);
-                    final NodeEngineImpl nodeEngine = node.nodeEngine;
-                    final Collection<SplitBrainHandlerService> services = nodeEngine
-                            .getServices(SplitBrainHandlerService.class);
-                    final Collection<Runnable> tasks = new LinkedList<Runnable>();
-                    for (SplitBrainHandlerService service : services) {
-                        final Runnable runnable = service.prepareMergeRunnable();
-                        if (runnable != null) {
-                            tasks.add(runnable);
-                        }
-                    }
-                    final Collection<ManagedService> managedServices = nodeEngine.getServices(ManagedService.class);
-                    for (ManagedService service : managedServices) {
-                        service.reset();
-                    }
-                    node.onRestart();
-                    node.nodeEngine.reset();
-                    node.connectionManager.restart();
-                    node.rejoin();
-                    final Collection<Future> futures = new LinkedList<Future>();
-                    for (Runnable task : tasks) {
-                        Future f = nodeEngine.getExecutionService().submit("hz:system", task);
-                        futures.add(f);
-                    }
-                    long callTimeout = node.groupProperties.OPERATION_CALL_TIMEOUT_MILLIS.getLong();
-                    for (Future f : futures) {
-                        try {
-                            waitOnFutureInterruptible(f, callTimeout, TimeUnit.MILLISECONDS);
-                        } catch (HazelcastInstanceNotActiveException e) {
-                            EmptyStatement.ignore(e);
-                        } catch (Exception e) {
-                            logger.severe("While merging...", e);
-                        }
-                    }
-                    if (node.isActive() && node.joined()) {
-                        lifecycleService.fireLifecycleEvent(MERGED);
-                    }
-                }
-            });
+            LifecycleServiceImpl lifecycleService = node.hazelcastInstance.getLifecycleService();
+            lifecycleService.runUnderLifecycleLock(new MergeTask());
         }
     }
 
@@ -1062,21 +1035,26 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
                 return;
             }
 
-            MemberImpl[] newMembers = new MemberImpl[members.size()];
+            MemberImpl[] updatedMembers = new MemberImpl[members.size()];
+            Collection<MemberImpl> newMembers = new LinkedList<MemberImpl>();
             int k = 0;
             for (MemberInfo memberInfo : members) {
                 MemberImpl member = currentMemberMap.get(memberInfo.getAddress());
                 if (member == null) {
                     member = createMember(memberInfo.getAddress(), memberInfo.getUuid(),
                             thisAddress.getScopeId(), memberInfo.getAttributes());
+
+                    newMembers.add(member);
+                    long now = Clock.currentTimeMillis();
+                    onHeartbeat(member, now);
+                    masterConfirmationTimes.put(member, now);
                 }
-                newMembers[k++] = member;
-                member.didRead();
+                updatedMembers[k++] = member;
             }
-            setMembers(newMembers);
-            if (!getMemberList().contains(thisMember)) {
-                throw new HazelcastException("Member list doesn't contain local member!");
-            }
+
+            setMembers(updatedMembers);
+            sendMembershipEvents(currentMemberMap.values(), newMembers);
+
             joinReset();
             heartBeater();
             node.setJoined();
@@ -1125,6 +1103,30 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         }
     }
 
+    private void sendMembershipEvents(Collection<MemberImpl> currentMembers, Collection<MemberImpl> newMembers) {
+        Set<Member> eventMembers = new LinkedHashSet<Member>(currentMembers);
+        if (!newMembers.isEmpty()) {
+            if (newMembers.size() == 1) {
+                MemberImpl newMember = newMembers.iterator().next();
+                // sync call
+                node.getPartitionService().memberAdded(newMember);
+
+                // async events
+                eventMembers.add(newMember);
+                sendMembershipEventNotifications(newMember, unmodifiableSet(eventMembers), true);
+            } else {
+                for (MemberImpl newMember : newMembers) {
+                    // sync call
+                    node.getPartitionService().memberAdded(newMember);
+
+                    // async events
+                    eventMembers.add(newMember);
+                    sendMembershipEventNotifications(newMember, unmodifiableSet(new LinkedHashSet<Member>(eventMembers)), true);
+                }
+            }
+        }
+    }
+
     public void updateMemberAttribute(String uuid, MemberAttributeOperationType operationType, String key, Object value) {
         lock.lock();
         try {
@@ -1156,15 +1158,27 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
 
         BuildInfo buildInfo = node.getBuildInfo();
         JoinMessage joinMessage = new JoinMessage(Packet.VERSION, buildInfo.getBuildNumber(), thisAddress,
-                thisMember.getUuid(), node.createConfigCheck(), getSize());
+                thisMember.getUuid(), node.createConfigCheck());
         return nodeEngine.getOperationService().send(new MasterDiscoveryOperation(joinMessage), toAddress);
     }
 
     @Override
-    public void connectionAdded(final Connection connection) {
-        MemberImpl member = getMember(connection.getEndPoint());
+    public void connectionAdded(Connection connection) {
+    }
+
+    public void onHeartbeat(MemberImpl member, long timestamp) {
         if (member != null) {
-            member.didRead();
+            long clusterTime = clusterClock.getClusterTime();
+            if (clusterTime - timestamp > maxNoHeartbeatMillis / 2) {
+                logger.warning("Ignoring heartbeat from " + member
+                        + ", since it's expired. Now: " + new Date(clusterTime)
+                        + ", Timestamp: " + new Date(timestamp));
+                return;
+            }
+            if (isMaster(member)) {
+                clusterClock.setMasterTime(timestamp);
+            }
+            heartbeatTimes.put(member, timestamp);
         }
     }
 
@@ -1191,40 +1205,19 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
     }
 
     private void setMembers(MemberImpl... members) {
-        if (members == null || members.length == 0) return;
+        if (members == null || members.length == 0) {
+            return;
+        }
         if (logger.isFinestEnabled()) {
             logger.finest("Updating members -> " + Arrays.toString(members));
         }
         lock.lock();
         try {
-            Map<Address, MemberImpl> oldMemberMap = membersMapRef.get();
             final Map<Address, MemberImpl> memberMap = new LinkedHashMap<Address, MemberImpl>();  // ! ORDERED !
-            final Collection<MemberImpl> newMembers = new LinkedList<MemberImpl>();
             for (MemberImpl member : members) {
-                MemberImpl currentMember = oldMemberMap.get(member.getAddress());
-                if (currentMember == null) {
-                    newMembers.add(member);
-                    masterConfirmationTimes.put(member, Clock.currentTimeMillis());
-                }
                 memberMap.put(member.getAddress(), member);
             }
             setMembersRef(memberMap);
-
-            if (!newMembers.isEmpty()) {
-                Set<Member> eventMembers = new LinkedHashSet<Member>(oldMemberMap.values());
-                if (newMembers.size() == 1) {
-                    MemberImpl newMember = newMembers.iterator().next();
-                    node.getPartitionService().memberAdded(newMember); // sync call
-                    eventMembers.add(newMember);
-                    sendMembershipEventNotifications(newMember, unmodifiableSet(eventMembers), true); // async events
-                } else {
-                    for (MemberImpl newMember : newMembers) {
-                        node.getPartitionService().memberAdded(newMember); // sync call
-                        eventMembers.add(newMember);
-                        sendMembershipEventNotifications(newMember, unmodifiableSet(new LinkedHashSet<Member>(eventMembers)), true); // async events
-                    }
-                }
-            }
         } finally {
             lock.unlock();
         }
@@ -1361,6 +1354,11 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         return membersRef.get();
     }
 
+    public Collection<Address> getMemberAddresses() {
+        Map<Address, MemberImpl> map = membersMapRef.get();
+        return map.keySet();
+    }
+
     @Override
     public Set<Member> getMembers() {
         return (Set) membersRef.get();
@@ -1468,5 +1466,91 @@ public final class ClusterServiceImpl implements ClusterService, ConnectionListe
         sb.append("{address=").append(thisAddress);
         sb.append('}');
         return sb.toString();
+    }
+
+    private class MergeTask implements Runnable {
+
+        public void run() {
+            LifecycleServiceImpl lifecycleService = node.hazelcastInstance.getLifecycleService();
+            lifecycleService.fireLifecycleEvent(MERGING);
+
+            resetState();
+
+            Collection<Runnable> tasks = collectMergeTasks();
+
+            resetServices();
+
+            rejoin();
+
+            executeMergeTasks(tasks);
+
+            if (node.isActive() && node.joined()) {
+                lifecycleService.fireLifecycleEvent(MERGED);
+            }
+        }
+
+        private void resetState() {
+            // reset node and membership state
+            // from now on this node won't be joined
+            // and won't have a master address
+            node.reset();
+            ClusterServiceImpl.this.reset();
+            // stop the connection-manager
+            // all socket connections will be closed
+            // connection listening thread will stop
+            // and no new connection will be established
+            node.connectionManager.stop();
+
+            // clear waiting operations in queue
+            // and notify invocations to retry
+            nodeEngine.reset();
+        }
+
+        private Collection<Runnable> collectMergeTasks() {
+            // gather merge tasks from services
+            Collection<SplitBrainHandlerService> services = nodeEngine.getServices(SplitBrainHandlerService.class);
+            Collection<Runnable> tasks = new LinkedList<Runnable>();
+            for (SplitBrainHandlerService service : services) {
+                final Runnable runnable = service.prepareMergeRunnable();
+                if (runnable != null) {
+                    tasks.add(runnable);
+                }
+            }
+            return tasks;
+        }
+
+        private void resetServices() {
+            // reset all services to their initial state
+            Collection<ManagedService> managedServices = nodeEngine.getServices(ManagedService.class);
+            for (ManagedService service : managedServices) {
+                service.reset();
+            }
+        }
+
+        private void rejoin() {
+            // start connection-manager to setup and accept new connections
+            node.connectionManager.start();
+            // re-join to the target cluster
+            node.rejoin();
+        }
+
+        private void executeMergeTasks(Collection<Runnable> tasks) {
+            // execute merge tasks
+            Collection<Future> futures = new LinkedList<Future>();
+            for (Runnable task : tasks) {
+                Future f = nodeEngine.getExecutionService().submit("hz:system", task);
+                futures.add(f);
+            }
+            long callTimeout = node.groupProperties.OPERATION_CALL_TIMEOUT_MILLIS.getLong();
+            for (Future f : futures) {
+                try {
+                    waitOnFutureInterruptible(f, callTimeout, TimeUnit.MILLISECONDS);
+                } catch (HazelcastInstanceNotActiveException e) {
+                    EmptyStatement.ignore(e);
+                } catch (Exception e) {
+                    logger.severe("While merging...", e);
+                }
+            }
+        }
     }
 }

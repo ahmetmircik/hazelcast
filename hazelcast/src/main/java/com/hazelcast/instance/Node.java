@@ -20,6 +20,7 @@ import com.hazelcast.client.impl.ClientEngineImpl;
 import com.hazelcast.cluster.Joiner;
 import com.hazelcast.cluster.impl.ClusterServiceImpl;
 import com.hazelcast.cluster.impl.ConfigCheck;
+import com.hazelcast.cluster.impl.JoinMessage;
 import com.hazelcast.cluster.impl.JoinRequest;
 import com.hazelcast.cluster.impl.MulticastJoiner;
 import com.hazelcast.cluster.impl.MulticastService;
@@ -36,7 +37,6 @@ import com.hazelcast.core.HazelcastInstanceAware;
 import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.core.MembershipListener;
 import com.hazelcast.core.MigrationListener;
-import com.hazelcast.partition.PartitionLostListener;
 import com.hazelcast.internal.ascii.TextCommandService;
 import com.hazelcast.internal.ascii.TextCommandServiceImpl;
 import com.hazelcast.internal.management.ManagementCenterService;
@@ -48,6 +48,7 @@ import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.partition.InternalPartitionService;
+import com.hazelcast.partition.PartitionLostListener;
 import com.hazelcast.partition.impl.InternalPartitionServiceImpl;
 import com.hazelcast.security.Credentials;
 import com.hazelcast.security.SecurityContext;
@@ -91,7 +92,7 @@ public class Node {
 
     public final ClientEngineImpl clientEngine;
 
-    public final InternalPartitionService partitionService;
+    public final InternalPartitionServiceImpl partitionService;
 
     public final ClusterServiceImpl clusterService;
 
@@ -378,14 +379,17 @@ public class Node {
         }
     }
 
-    public void onRestart() {
+    /**
+     * Resets the internal cluster-state of the Node to be able to make it ready to join a new cluster.
+     * After this method is called,
+     * a new join process can be triggered by calling {@link #rejoin()}.
+     * <p/>
+     * This method is called during merge process after a split-brain is detected.
+     */
+    public void reset() {
+        setMasterAddress(null);
         joined.set(false);
         joiner.reset();
-        final String uuid = createMemberUuid(address);
-        if (logger.isFinestEnabled()) {
-            logger.finest("Generated new UUID for local member: " + uuid);
-        }
-        localMember.setUuid(uuid);
     }
 
     public ILogger getLogger(String name) {
@@ -451,8 +455,9 @@ public class Node {
         joined.set(true);
     }
 
-    public JoinRequest createJoinRequest() {
-        return createJoinRequest(false);
+    public JoinMessage createSplitBrainJoinMessage() {
+        return new JoinMessage(Packet.VERSION, buildInfo.getBuildNumber(), address, localMember.getUuid(),
+                createConfigCheck(), clusterService.getMemberAddresses());
     }
 
     public JoinRequest createJoinRequest(boolean withCredentials) {
@@ -460,7 +465,7 @@ public class Node {
                 ? securityContext.getCredentialsFactory().newCredentials() : null;
 
         return new JoinRequest(Packet.VERSION, buildInfo.getBuildNumber(), address,
-                localMember.getUuid(), createConfigCheck(), credentials, clusterService.getSize(), 0,
+                localMember.getUuid(), createConfigCheck(), credentials,
                 config.getMemberAttributeConfig().getAttributes());
     }
 

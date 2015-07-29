@@ -16,6 +16,7 @@
 
 package com.hazelcast.spi.impl.operationservice.impl;
 
+import com.hazelcast.cluster.ClusterClock;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.instance.MemberImpl;
@@ -64,6 +65,7 @@ import static com.hazelcast.spi.InvocationBuilder.DEFAULT_TRY_COUNT;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static com.hazelcast.util.Preconditions.checkTrue;
+import static com.hazelcast.spi.impl.operationutil.Operations.isJoinOperation;
 
 /**
  * This is the implementation of the {@link com.hazelcast.spi.impl.operationservice.InternalOperationService}.
@@ -315,19 +317,14 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
                 DEFAULT_CALL_TIMEOUT, callback, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public <V> void asyncInvokeOnTarget(String serviceName, Operation op, Address target, ExecutionCallback<V> callback) {
-        new TargetInvocation(nodeEngine, serviceName, op, target, DEFAULT_TRY_COUNT,
-                DEFAULT_TRY_PAUSE_MILLIS,
-                DEFAULT_CALL_TIMEOUT, callback, DEFAULT_DESERIALIZE_RESULT).invokeAsync();
-    }
-
     // =============================== processing operation  ===============================
 
     @Override
     public boolean isCallTimedOut(Operation op) {
-        if (!op.returnsResponse() || op.getCallId() == 0) {
+        // Join operations should not be checked for timeout
+        // because caller is not member of this cluster
+        // and can have a different clock.
+        if (!op.returnsResponse() || isJoinOperation(op)) {
             return false;
         }
 
@@ -339,7 +336,8 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
             return false;
         }
 
-        long now = nodeEngine.getClusterService().getClusterClock().getClusterTime();
+        ClusterClock clusterClock = nodeEngine.getClusterService().getClusterClock();
+        long now = clusterClock.getClusterTime();
         if (expireTime < now) {
             return true;
         }

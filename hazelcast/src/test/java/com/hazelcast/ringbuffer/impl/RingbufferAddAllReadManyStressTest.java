@@ -4,23 +4,31 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.config.RingbufferConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 import com.hazelcast.ringbuffer.ReadResultSet;
 import com.hazelcast.ringbuffer.Ringbuffer;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestThread;
 import com.hazelcast.test.annotation.NightlyTest;
+import org.apache.log4j.Level;
+import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
 import java.util.LinkedList;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.ringbuffer.OverflowPolicy.FAIL;
 import static java.lang.Math.max;
+import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
@@ -31,9 +39,16 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
     private final AtomicBoolean stop = new AtomicBoolean();
     private Ringbuffer<Long> ringbuffer;
 
+    @After
+    public void tearDown() {
+        if (ringbuffer != null) {
+            ringbuffer.destroy();
+        }
+    }
+
     @Test
     public void whenNoTTL() throws Exception {
-        RingbufferConfig ringbufferConfig = new RingbufferConfig("foo")
+        RingbufferConfig ringbufferConfig = new RingbufferConfig("rb")
                 .setCapacity(20 * 1000 * 1000)
                 .setInMemoryFormat(InMemoryFormat.OBJECT)
                 .setTimeToLiveSeconds(0);
@@ -42,7 +57,7 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
 
     @Test
     public void whenTTLEnabled() throws Exception {
-        RingbufferConfig ringbufferConfig = new RingbufferConfig("foo")
+        RingbufferConfig ringbufferConfig = new RingbufferConfig("rb")
                 .setCapacity(200 * 1000)
                 .setTimeToLiveSeconds(2);
         test(ringbufferConfig);
@@ -50,7 +65,7 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
 
     @Test
     public void whenLongTTLAndSmallBuffer() throws Exception {
-        RingbufferConfig ringbufferConfig = new RingbufferConfig("foo")
+        RingbufferConfig ringbufferConfig = new RingbufferConfig("rb")
                 .setCapacity(1000)
                 .setTimeToLiveSeconds(30);
         test(ringbufferConfig);
@@ -58,7 +73,8 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
 
     @Test
     public void whenShortTTLAndBigBuffer() throws Exception {
-        RingbufferConfig ringbufferConfig = new RingbufferConfig("foo")
+
+        RingbufferConfig ringbufferConfig = new RingbufferConfig("rb")
                 .setInMemoryFormat(InMemoryFormat.OBJECT)
                 .setCapacity(20 * 1000 * 1000)
                 .setTimeToLiveSeconds(2);
@@ -83,7 +99,7 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
         ProduceThread producer = new ProduceThread();
         producer.start();
 
-        sleepAndStop(stop, 5 * 60);
+        sleepAndStop(stop, 60);
         System.out.println("Waiting fo completion");
 
         producer.assertSucceedsEventually();
@@ -97,7 +113,10 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
     }
 
     class ProduceThread extends TestThread {
+        private final ILogger logger = Logger.getLogger(ProduceThread.class);
         private volatile long produced;
+        long lastLogMs = 0;
+
 
         public ProduceThread() {
             super("ProduceThread");
@@ -123,26 +142,29 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
         private LinkedList<Long> makeBatch(Random random) {
             int count = max(1, random.nextInt(MAX_BATCH));
             LinkedList<Long> items = new LinkedList<Long>();
+
             for (int k = 0; k < count; k++) {
                 items.add(produced);
                 produced++;
 
-                if (produced % 100000 == 0) {
-                    System.out.println(getName() + " at " + produced);
+                long currentTimeMs = currentTimeMillis();
+                if (lastLogMs + SECONDS.toMillis(5) < currentTimeMs) {
+                    lastLogMs = currentTimeMs;
+                    logger.info(getName() + " at " + produced);
                 }
             }
             return items;
         }
 
-        private void addAll(LinkedList<Long> items) throws InterruptedException, java.util.concurrent.ExecutionException {
+        private void addAll(LinkedList<Long> items) throws InterruptedException, ExecutionException {
             long sleepMs = 100;
             for (; ; ) {
                 long result = ringbuffer.addAllAsync(items, FAIL).get();
                 if (result != -1) {
                     break;
                 }
-                System.out.println("Backoff");
-                TimeUnit.MILLISECONDS.sleep(sleepMs);
+                logger.info("Backoff");
+                MILLISECONDS.sleep(sleepMs);
                 sleepMs = sleepMs * 2;
                 if (sleepMs > 1000) {
                     sleepMs = 1000;
@@ -152,7 +174,9 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
     }
 
     class ConsumeThread extends TestThread {
+        private final ILogger logger = Logger.getLogger(ConsumeThread.class);
         volatile long seq;
+        long lastLogMs = 0;
 
         public ConsumeThread(int id) {
             super("ConsumeThread-" + id);
@@ -178,11 +202,13 @@ public class RingbufferAddAllReadManyStressTest extends HazelcastTestSupport {
                     }
 
                     assertEquals(new Long(seq), item);
-                    seq++;
 
-                    if (seq % 100000 == 0) {
-                        System.out.println(getName() + " at " + seq);
+                    long currentTimeMs = currentTimeMillis();
+                    if (lastLogMs + SECONDS.toMillis(5) < currentTimeMs) {
+                        lastLogMs = currentTimeMs;
+                        logger.info(getName() + " at " + seq);
                     }
+                    seq++;
                 }
             }
         }
