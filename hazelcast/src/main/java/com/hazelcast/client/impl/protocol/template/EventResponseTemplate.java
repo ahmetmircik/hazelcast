@@ -23,10 +23,10 @@ import com.hazelcast.cache.impl.CacheEventData;
 import com.hazelcast.client.impl.protocol.EventMessageConst;
 import com.hazelcast.cluster.client.MemberAttributeChange;
 import com.hazelcast.core.Member;
+import com.hazelcast.map.impl.querycache.event.QueryCacheEventData;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -42,12 +42,12 @@ public interface EventResponseTemplate {
     @EventResponse(EventMessageConst.EVENT_MEMBERATTRIBUTECHANGE)
     void MemberAttributeChange(MemberAttributeChange memberAttributeChange);
 
-    @EventResponse(EventMessageConst.EVENT_MEMBERLIST)
-    void MemberList(Collection<Member> members);
+    @EventResponse(EventMessageConst.EVENT_MEMBERSET)
+    void MemberSet(Set<Member> members);
 
     @EventResponse(EventMessageConst.EVENT_ENTRY)
-    void Entry(@Nullable Data key, @Nullable Data value, @Nullable Data oldValue, @Nullable Data mergingValue,
-               int eventType, String uuid, int numberOfAffectedEntries);
+    void Entry(@Nullable Data key, @Nullable Data value, @Nullable Data oldValue, @Nullable Data mergingValue, int eventType,
+               String uuid, int numberOfAffectedEntries);
 
     @EventResponse(EventMessageConst.EVENT_ITEM)
     void Item(@Nullable Data item, String uuid, int eventType);
@@ -72,5 +72,12 @@ public interface EventResponseTemplate {
 
     @EventResponse(EventMessageConst.EVENT_CACHE)
     void Cache(int type, Set<CacheEventData> keys, int completionId);
+
+    @EventResponse(EventMessageConst.EVENT_QUERYCACHESINGLE)
+    void QueryCacheSingle(QueryCacheEventData data);
+
+    @EventResponse(EventMessageConst.EVENT_QUERYCACHEBATCH)
+    void QueryCacheBatch(List<QueryCacheEventData> events, String source, int partitionId);
+
 
 }

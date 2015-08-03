@@ -730,6 +730,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         if (key == null || value == null) {
             return;
         }
+        value = mapServiceContext.interceptGet(name, value);
         final Data dataKey = mapServiceContext.toData(key);
         final Data dataValue = mapServiceContext.toData(value);
         mapEntrySet.add(dataKey, dataValue);

@@ -63,6 +63,7 @@ import com.hazelcast.client.impl.protocol.codec.MapRemoveCodec;
 import com.hazelcast.client.impl.protocol.codec.MapRemoveEntryListenerCodec;
 import com.hazelcast.client.impl.protocol.codec.MapRemoveIfSameCodec;
 import com.hazelcast.client.impl.protocol.codec.MapRemoveInterceptorCodec;
+import com.hazelcast.client.impl.protocol.codec.MapRemovePartitionLostListenerCodec;
 import com.hazelcast.client.impl.protocol.codec.MapReplaceCodec;
 import com.hazelcast.client.impl.protocol.codec.MapReplaceIfSameCodec;
 import com.hazelcast.client.impl.protocol.codec.MapSetCodec;
@@ -77,10 +78,12 @@ import com.hazelcast.client.impl.protocol.codec.MapValuesWithPagingPredicateCode
 import com.hazelcast.client.impl.protocol.codec.MapValuesWithPredicateCodec;
 import com.hazelcast.client.nearcache.ClientHeapNearCache;
 import com.hazelcast.client.nearcache.ClientNearCache;
+import com.hazelcast.client.spi.ClientListenerService;
 import com.hazelcast.client.spi.ClientProxy;
 import com.hazelcast.client.spi.EventHandler;
 import com.hazelcast.client.spi.impl.ClientInvocation;
 import com.hazelcast.client.spi.impl.ClientInvocationFuture;
+import com.hazelcast.client.spi.impl.ListenerRemoveCodec;
 import com.hazelcast.client.util.ClientDelegatingFuture;
 import com.hazelcast.config.NearCacheConfig;
 import com.hazelcast.core.EntryEvent;
@@ -629,9 +632,18 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
     }
 
     @Override
-    public boolean removeEntryListener(String id) {
-        ClientMessage request = MapRemoveEntryListenerCodec.encodeRequest(name, id);
-        return stopListening(request, id);
+    public boolean removeEntryListener(String registrationId) {
+        return stopListening(registrationId, new ListenerRemoveCodec() {
+            @Override
+            public ClientMessage encodeRequest(String realRegistrationId) {
+                return MapRemoveEntryListenerCodec.encodeRequest(name, realRegistrationId);
+            }
+
+            @Override
+            public boolean decodeResponse(ClientMessage clientMessage) {
+                return MapRemoveEntryListenerCodec.decodeResponse(clientMessage).response;
+            }
+        });
     }
 
     @Override
@@ -642,9 +654,18 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
     }
 
     @Override
-    public boolean removePartitionLostListener(String id) {
-        ClientMessage request = MapRemoveEntryListenerCodec.encodeRequest(name, id);
-        return stopListening(request, id);
+    public boolean removePartitionLostListener(String registrationId) {
+        return stopListening(registrationId, new ListenerRemoveCodec() {
+            @Override
+            public ClientMessage encodeRequest(String realRegistrationId) {
+                return MapRemovePartitionLostListenerCodec.encodeRequest(name, realRegistrationId);
+            }
+
+            @Override
+            public boolean decodeResponse(ClientMessage clientMessage) {
+                return MapRemovePartitionLostListenerCodec.decodeResponse(clientMessage).response;
+            }
+        });
     }
 
     @Override
@@ -766,7 +787,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         if (keys.isEmpty()) {
             return;
         }
-        final List<Data> dataKeys = convertKeysToData(keys);
+        final Set<Data> dataKeys = convertKeysToData(keys);
         if (replaceExistingValues) {
             invalidateNearCache(dataKeys);
         }
@@ -775,11 +796,11 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
     }
 
     // todo duplicate code.
-    private <K> List<Data> convertKeysToData(Set<K> keys) {
+    private <K> Set<Data> convertKeysToData(Set<K> keys) {
         if (keys == null || keys.isEmpty()) {
-            return Collections.emptyList();
+            return Collections.emptySet();
         }
-        final List<Data> dataKeys = new ArrayList<Data>(keys.size());
+        final Set<Data> dataKeys = new HashSet<Data>(keys.size());
         for (K key : keys) {
             checkNotNull(key, NULL_KEY_IS_NOT_ALLOWED);
 
@@ -794,7 +815,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         ClientMessage request = MapKeySetCodec.encodeRequest(name);
         ClientMessage response = invoke(request);
         MapKeySetCodec.ResponseParameters resultParameters = MapKeySetCodec.decodeResponse(response);
-        Collection<Data> result = resultParameters.list;
+        Set<Data> result = resultParameters.set;
         Set<K> keySet = new HashSet<K>(result.size());
         for (Data data : result) {
             final K key = toObject(data);
@@ -830,7 +851,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         ClientMessage response = invoke(request);
         MapGetAllCodec.ResponseParameters resultParameters = MapGetAllCodec.decodeResponse(response);
 
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
 
             final V value = toObject(entry.getValue());
             final K key = toObject(entry.getKey());
@@ -864,7 +885,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         Set<Entry<K, V>> entrySet = new HashSet<Entry<K, V>>();
 
 
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             V value = toObject(entry.getValue());
             entrySet.add(new AbstractMap.SimpleEntry<K, V>(key, value));
@@ -884,7 +905,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         MapKeySetWithPredicateCodec.ResponseParameters resultParameters = MapKeySetWithPredicateCodec.decodeResponse(response);
 
         final HashSet<K> keySet = new HashSet<K>();
-        for (Data o : resultParameters.list) {
+        for (Data o : resultParameters.set) {
             final K key = toObject(o);
             keySet.add(key);
         }
@@ -899,8 +920,8 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         MapKeySetWithPagingPredicateCodec.ResponseParameters resultParameters = MapKeySetWithPagingPredicateCodec.decodeResponse(response);
 
         ArrayList<Map.Entry> resultList = new ArrayList<Map.Entry>();
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
-            K key = toObject(entry.getKey());
+        for (Data keyData : resultParameters.set) {
+            K key = toObject(keyData);
             resultList.add(new AbstractMap.SimpleImmutableEntry<K, V>(key, null));
         }
         return (Set<K>) getSortedQueryResultSet(resultList, pagingPredicate, IterationType.KEY);
@@ -918,9 +939,9 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         ClientMessage response = invoke(request);
         MapEntriesWithPredicateCodec.ResponseParameters resultParameters = MapEntriesWithPredicateCodec.decodeResponse(response);
 
-        Set entrySet = new HashSet<Entry<K, V>>(resultParameters.map.size());
+        Set entrySet = new HashSet<Entry<K, V>>(resultParameters.entrySet.size());
 
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             V value = toObject(entry.getValue());
             entrySet.add(new AbstractMap.SimpleEntry<K, V>(key, value));
@@ -937,7 +958,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         MapEntriesWithPagingPredicateCodec.ResponseParameters resultParameters = MapEntriesWithPagingPredicateCodec.decodeResponse(response);
 
         ArrayList<Map.Entry> resultList = new ArrayList<Map.Entry>();
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             V value = toObject(entry.getValue());
             resultList.add(new AbstractMap.SimpleEntry<K, V>(key, value));
@@ -971,13 +992,12 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         ClientMessage response = invoke(request);
         MapValuesWithPagingPredicateCodec.ResponseParameters resultParameters = MapValuesWithPagingPredicateCodec.decodeResponse(response);
 
-        List<Entry> resultList = new ArrayList<Entry>(resultParameters.map.size());
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        List<Entry> resultList = new ArrayList<Entry>(resultParameters.entrySet.size());
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             V value = toObject(entry.getValue());
             resultList.add(new AbstractMap.SimpleImmutableEntry<K, V>(key, value));
         }
-
         return (Collection) getSortedQueryResultSet(resultList, pagingPredicate, IterationType.VALUE);
     }
 
@@ -1048,7 +1068,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         MapExecuteOnAllKeysCodec.ResponseParameters resultParameters = MapExecuteOnAllKeysCodec.decodeResponse(response);
 
         Map<K, Object> result = new HashMap<K, Object>();
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             result.put(key, toObject(entry.getValue()));
         }
@@ -1066,7 +1086,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
 
 
         Map<K, Object> result = new HashMap<K, Object>();
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             result.put(key, toObject(entry.getValue()));
         }
@@ -1123,7 +1143,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         MapExecuteOnKeysCodec.ResponseParameters resultParameters = MapExecuteOnKeysCodec.decodeResponse(response);
 
         Map<K, Object> result = new HashMap<K, Object>();
-        for (Entry<Data, Data> entry : resultParameters.map.entrySet()) {
+        for (Entry<Data, Data> entry : resultParameters.entrySet) {
             K key = toObject(entry.getKey());
             result.put(key, toObject(entry.getValue()));
         }
@@ -1250,8 +1270,20 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
     private void removeNearCacheInvalidationListener() {
         if (nearCache != null && nearCache.getId() != null) {
             String registrationId = nearCache.getId();
-            ClientMessage request = MapRemoveEntryListenerCodec.encodeRequest(name, registrationId);
-            getContext().getListenerService().stopListening(request, registrationId);
+
+            ClientListenerService listenerService = getContext().getListenerService();
+
+            listenerService.stopListening(registrationId, new ListenerRemoveCodec() {
+                @Override
+                public ClientMessage encodeRequest(String realRegistrationId) {
+                    return MapRemoveEntryListenerCodec.encodeRequest(name, realRegistrationId);
+                }
+
+                @Override
+                public boolean decodeResponse(ClientMessage clientMessage) {
+                    return MapRemoveEntryListenerCodec.decodeResponse(clientMessage).response;
+                }
+            });
         }
     }
 
