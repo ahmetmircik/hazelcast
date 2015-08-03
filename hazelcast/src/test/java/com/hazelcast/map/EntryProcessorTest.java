@@ -75,8 +75,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testExecuteOnEntriesWithEntryListener() {
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        HazelcastInstance instance = factory.newHazelcastInstance();
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
         final IMap<String, String> map = instance.getMap("map");
         map.put("key", "value");
         final CountDownLatch latch = new CountDownLatch(1);
@@ -102,8 +101,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testExecuteOnKeysWithEntryListener() {
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        HazelcastInstance instance = factory.newHazelcastInstance();
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
         final IMap<String, String> map = instance.getMap("map");
         map.put("key", "value");
         final CountDownLatch latch = new CountDownLatch(1);
@@ -153,7 +151,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testIndexAware_Issue_1719() {
-        Config cfg = new Config();
+        Config cfg = getConfig();
         cfg.getMapConfig("test").addMapIndexConfig(new MapIndexConfig("attr1", false));
         HazelcastInstance instance = createHazelcastInstance(cfg);
         IMap<String, TempData> map = instance.getMap("test");
@@ -170,7 +168,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
      */
     @Test
     public void testExecuteOnKeysBackupOperation() {
-        Config cfg = new Config();
+        Config cfg = getConfig();
         cfg.getMapConfig("test").setBackupCount(1);
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(cfg);
@@ -204,7 +202,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
      */
     @Test
     public void testExecuteOnKeysBackupOperationIndexed() throws Exception {
-        Config cfg = new Config();
+        Config cfg = getConfig();
         cfg.getMapConfig("test").setBackupCount(1).addMapIndexConfig(new MapIndexConfig("attr1", false));
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(cfg);
@@ -234,7 +232,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
     @Test
     public void testEntryProcessorDeleteWithPredicate() {
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        Config cfg = new Config();
+        Config cfg = getConfig();
         cfg.getMapConfig("test").setBackupCount(1);
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(cfg);
         HazelcastInstance instance2 = nodeFactory.newHazelcastInstance(cfg);
@@ -264,9 +262,10 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testEntryProcessorWithKey() {
+        Config cfg = getConfig();
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance instance1 = factory.newHazelcastInstance();
-        final HazelcastInstance instance2 = factory.newHazelcastInstance();
+        final HazelcastInstance instance1 = factory.newHazelcastInstance(cfg);
+        final HazelcastInstance instance2 = factory.newHazelcastInstance(cfg);
 
         String key = generateKeyOwnedBy(instance1);
         SimpleValue simpleValue = new SimpleValue(1);
@@ -284,9 +283,10 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testEntryProcessorWithKeys() {
+        Config cfg = getConfig();
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance instance1 = factory.newHazelcastInstance();
-        final HazelcastInstance instance2 = factory.newHazelcastInstance();
+        final HazelcastInstance instance1 = factory.newHazelcastInstance(cfg);
+        final HazelcastInstance instance2 = factory.newHazelcastInstance(cfg);
 
         final IMap<Object, Object> map = instance2.getMap("map");
         final Set<Object> keys = new HashSet<Object>();
@@ -318,10 +318,10 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue2754() {
-
+        Config cfg = getConfig();
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance instance1 = factory.newHazelcastInstance();
-        final HazelcastInstance instance2 = factory.newHazelcastInstance();
+        final HazelcastInstance instance1 = factory.newHazelcastInstance(cfg);
+        final HazelcastInstance instance2 = factory.newHazelcastInstance(cfg);
 
         final IMap<Object, Object> map = instance2.getMap("map");
         Set<Object> keys = new HashSet<Object>();
@@ -348,7 +348,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
     @Test
     public void testEntryProcessorDelete() {
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        Config cfg = new Config();
+        Config cfg = getConfig();
         cfg.getMapConfig("test").setBackupCount(1);
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(cfg);
         HazelcastInstance instance2 = nodeFactory.newHazelcastInstance(cfg);
@@ -904,7 +904,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
     @Test
     public void testIssue1022() throws InterruptedException {
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        Config cfg = new Config();
+        Config cfg = getConfig();
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
         mapStoreConfig.setImplementation(new MapLoader<Integer, Integer>() {
@@ -934,8 +934,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testSubmitToKey() throws InterruptedException, ExecutionException {
-        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        HazelcastInstance instance1 = nodeFactory.newHazelcastInstance();
+        HazelcastInstance instance1 = createHazelcastInstance(getConfig());
         IMap<Integer, Integer> map = instance1.getMap("testMapEntryProcessor");
         map.put(1, 1);
         Future f = map.submitToKey(1, new IncrementorEntryProcessor());
@@ -945,8 +944,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testSubmitToNonExistentKey() throws InterruptedException, ExecutionException {
-        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        HazelcastInstance instance1 = nodeFactory.newHazelcastInstance();
+        HazelcastInstance instance1 = createHazelcastInstance(getConfig());
         IMap<Integer, Integer> map = instance1.getMap("testMapEntryProcessor");
         Future f = map.submitToKey(11, new IncrementorEntryProcessor());
         assertEquals(1, f.get());
@@ -955,8 +953,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testSubmitToKeyWithCallback() throws InterruptedException, ExecutionException {
-        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        HazelcastInstance instance1 = nodeFactory.newHazelcastInstance();
+        HazelcastInstance instance1 = createHazelcastInstance(getConfig());
         IMap<Integer, Integer> map = instance1.getMap("testMapEntryProcessor");
         map.put(1, 1);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -978,9 +975,10 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
     @Test
     public void testExecuteOnKeys() throws InterruptedException, ExecutionException {
+        Config config = getConfig();
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        HazelcastInstance instance1 = nodeFactory.newHazelcastInstance();
-        HazelcastInstance instance2 = nodeFactory.newHazelcastInstance();
+        HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(config);
+        HazelcastInstance instance2 = nodeFactory.newHazelcastInstance(config);
 
         IMap<Integer, Integer> map = instance1.getMap("testMapMultipleEntryProcessor");
         IMap<Integer, Integer> map2 = instance2.getMap("testMapMultipleEntryProcessor");

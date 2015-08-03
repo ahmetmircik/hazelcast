@@ -18,12 +18,14 @@ package com.hazelcast.map;
 
 import com.hazelcast.core.EntryAdapter;
 import com.hazelcast.core.EntryEvent;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
 import com.hazelcast.test.annotation.QuickTest;
 import junit.framework.TestCase;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -43,11 +45,16 @@ public class AsyncTest extends HazelcastTestSupport {
     private final String value1 = "value1";
     private final String value2 = "value2";
 
+    protected HazelcastInstance instance;
+
+    @Before
+    public void setup() {
+        instance = createHazelcastInstance(getConfig());
+    }
+
     @Test
     public void testGetAsync() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        IMap<String, String> map = factory.newHazelcastInstance().getMap("testGetAsync");
+        IMap<String, String> map = instance.getMap(randomString());
         map.put(key, value1);
         Future<String> f1 = map.getAsync(key);
         TestCase.assertEquals(value1, f1.get());
@@ -55,9 +62,7 @@ public class AsyncTest extends HazelcastTestSupport {
 
     @Test
     public void testPutAsync() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        IMap<String, String> map = factory.newHazelcastInstance().getMap("map:test:putAsync");
+        IMap<String, String> map = instance.getMap(randomString());
         Future<String> f1 = map.putAsync(key, value1);
         String f1Val = f1.get();
         TestCase.assertNull(f1Val);
@@ -68,9 +73,7 @@ public class AsyncTest extends HazelcastTestSupport {
 
     @Test
     public void testPutAsyncWithTtl() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        IMap<String, String> map = factory.newHazelcastInstance().getMap("map:test:putAsyncWithTtl");
+        IMap<String, String> map = instance.getMap(randomString());
 
         final CountDownLatch latch = new CountDownLatch(1);
         map.addEntryListener(new EntryAdapter<String, String>() {
@@ -90,7 +93,7 @@ public class AsyncTest extends HazelcastTestSupport {
 
     @Test
     public void testRemoveAsync() throws Exception {
-        IMap<String, String> map = createHazelcastInstance().getMap("map:test:removeAsync");
+        IMap<String, String> map = instance.getMap(randomString());
         // populate map
         map.put(key, value1);
         Future<String> f1 = map.removeAsync(key);
@@ -99,7 +102,7 @@ public class AsyncTest extends HazelcastTestSupport {
 
     @Test
     public void testRemoveAsyncWithImmediateTimeout() throws Exception {
-       final IMap<String, String> map = createHazelcastInstance().getMap("map:test:removeAsync:timeout");
+        final IMap<String, String> map = instance.getMap(randomString());
         // populate map
         map.put(key, value1);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -122,7 +125,7 @@ public class AsyncTest extends HazelcastTestSupport {
 
     @Test
     public void testRemoveAsyncWithNonExistentKey() throws Exception {
-       IMap<String, String> map = createHazelcastInstance().getMap("map:test:removeAsync:nonexistant");
+        IMap<String, String> map = instance.getMap(randomString());
         Future<String> f1 = map.removeAsync(key);
         TestCase.assertNull(f1.get());
     }
