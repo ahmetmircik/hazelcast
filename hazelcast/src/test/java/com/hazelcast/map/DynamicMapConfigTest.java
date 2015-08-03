@@ -58,7 +58,7 @@ public class DynamicMapConfigTest extends HazelcastTestSupport {
     public void testMapConfigUpdate_reflectedToRecordStore() throws ExecutionException, InterruptedException {
         String mapName = randomMapName();
 
-        Config config = new Config();
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_PARTITION_COUNT, "1");
 
         HazelcastInstance node = createHazelcastInstance(config);

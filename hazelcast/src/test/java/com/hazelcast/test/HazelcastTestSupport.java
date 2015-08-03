@@ -83,7 +83,6 @@ public abstract class HazelcastTestSupport {
 
     private TestHazelcastInstanceFactory factory;
 
-
     public static void assertUtilityConstructor(Class clazz) {
         Constructor[] constructors = clazz.getDeclaredConstructors();
         assertEquals("there are more than 1 constructors", 1, constructors.length);
@@ -107,39 +106,10 @@ public abstract class HazelcastTestSupport {
         assertFalse(VectorClockTimestamp.happenedBefore(clock1, clock2));
     }
 
-    public HazelcastInstance createHazelcastInstance() {
-        return createHazelcastInstance(new Config());
-    }
-
-    public HazelcastInstance createHazelcastInstance(Config config) {
-        return createHazelcastInstanceFactory(1).newHazelcastInstance(config);
-    }
-
-    public static int getPartitionId(HazelcastInstance hz, String name){
+    public static int getPartitionId(HazelcastInstance hz, String name) {
         PartitionService partitionService = hz.getPartitionService();
         Partition partition = partitionService.getPartition(name);
         return partition.getPartitionId();
-    }
-
-    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory(int nodeCount) {
-        if (factory != null) {
-            throw new IllegalStateException("Node factory is already created!");
-        }
-        return factory = new TestHazelcastInstanceFactory(nodeCount);
-    }
-
-    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory(String... addresses) {
-        if (factory != null) {
-            throw new IllegalStateException("Node factory is already created!");
-        }
-        return factory = new TestHazelcastInstanceFactory(addresses);
-    }
-
-    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory() {
-        if (factory != null) {
-            throw new IllegalStateException("Node factory is already created!");
-        }
-        return factory = new TestHazelcastInstanceFactory();
     }
 
     public static Future spawn(Runnable task) {
@@ -199,18 +169,9 @@ public abstract class HazelcastTestSupport {
         return node.nodeEngine;
     }
 
-    public static MetricsRegistry getMetricsRegistry(HazelcastInstance hz){
+    public static MetricsRegistry getMetricsRegistry(HazelcastInstance hz) {
         NodeEngineImpl nodeEngine = getNodeEngineImpl(hz);
         return nodeEngine.getMetricsRegistry();
-    }
-
-    @After
-    public final void shutdownNodeFactory() {
-        TestHazelcastInstanceFactory testHazelcastInstanceFactory = factory;
-        if (testHazelcastInstanceFactory != null) {
-            factory = null;
-            testHazelcastInstanceFactory.terminateAll();
-        }
     }
 
     public static void setLoggingNone() {
@@ -256,9 +217,9 @@ public abstract class HazelcastTestSupport {
 
     /**
      * Sleeps for the given amount of time and after that, sets stop to true.
-     *
+     * <p/>
      * If stop is changed to true while sleeping, the calls returns before waiting the full sleeping period.
-     *
+     * <p/>
      * This method is very useful for stress tests that run for a certain amount of time. But if one of the stress tests
      * runs into a failure, the test should be aborted immediately. This is done by letting the thread set stop to true.
      *
@@ -276,24 +237,24 @@ public abstract class HazelcastTestSupport {
     }
 
     public static void sleepAtLeastMillis(long sleepFor) {
-       boolean interrupted = false;
-       try {
-           long remainingNanos = MILLISECONDS.toNanos(sleepFor);
-           final long sleepUntil = System.nanoTime() + remainingNanos;
-           while (remainingNanos > 0) {
-               try {
-                   NANOSECONDS.sleep(remainingNanos);
-               } catch (InterruptedException e) {
-                   interrupted = true;
-               } finally {
-                   remainingNanos = sleepUntil - System.nanoTime();
-               }
-           }
-       } finally {
-           if (interrupted) {
-               Thread.currentThread().interrupt();
-           }
-       }
+        boolean interrupted = false;
+        try {
+            long remainingNanos = MILLISECONDS.toNanos(sleepFor);
+            final long sleepUntil = System.nanoTime() + remainingNanos;
+            while (remainingNanos > 0) {
+                try {
+                    NANOSECONDS.sleep(remainingNanos);
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                } finally {
+                    remainingNanos = sleepUntil - System.nanoTime();
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     public static void sleepAtLeastSeconds(long seconds) {
@@ -523,7 +484,7 @@ public abstract class HazelcastTestSupport {
     }
 
     public static void waitAllForSafeState() {
-       waitAllForSafeState(HazelcastInstanceFactory.getAllHazelcastInstances());
+        waitAllForSafeState(HazelcastInstanceFactory.getAllHazelcastInstances());
     }
 
     public static void waitAllForSafeState(final Collection<HazelcastInstance> instances) {
@@ -585,7 +546,7 @@ public abstract class HazelcastTestSupport {
     public static <E> E assertInstanceOf(Class<E> clazz, Object o) {
         Assert.assertNotNull(o);
         assertTrue(o + " is not an instanceof " + clazz.getName(), clazz.isAssignableFrom(o.getClass()));
-        return (E)o;
+        return (E) o;
     }
 
     public static void assertJoinable(Thread... threads) {
@@ -798,8 +759,6 @@ public abstract class HazelcastTestSupport {
         n1.clusterService.removeAddress(n2.address);
         n2.clusterService.removeAddress(n1.address);
     }
-    public final class DummyUncheckedHazelcastTestException extends RuntimeException {
-    }
 
     public static void assertExactlyOneSuccessfulRun(AssertTask task) {
         assertExactlyOneSuccessfulRun(task, ASSERT_TRUE_EVENTUALLY_TIMEOUT, TimeUnit.SECONDS);
@@ -822,5 +781,51 @@ public abstract class HazelcastTestSupport {
             }
         }
         throw lastException;
+    }
+
+    // this is overridden in another context.
+    protected Config getConfig() {
+        return new Config();
+    }
+
+    public HazelcastInstance createHazelcastInstance() {
+        return createHazelcastInstance(new Config());
+    }
+
+    public HazelcastInstance createHazelcastInstance(Config config) {
+        return createHazelcastInstanceFactory(1).newHazelcastInstance(config);
+    }
+
+    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory(int nodeCount) {
+        if (factory != null) {
+            throw new IllegalStateException("Node factory is already created!");
+        }
+        return factory = new TestHazelcastInstanceFactory(nodeCount);
+    }
+
+    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory(String... addresses) {
+        if (factory != null) {
+            throw new IllegalStateException("Node factory is already created!");
+        }
+        return factory = new TestHazelcastInstanceFactory(addresses);
+    }
+
+    protected final TestHazelcastInstanceFactory createHazelcastInstanceFactory() {
+        if (factory != null) {
+            throw new IllegalStateException("Node factory is already created!");
+        }
+        return factory = new TestHazelcastInstanceFactory();
+    }
+
+    @After
+    public final void shutdownNodeFactory() {
+        TestHazelcastInstanceFactory testHazelcastInstanceFactory = factory;
+        if (testHazelcastInstanceFactory != null) {
+            factory = null;
+            testHazelcastInstanceFactory.terminateAll();
+        }
+    }
+
+    public final class DummyUncheckedHazelcastTestException extends RuntimeException {
     }
 }

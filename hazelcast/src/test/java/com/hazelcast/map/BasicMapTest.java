@@ -75,11 +75,6 @@ public class BasicMapTest extends HazelcastTestSupport {
         instances = factory.newInstances(config);
     }
 
-    // this is overridden in another context.
-    Config getConfig() {
-        return new Config();
-    }
-
     HazelcastInstance getInstance() {
         return instances[rand.nextInt(instanceCount)];
     }
