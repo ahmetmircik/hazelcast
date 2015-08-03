@@ -276,7 +276,7 @@ public class EvictionMaxSizePolicyTest extends HazelcastTestSupport {
     }
 
     private Config createConfig(MaxSizeConfig.MaxSizePolicy maxSizePolicy, int maxSize, String mapName) {
-        Config config = new Config();
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_PARTITION_COUNT, String.valueOf(PARTITION_COUNT));
 
         MapConfig mapConfig = config.getMapConfig(mapName);
