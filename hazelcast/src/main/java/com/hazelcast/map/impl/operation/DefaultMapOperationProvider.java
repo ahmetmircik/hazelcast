@@ -23,17 +23,22 @@ import com.hazelcast.nio.serialization.Data;
  */
 public final class DefaultMapOperationProvider implements MapOperationProvider {
 
-    private static final DefaultMapOperationProvider _this = new DefaultMapOperationProvider();
+    private static final DefaultMapOperationProvider INSTANCE = new DefaultMapOperationProvider();
 
     private DefaultMapOperationProvider() {
     }
 
     public static DefaultMapOperationProvider get() {
-        return _this;
+        return INSTANCE;
     }
 
     @Override
     public KeyBasedMapOperation createPutOperation(String name, Data key, Data value, long ttl) {
         return new PutOperation(name, key, value, ttl);
+    }
+
+    @Override
+    public KeyBasedMapOperation createRemoveOperation(String name, Data key) {
+        return new RemoveOperation(name, key);
     }
 }

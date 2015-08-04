@@ -75,7 +75,6 @@ import com.hazelcast.map.impl.operation.PutIfAbsentOperation;
 import com.hazelcast.map.impl.operation.PutTransientOperation;
 import com.hazelcast.map.impl.operation.RemoveIfSameOperation;
 import com.hazelcast.map.impl.operation.RemoveInterceptorOperation;
-import com.hazelcast.map.impl.operation.RemoveOperation;
 import com.hazelcast.map.impl.operation.ReplaceIfSameOperation;
 import com.hazelcast.map.impl.operation.ReplaceOperation;
 import com.hazelcast.map.impl.operation.SetOperation;
@@ -572,7 +571,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected Data removeInternal(Data key) {
-        RemoveOperation operation = new RemoveOperation(name, key);
+        KeyBasedMapOperation operation = operationProvider.createRemoveOperation(name, key);
         Data previousValue = (Data) invokeOperation(key, operation);
         invalidateNearCache(key);
         return previousValue;
@@ -601,7 +600,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected ICompletableFuture<Data> removeAsyncInternal(final Data key) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        RemoveOperation operation = new RemoveOperation(name, key);
+        KeyBasedMapOperation operation = operationProvider.createRemoveOperation(name, key);
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             ICompletableFuture<Data> future

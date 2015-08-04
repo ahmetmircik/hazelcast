@@ -22,7 +22,9 @@ import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.RemoveOperation;
+import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.operation.KeyBasedMapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -57,7 +59,10 @@ public class MapRemoveMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        RemoveOperation op = new RemoveOperation(parameters.name, parameters.key);
+        MapService mapService = getService(MapService.SERVICE_NAME);
+        MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+        MapOperationProvider operationProvider = mapServiceContext.getMapOperationProvider(parameters.name);
+        KeyBasedMapOperation op = operationProvider.createRemoveOperation(parameters.name, parameters.key);
         op.setThreadId(parameters.threadId);
         return op;
     }

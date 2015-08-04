@@ -285,7 +285,7 @@ public interface RecordStore<V extends Record> {
      */
     V getRecordOrNull(Data key);
 
-    boolean isRecordAccessible(Record record, long now, boolean backup);
+    boolean isRecordExpirable(Record record, long now, boolean backup);
 
     void evictEntries(long now, boolean backup);
 

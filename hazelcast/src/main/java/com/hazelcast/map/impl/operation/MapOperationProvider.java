@@ -25,4 +25,6 @@ public interface MapOperationProvider {
 
     KeyBasedMapOperation createPutOperation(String name, Data key, Data value, long ttl);
 
+    KeyBasedMapOperation createRemoveOperation(String name, Data key);
+
 }

@@ -99,7 +99,7 @@ public final class EvictionOperator {
             final Record record = iterator.next();
             final long value = getEvictionCriteriaValue(record, evictionPolicy);
             if (value <= criteriaValue) {
-                if (!recordStore.isRecordAccessible(record, now, backup)) {
+                if (!recordStore.isLocked(record.getKey())) {
                     recordStore.doPostEvictOperations(record, backup);
                     fireEvent(record, mapName, mapServiceContext);
                     iterator.remove();
