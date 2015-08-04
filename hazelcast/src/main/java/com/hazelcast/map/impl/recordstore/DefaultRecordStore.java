@@ -203,12 +203,12 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     @Override
     public Iterator<Record> iterator() {
-        return new ReadOnlyRecordIterator(internalRecordStore.values());
+        return new RecordStoreIterator(internalRecordStore.values());
     }
 
     @Override
     public Iterator<Record> iterator(long now, boolean backup) {
-        return new ReadOnlyRecordIterator(internalRecordStore.values(), now, backup);
+        return new RecordStoreIterator(internalRecordStore.values(), now, backup);
     }
 
     @Override
@@ -495,17 +495,17 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     @Override
-    public Object doPostEvictOperations(Record removedRecord, boolean backup) {
+    public Object doPostEvictOperations(Record record, boolean backup) {
         Object value = null;
-        if (removedRecord != null) {
-            value = removedRecord.getValue();
-            final long lastUpdateTime = removedRecord.getLastUpdateTime();
-            Data key = removedRecord.getKey();
+        if (record != null) {
+            value = record.getValue();
+            final long lastUpdateTime = record.getLastUpdateTime();
+            Data key = record.getKey();
             mapDataStore.flush(key, value, lastUpdateTime, backup);
             if (!backup) {
                 mapServiceContext.interceptRemove(name, value);
             }
-            updateSizeEstimator(-calculateRecordHeapCost(removedRecord));
+            updateSizeEstimator(-calculateRecordHeapCost(record));
             removeIndex(key);
         }
         return value;
@@ -1081,6 +1081,9 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     private Object removeRecord(Data key, Record record, long now) {
         Object oldValue = record.getValue();
+        if (oldValue instanceof Data) {
+            oldValue = toData(oldValue);
+        }
         oldValue = mapServiceContext.interceptRemove(name, oldValue);
         if (oldValue != null) {
             removeIndex(key);
