@@ -21,7 +21,6 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.map.impl.MapContainer;
-import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.eviction.EvictionOperator;
 import com.hazelcast.map.impl.eviction.MaxSizeChecker;
 import com.hazelcast.map.impl.record.Record;
@@ -35,9 +34,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateExpirationWithDelay;
-import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateMaxIdleMillis;
-import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTime;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.*;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 
 /**
@@ -163,7 +160,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
             }
             checkedEntryCount++;
             Record record = expirationIterator.next();
-            if (!isRecordAccessible(record, now, backup)) {
+            if (isRecordExpirable(record, now, backup)) {
                 records.add(record);
                 evictedCount++;
             }
@@ -329,12 +326,12 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
     @Override
-    public boolean isRecordAccessible(Record record, long now, boolean backup) {
+    public boolean isRecordExpirable(Record record, long now, boolean backup) {
         checkNotNull(record, "record cannot be null");
 
-        return !isRecordStoreExpirable()
-                || isLocked(record.getKey())
-                || !isExpired(record, now, backup);
+        return isRecordStoreExpirable()
+                && !isLocked(record.getKey())
+                && isExpired(record, now, backup);
     }
 
     public boolean isExpired(Record record, long now, boolean backup) {
@@ -418,7 +415,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     /**
      * Read only iterator. Iterates by checking whether a record expired or not.
      */
-    protected final class ReadOnlyRecordIterator implements Iterator<Record> {
+    protected final class RecordStoreIterator implements Iterator<Record> {
 
         private final long now;
         private final boolean checkExpiration;
@@ -427,15 +424,15 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         private Record nextRecord;
         private Record lastReturned;
 
-        protected ReadOnlyRecordIterator(Collection<Record> values, long now, boolean backup) {
+        protected RecordStoreIterator(Collection<Record> values, long now, boolean backup) {
             this(values, now, true, backup);
         }
 
-        protected ReadOnlyRecordIterator(Collection<Record> values) {
+        protected RecordStoreIterator(Collection<Record> values) {
             this(values, -1L, false, false);
         }
 
-        private ReadOnlyRecordIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
+        private RecordStoreIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
             this.iterator = values.iterator();
             this.now = now;
             this.checkExpiration = checkExpiration;
@@ -460,7 +457,12 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
 
         @Override
         public void remove() {
-            throw new UnsupportedOperationException("remove() is not supported by this iterator");
+            if (lastReturned == null) {
+                throw new IllegalStateException();
+            }
+
+            internalRecordStore.remove(lastReturned.getKey());
+            lastReturned = null;
         }
 
         private void advance() {
