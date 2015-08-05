@@ -53,9 +53,10 @@ public class SortLimitTest extends HazelcastTestSupport {
 
     @Test
     public void testLocalPaging() {
+        Config config = getConfig();
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance instance1 = nodeFactory.newHazelcastInstance();
-        final HazelcastInstance instance2 = nodeFactory.newHazelcastInstance();
+        final HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(config);
+        final HazelcastInstance instance2 = nodeFactory.newHazelcastInstance(config);
 
         final IMap<Integer, Integer> map1 = instance1.getMap("testSort");
         final IMap<Integer, Integer> map2 = instance2.getMap("testSort");
@@ -260,8 +261,8 @@ public class SortLimitTest extends HazelcastTestSupport {
     }
 
     private IMap<Integer, Integer> initMap() {
+        Config config = getConfig();
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
-        Config config = new Config();
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(config);
         HazelcastInstance instance2 = nodeFactory.newHazelcastInstance(config);
         IMap<Integer, Integer> map = instance1.getMap(randomString());

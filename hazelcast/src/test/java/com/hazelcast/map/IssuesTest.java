@@ -53,27 +53,25 @@ public class IssuesTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue321_1() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-
-        final IMap<Integer, Integer> imap = factory.newHazelcastInstance(null).getMap("testIssue321_1");
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap<Integer, Integer> map = instance.getMap(randomString());
         final BlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>> events1 = new LinkedBlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>>();
         final BlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>> events2 = new LinkedBlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>>();
-        imap.addEntryListener(new EntryAdapter<Integer, Integer>() {
+        map.addEntryListener(new EntryAdapter<Integer, Integer>() {
             @Override
             public void entryAdded(com.hazelcast.core.EntryEvent<Integer, Integer> event) {
                 events2.add(event);
             }
         }, false);
-        imap.addEntryListener(new EntryAdapter<Integer, Integer>() {
+        map.addEntryListener(new EntryAdapter<Integer, Integer>() {
             @Override
             public void entryAdded(com.hazelcast.core.EntryEvent<Integer, Integer> event) {
                 events1.add(event);
             }
         }, true);
-        imap.put(1, 1);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events1.poll(10, TimeUnit.SECONDS);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events2.poll(10, TimeUnit.SECONDS);
+        map.put(1, 1);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events1.poll(10, TimeUnit.SECONDS);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events2.poll(10, TimeUnit.SECONDS);
         assertNotNull(event1);
         assertNotNull(event2);
         assertNotNull(event1.getValue());
@@ -82,28 +80,26 @@ public class IssuesTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue321_2() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-
-        final IMap<Integer, Integer> imap = factory.newHazelcastInstance(null).getMap("testIssue321_2");
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap<Integer, Integer> map = instance.getMap(randomString());
         final BlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>> events1 = new LinkedBlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>>();
         final BlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>> events2 = new LinkedBlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>>();
-        imap.addEntryListener(new EntryAdapter<Integer, Integer>() {
+        map.addEntryListener(new EntryAdapter<Integer, Integer>() {
             @Override
             public void entryAdded(com.hazelcast.core.EntryEvent<Integer, Integer> event) {
                 events1.add(event);
             }
         }, true);
         Thread.sleep(50L);
-        imap.addEntryListener(new EntryAdapter<Integer, Integer>() {
+        map.addEntryListener(new EntryAdapter<Integer, Integer>() {
             @Override
             public void entryAdded(com.hazelcast.core.EntryEvent<Integer, Integer> event) {
                 events2.add(event);
             }
         }, false);
-        imap.put(1, 1);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events1.poll(10, TimeUnit.SECONDS);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events2.poll(10, TimeUnit.SECONDS);
+        map.put(1, 1);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events1.poll(10, TimeUnit.SECONDS);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events2.poll(10, TimeUnit.SECONDS);
         assertNotNull(event1);
         assertNotNull(event2);
         assertNotNull(event1.getValue());
@@ -112,23 +108,21 @@ public class IssuesTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue321_3() throws Exception {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-
-        final IMap<Integer, Integer> imap = factory.newHazelcastInstance(null).getMap("testIssue321_3");
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap<Integer, Integer> map = instance.getMap(randomString());
         final BlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>> events = new LinkedBlockingQueue<com.hazelcast.core.EntryEvent<Integer, Integer>>();
-        final EntryAdapter<Integer, Integer> listener = new EntryAdapter<Integer, Integer>() {
+        EntryAdapter<Integer, Integer> listener = new EntryAdapter<Integer, Integer>() {
             @Override
             public void entryAdded(com.hazelcast.core.EntryEvent<Integer, Integer> event) {
                 events.add(event);
             }
         };
-        imap.addEntryListener(listener, true);
+        map.addEntryListener(listener, true);
         Thread.sleep(50L);
-        imap.addEntryListener(listener, false);
-        imap.put(1, 1);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events.poll(10, TimeUnit.SECONDS);
-        final com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events.poll(10, TimeUnit.SECONDS);
+        map.addEntryListener(listener, false);
+        map.put(1, 1);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event1 = events.poll(10, TimeUnit.SECONDS);
+        com.hazelcast.core.EntryEvent<Integer, Integer> event2 = events.poll(10, TimeUnit.SECONDS);
         assertNotNull(event1);
         assertNotNull(event2);
         assertNotNull(event1.getValue());
@@ -137,9 +131,8 @@ public class IssuesTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue304() {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        IMap<String, String> map = factory.newHazelcastInstance(null).getMap("testIssue304");
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap<String, String> map = instance.getMap(randomString());
         map.lock("1");
         assertEquals(0, map.size());
         assertEquals(0, map.entrySet().size());
@@ -159,50 +152,33 @@ public class IssuesTest extends HazelcastTestSupport {
     */
     @Test
     public void testIssue174NearCacheContainsKeySingleNode() {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        Config config = new Config();
-        config.getGroupConfig().setName("testIssue174NearCacheContainsKeySingleNode");
+        String name = randomString();
+        Config config = getConfig();
         NearCacheConfig nearCacheConfig = new NearCacheConfig();
-        config.getMapConfig("default").setNearCacheConfig(nearCacheConfig);
-        HazelcastInstance h = factory.newHazelcastInstance(config);
-        IMap<String, String> map = h.getMap("testIssue174NearCacheContainsKeySingleNode");
+        config.getMapConfig(name).setNearCacheConfig(nearCacheConfig);
+
+        HazelcastInstance instance = createHazelcastInstance(config);
+        IMap<String, String> map = instance.getMap(name);
         map.put("key", "value");
         assertTrue(map.containsKey("key"));
-        h.shutdown();
     }
 
     @Test
     public void testIssue1067GlobalSerializer() {
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-
-        final Config config = new Config();
+        String name = randomString();
+        Config config = getConfig();
         config.getSerializationConfig().setGlobalSerializerConfig(new GlobalSerializerConfig()
-                .setImplementation(new StreamSerializer() {
-                    public void write(ObjectDataOutput out, Object object) throws IOException {
-                    }
-
-                    public Object read(ObjectDataInput in) throws IOException {
-                        return new DummyValue();
-                    }
-
-                    public int getTypeId() {
-                        return 123;
-                    }
-
-                    public void destroy() {
-                    }
-                }));
-
-        HazelcastInstance hz = factory.newHazelcastInstance(config);
-        IMap<Object, Object> map = hz.getMap("test");
+                .setImplementation(new DummyStreamSerializer()));
+        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
+        HazelcastInstance instance = factory.newHazelcastInstance(config);
+        IMap<Object, Object> map = instance.getMap(name);
         for (int i = 0; i < 10; i++) {
             map.put(i, new DummyValue());
         }
         assertEquals(10, map.size());
 
         HazelcastInstance hz2 = factory.newHazelcastInstance(config);
-        IMap<Object, Object> map2 = hz2.getMap("test");
+        IMap<Object, Object> map2 = hz2.getMap(name);
         assertEquals(10, map2.size());
         assertEquals(10, map.size());
 
@@ -213,20 +189,19 @@ public class IssuesTest extends HazelcastTestSupport {
         }
     }
 
-    private static class DummyValue {
-    }
-
     @Test
     public void testMapInterceptorInstanceAware() {
+        String name = randomString();
+        Config config = getConfig();
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        HazelcastInstance hz1 = factory.newHazelcastInstance();
-        HazelcastInstance hz2 = factory.newHazelcastInstance();
-        IMap<Object, Object> map = hz1.getMap("test");
+        HazelcastInstance instance1 = factory.newHazelcastInstance(config);
+        HazelcastInstance instance2 = factory.newHazelcastInstance(config);
+        IMap<Object, Object> map = instance1.getMap(name);
 
         InstanceAwareMapInterceptorImpl interceptor = new InstanceAwareMapInterceptorImpl();
         map.addInterceptor(interceptor);
         assertNotNull(interceptor.hazelcastInstance);
-        assertEquals(hz1, interceptor.hazelcastInstance);
+        assertEquals(instance1, interceptor.hazelcastInstance);
 
         for (int i = 0; i < 100; i++) {
             map.put(i, i);
@@ -235,6 +210,20 @@ public class IssuesTest extends HazelcastTestSupport {
         for (int i = 0; i < 100; i++) {
             assertEquals("notNull", map.get(i));
         }
+    }
+
+    @Test // Issue #1795
+    public void testMapClearDoesNotTriggerEqualsOrHashCodeOnKeyObject() {
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap map = instance.getMap(randomString());
+        CompositeKey key = new CompositeKey();
+        map.put(key, "value");
+        map.clear();
+        assertFalse("hashCode method should not have been called on key during clear", CompositeKey.hashCodeCalled);
+        assertFalse("equals method should not have been called on key during clear", CompositeKey.equalsCalled);
+    }
+
+    private static class DummyValue {
     }
 
     static class InstanceAwareMapInterceptorImpl implements MapInterceptor, HazelcastInstanceAware {
@@ -280,19 +269,6 @@ public class IssuesTest extends HazelcastTestSupport {
         }
     }
 
-    @Test // Issue #1795
-    public void testMapClearDoesNotTriggerEqualsOrHashCodeOnKeyObject() {
-        int n = 1;
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(n);
-        final HazelcastInstance instance = factory.newHazelcastInstance();
-        final IMap map = instance.getMap(randomString());
-        final CompositeKey key = new CompositeKey();
-        map.put(key, "value");
-        map.clear();
-        assertFalse("hashCode method should not have been called on key during clear", CompositeKey.hashCodeCalled);
-        assertFalse("equals method should not have been called on key during clear", CompositeKey.equalsCalled);
-    }
-
     public static class CompositeKey implements Serializable {
         static boolean hashCodeCalled = false;
         static boolean equalsCalled = false;
@@ -307,6 +283,22 @@ public class IssuesTest extends HazelcastTestSupport {
         public boolean equals(Object o) {
             equalsCalled = true;
             return super.equals(o);
+        }
+    }
+
+    private static class DummyStreamSerializer implements StreamSerializer {
+        public void write(ObjectDataOutput out, Object object) throws IOException {
+        }
+
+        public Object read(ObjectDataInput in) throws IOException {
+            return new DummyValue();
+        }
+
+        public int getTypeId() {
+            return 123;
+        }
+
+        public void destroy() {
         }
     }
 }
