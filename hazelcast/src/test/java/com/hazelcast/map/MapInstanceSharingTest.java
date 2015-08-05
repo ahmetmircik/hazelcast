@@ -5,6 +5,10 @@ import com.hazelcast.core.IMap;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.QuickTest;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
 
 import java.io.Serializable;
 import java.util.UUID;
@@ -12,11 +16,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
@@ -28,7 +27,7 @@ public class MapInstanceSharingTest extends HazelcastTestSupport {
 
     @Before
     public void setUp() {
-        instances = createHazelcastInstanceFactory(2).newInstances();
+        instances = createHazelcastInstanceFactory(2).newInstances(getConfig());
         warmUpPartitions(instances);
         local = instances[0];
         remote = instances[1];
@@ -40,7 +39,7 @@ public class MapInstanceSharingTest extends HazelcastTestSupport {
         IMap<String, DummyObject> map = local.getMap(UUID.randomUUID().toString());
 
         DummyObject inserted = new DummyObject();
-        map.put(localKey,inserted);
+        map.put(localKey, inserted);
 
         DummyObject get1 = map.get(localKey);
         DummyObject get2 = map.get(localKey);
@@ -50,9 +49,6 @@ public class MapInstanceSharingTest extends HazelcastTestSupport {
         assertNotSame(get1, get2);
         assertNotSame(get1, inserted);
         assertNotSame(get2, inserted);
-    }
-
-    public static class DummyObject implements Serializable {
     }
 
     @Test
@@ -71,5 +67,8 @@ public class MapInstanceSharingTest extends HazelcastTestSupport {
         assertNotSame(get1, get2);
         assertNotSame(get1, inserted);
         assertNotSame(get2, inserted);
+    }
+
+    public static class DummyObject implements Serializable {
     }
 }

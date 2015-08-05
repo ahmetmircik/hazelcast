@@ -1,19 +1,17 @@
 package com.hazelcast.map;
 
 
-import com.hazelcast.test.TestHazelcastInstanceFactory;
+import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IMap;
+import com.hazelcast.test.HazelcastParallelClassRunner;
+import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.NightlyTest;
 import org.junit.Test;
-import com.hazelcast.core.IMap;
-import org.junit.runner.RunWith;
-import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.test.HazelcastTestSupport;
 import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-
-import com.hazelcast.test.HazelcastParallelClassRunner;
 
 import static junit.framework.TestCase.fail;
 
@@ -22,9 +20,8 @@ import static junit.framework.TestCase.fail;
 public class MapPutDestroyTest extends HazelcastTestSupport {
     @Test
     public void testConcurrentPutDestroy_doesNotCauseNPE() {
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(3);
-        final HazelcastInstance instance = factory.newHazelcastInstance();
-        final String mapName = randomString();
+        final HazelcastInstance instance = createHazelcastInstance(getConfig());
+        final String name = randomString();
         final AtomicReference<Throwable> error = new AtomicReference<Throwable>(null);
 
         final AtomicBoolean stop = new AtomicBoolean();
@@ -35,7 +32,7 @@ public class MapPutDestroyTest extends HazelcastTestSupport {
                     public void run() {
                         try {
                             while (!stop.get()) {
-                                IMap<Object, Object> map = instance.getMap(mapName);
+                                IMap<Object, Object> map = instance.getMap(name);
                                 map.put(System.currentTimeMillis(), Boolean.TRUE);
                             }
                         } catch (Throwable e) {
@@ -51,7 +48,7 @@ public class MapPutDestroyTest extends HazelcastTestSupport {
                     public void run() {
                         try {
                             while (!stop.get()) {
-                                IMap<Object, Object> map = instance.getMap(mapName);
+                                IMap<Object, Object> map = instance.getMap(name);
                                 map.destroy();
                             }
                         } catch (Throwable e) {

@@ -44,8 +44,8 @@ public class MergePolicyTest extends HazelcastTestSupport {
 
     @Test
     public void testLatestUpdateMapMergePolicy() {
-        String mapName = randomMapName();
-        Config config = newConfig(LatestUpdateMapMergePolicy.class.getName(), mapName);
+        String name = randomString();
+        Config config = newConfig(LatestUpdateMapMergePolicy.class.getName(), name);
         HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
 
@@ -60,8 +60,8 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(1, h1);
         assertClusterSizeEventually(1, h2);
 
-        IMap<Object, Object> map1 = h1.getMap(mapName);
-        IMap<Object, Object> map2 = h2.getMap(mapName);
+        IMap<Object, Object> map1 = h1.getMap(name);
+        IMap<Object, Object> map2 = h2.getMap(name);
         map1.put("key1", "value");
         //prevent updating at the same time
         sleepMillis(1);
@@ -75,15 +75,15 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(2, h1);
         assertClusterSizeEventually(2, h2);
 
-        IMap<Object, Object> mapTest = h1.getMap(mapName);
+        IMap<Object, Object> mapTest = h1.getMap(name);
         assertEquals("LatestUpdatedValue", mapTest.get("key1"));
         assertEquals("LatestUpdatedValue2", mapTest.get("key2"));
     }
 
     @Test
     public void testHigherHitsMapMergePolicy() {
-        String mapName = randomMapName();
-        Config config = newConfig(HigherHitsMapMergePolicy.class.getName(), mapName);
+        String name = randomString();
+        Config config = newConfig(HigherHitsMapMergePolicy.class.getName(), name);
         HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
 
@@ -98,14 +98,14 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(1, h1);
         assertClusterSizeEventually(1, h2);
 
-        IMap<Object, Object> map1 = h1.getMap(mapName);
+        IMap<Object, Object> map1 = h1.getMap(name);
         map1.put("key1", "higherHitsValue");
         map1.put("key2", "value2");
         //increase hits number
         map1.get("key1");
         map1.get("key1");
 
-        IMap<Object, Object> map2 = h2.getMap(mapName);
+        IMap<Object, Object> map2 = h2.getMap(name);
         map2.put("key1", "value1");
         map2.put("key2", "higherHitsValue2");
         //increase hits number
@@ -116,15 +116,15 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(2, h1);
         assertClusterSizeEventually(2, h2);
 
-        IMap<Object, Object> mapTest = h2.getMap(mapName);
+        IMap<Object, Object> mapTest = h2.getMap(name);
         assertEquals("higherHitsValue", mapTest.get("key1"));
         assertEquals("higherHitsValue2", mapTest.get("key2"));
     }
 
     @Test
     public void testPutIfAbsentMapMergePolicy() {
-        String mapName = randomMapName();
-        Config config = newConfig(PutIfAbsentMapMergePolicy.class.getName(), mapName);
+        String name = randomString();
+        Config config = newConfig(PutIfAbsentMapMergePolicy.class.getName(), name);
         HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
 
@@ -139,10 +139,10 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(1, h1);
         assertClusterSizeEventually(1, h2);
 
-        IMap<Object, Object> map1 = h1.getMap(mapName);
+        IMap<Object, Object> map1 = h1.getMap(name);
         map1.put("key1", "PutIfAbsentValue1");
 
-        IMap<Object, Object> map2 = h2.getMap(mapName);
+        IMap<Object, Object> map2 = h2.getMap(name);
         map2.put("key1", "value");
         map2.put("key2", "PutIfAbsentValue2");
 
@@ -150,15 +150,15 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(2, h1);
         assertClusterSizeEventually(2, h2);
 
-        IMap<Object, Object> mapTest = h2.getMap(mapName);
+        IMap<Object, Object> mapTest = h2.getMap(name);
         assertEquals("PutIfAbsentValue1", mapTest.get("key1"));
         assertEquals("PutIfAbsentValue2", mapTest.get("key2"));
     }
 
     @Test
     public void testPassThroughMapMergePolicy() {
-        String mapName = randomMapName();
-        Config config = newConfig(PassThroughMergePolicy.class.getName(), mapName);
+        String name = randomString();
+        Config config = newConfig(PassThroughMergePolicy.class.getName(), name);
         HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
 
@@ -173,25 +173,25 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(1, h1);
         assertClusterSizeEventually(1, h2);
 
-        IMap<Object, Object> map1 = h1.getMap(mapName);
+        IMap<Object, Object> map1 = h1.getMap(name);
         String key = generateKeyOwnedBy(h1);
         map1.put(key, "value");
 
-        IMap<Object, Object> map2 = h2.getMap(mapName);
+        IMap<Object, Object> map2 = h2.getMap(name);
         map2.put(key, "passThroughValue");
 
         assertOpenEventually(lifeCycleListener.latch);
         assertClusterSizeEventually(2, h1);
         assertClusterSizeEventually(2, h2);
 
-        IMap<Object, Object> mapTest = h2.getMap(mapName);
+        IMap<Object, Object> mapTest = h2.getMap(name);
         assertEquals("passThroughValue", mapTest.get(key));
     }
 
     @Test
     public void testCustomMergePolicy() {
-        String mapName = randomMapName();
-        Config config = newConfig(CustomMergePolicy.class.getName(), mapName);
+        String name = randomString();
+        Config config = newConfig(CustomMergePolicy.class.getName(), name);
         HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
 
@@ -206,28 +206,28 @@ public class MergePolicyTest extends HazelcastTestSupport {
         assertClusterSizeEventually(1, h1);
         assertClusterSizeEventually(1, h2);
 
-        IMap<Object, Object> map1 = h1.getMap(mapName);
+        IMap<Object, Object> map1 = h1.getMap(name);
         String key = generateKeyOwnedBy(h1);
         map1.put(key, "value");
 
-        IMap<Object, Object> map2 = h2.getMap(mapName);
+        IMap<Object, Object> map2 = h2.getMap(name);
         map2.put(key,Integer.valueOf(1));
 
         assertOpenEventually(lifeCycleListener.latch);
         assertClusterSizeEventually(2, h1);
         assertClusterSizeEventually(2, h2);
 
-        IMap<Object, Object> mapTest = h2.getMap(mapName);
+        IMap<Object, Object> mapTest = h2.getMap(name);
         assertNotNull(mapTest.get(key));
         assertTrue(mapTest.get(key) instanceof Integer);
     }
 
-    private Config newConfig(String mergePolicy, String mapName) {
-        Config config = new Config();
+    private Config newConfig(String mergePolicy, String name) {
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_MERGE_FIRST_RUN_DELAY_SECONDS, "5");
         config.setProperty(GroupProperties.PROP_MERGE_NEXT_RUN_DELAY_SECONDS, "3");
         config.getGroupConfig().setName(generateRandomString(10));
-        MapConfig mapConfig = config.getMapConfig(mapName);
+        MapConfig mapConfig = config.getMapConfig(name);
         mapConfig.setMergePolicy(mergePolicy);
         return config;
     }
