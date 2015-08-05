@@ -74,9 +74,10 @@ public class MapTransactionTest extends HazelcastTestSupport {
     //unfortunately the bug can't be detected by a unit test since the exception is thrown in a background thread (and logged)
     @Test
     public void issue_1056s() throws InterruptedException {
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        HazelcastInstance instance = factory.newHazelcastInstance();
-        final HazelcastInstance instance2 = factory.newHazelcastInstance();
+        HazelcastInstance instance = factory.newHazelcastInstance(config);
+        final HazelcastInstance instance2 = factory.newHazelcastInstance(config);
 
         final CountDownLatch latch = new CountDownLatch(1);
         final Thread t = new Thread() {
@@ -104,14 +105,14 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testCommitOrder() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(4);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
         final HazelcastInstance h3 = factory.newHazelcastInstance(config);
         final HazelcastInstance h4 = factory.newHazelcastInstance(config);
 
-        boolean b = h1.executeTransaction(options, new TransactionalTask<Boolean>() {
+        h1.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
                 final TransactionalMap<Object, Object> txMap = context.getMap("default");
                 txMap.put("1", "value1");
@@ -129,7 +130,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnCommit() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -172,7 +173,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnBackupDies() throws TransactionException, InterruptedException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -222,10 +223,11 @@ public class MapTransactionTest extends HazelcastTestSupport {
     @Test
     @Category(NightlyTest.class)
     public void testTxnOwnerDies() throws TransactionException, InterruptedException {
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(3);
-        final HazelcastInstance h1 = factory.newHazelcastInstance();
-        final HazelcastInstance h2 = factory.newHazelcastInstance();
-        final HazelcastInstance h3 = factory.newHazelcastInstance();
+        final HazelcastInstance h1 = factory.newHazelcastInstance(config);
+        final HazelcastInstance h2 = factory.newHazelcastInstance(config);
+        final HazelcastInstance h3 = factory.newHazelcastInstance(config);
         final int size = 50;
         final AtomicBoolean result = new AtomicBoolean(false);
 
@@ -267,10 +269,10 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnSet() throws TransactionException {
-        Config config = new Config();
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance h1 = factory.newHazelcastInstance(config);
-        final HazelcastInstance h2 = factory.newHazelcastInstance(config);
+        Config config = getConfig();
+        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
+        HazelcastInstance h1 = factory.newHazelcastInstance(config);
+        HazelcastInstance h2 = factory.newHazelcastInstance(config);
         final IMap map1 = h1.getMap("default");
         final IMap map2 = h2.getMap("default");
 
@@ -295,11 +297,10 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnPutTTL() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
-        final IMap map2 = h2.getMap("putWithTTL");
 
         boolean b = h1.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
@@ -324,7 +325,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnGetForUpdate() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -366,7 +367,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnGetForUpdateTimeout() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -393,7 +394,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnGetForUpdateTxnFails() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_OPERATION_CALL_TIMEOUT_MILLIS, "5000");
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
@@ -422,7 +423,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnGetForUpdateMultipleTimes() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -446,7 +447,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnUpdateThenGetForUpdate() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -469,7 +470,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnGetForUpdateThenUpdate() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -494,7 +495,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnRemove() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -534,7 +535,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnRemoveIfSame() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -576,19 +577,18 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnRemove_whenRemoveFails() throws InterruptedException {
-        final String TEST_MAP = "testMap";
+        final String name = randomString();
         final String key = "k";
         final String value = "v";
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        final HazelcastInstance hazelcastInstance = factory.newHazelcastInstance(new Config());
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
 
-        IMap<String, Object> map = hazelcastInstance.getMap(TEST_MAP);
+        IMap<String, Object> map = instance.getMap(name);
         map.put(key, value);
 
-        hazelcastInstance.executeTransaction(new TransactionalTask<Object>() {
+        instance.executeTransaction(new TransactionalTask<Object>() {
             @Override
             public Object execute(TransactionalTaskContext transactionContext) throws TransactionException {
-                TransactionalMap<String, Object> map = transactionContext.getMap(TEST_MAP);
+                TransactionalMap<String, Object> map = transactionContext.getMap(name);
                 map.remove(key, value + "other");
                 return null;
             }
@@ -598,7 +598,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnDelete() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -638,7 +638,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnPutIfAbsent() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -664,18 +664,17 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnPutIfAbsent_whenPutFails() throws InterruptedException {
-        final String TEST_MAP = "testMap";
+        final String name = randomString();
         final String key = "k";
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        final HazelcastInstance hazelcastInstance = factory.newHazelcastInstance(new Config());
+        final HazelcastInstance hazelcastInstance = createHazelcastInstance(getConfig());
 
-        IMap<String, Object> map = hazelcastInstance.getMap(TEST_MAP);
+        IMap<String, Object> map = hazelcastInstance.getMap(name);
         map.put(key, "v");
 
         hazelcastInstance.executeTransaction(new TransactionalTask<Object>() {
             @Override
             public Object execute(TransactionalTaskContext transactionContext) throws TransactionException {
-                TransactionalMap<String, Object> map = transactionContext.getMap(TEST_MAP);
+                TransactionalMap<String, Object> map = transactionContext.getMap(name);
                 map.putIfAbsent(key, "t");
                 return null;
             }
@@ -685,7 +684,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnReplace() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -712,18 +711,17 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnReplace_whenReplaceFails() throws InterruptedException {
-        final String TEST_MAP = "testMap";
+        final String name = randomString();
         final String key = "k";
         final String value = "v";
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        final HazelcastInstance hazelcastInstance = factory.newHazelcastInstance(new Config());
+        final HazelcastInstance hazelcastInstance = createHazelcastInstance(getConfig());
 
-        IMap<String, Object> map = hazelcastInstance.getMap(TEST_MAP);
+        IMap<String, Object> map = hazelcastInstance.getMap(name);
 
         hazelcastInstance.executeTransaction(new TransactionalTask<Object>() {
             @Override
             public Object execute(TransactionalTaskContext transactionContext) throws TransactionException {
-                TransactionalMap<String, Object> map = transactionContext.getMap(TEST_MAP);
+                TransactionalMap<String, Object> map = transactionContext.getMap(name);
                 map.replace(key, value);
                 return null;
             }
@@ -733,7 +731,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnReplaceIfSame() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -765,8 +763,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnContainsKey() throws TransactionException {
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance h1 = factory.newHazelcastInstance();
+        final HazelcastInstance h1 = createHazelcastInstance(getConfig());
         final IMap<String, String> map = h1.getMap("default");
         map.put("1", "1");
 
@@ -784,19 +781,18 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnReplaceIfSame_whenReplaceFails() throws InterruptedException {
-        final String TEST_MAP = "testMap";
+        final String name = randomString();
         final String key = "k";
         final String value = "v";
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(1);
-        final HazelcastInstance hazelcastInstance = factory.newHazelcastInstance(new Config());
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
 
-        IMap<String, Object> map = hazelcastInstance.getMap(TEST_MAP);
+        IMap<String, Object> map = instance.getMap(name);
         map.put(key, value);
 
-        hazelcastInstance.executeTransaction(new TransactionalTask<Object>() {
+        instance.executeTransaction(new TransactionalTask<Object>() {
             @Override
             public Object execute(TransactionalTaskContext transactionContext) throws TransactionException {
-                TransactionalMap<String, Object> map = transactionContext.getMap(TEST_MAP);
+                TransactionalMap<String, Object> map = transactionContext.getMap(name);
                 map.replace(key, value + "other", value);
                 return null;
             }
@@ -806,7 +802,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testTxnReplace2() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -830,7 +826,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue1076() {
-        final HazelcastInstance inst = createHazelcastInstance();
+        final HazelcastInstance inst = createHazelcastInstance(getConfig());
 
         IMap map = inst.getMap("default");
 
@@ -858,10 +854,10 @@ public class MapTransactionTest extends HazelcastTestSupport {
     @Test
     // TODO: @mm - Review following case...
     public void testFailingMapStore() throws TransactionException {
-        final String map = "map";
-        final String anotherMap = "anotherMap";
-        Config config = new Config();
-        config.getMapConfig(map).setMapStoreConfig(new MapStoreConfig()
+        final String name1 = randomString();
+        final String name2 = randomString();
+        Config config = getConfig();
+        config.getMapConfig(name1).setMapStoreConfig(new MapStoreConfig()
                 .setEnabled(true).setImplementation(new MapStoreAdapter() {
                     public void store(Object key, Object value) {
                         throw new IllegalStateException("Map store intentionally failed :) ");
@@ -874,22 +870,20 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
         boolean b = h1.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
-                assertNull(context.getMap(map).put("1", "value1"));
-                assertNull(context.getMap(anotherMap).put("1", "value1"));
+                assertNull(context.getMap(name1).put("1", "value1"));
+                assertNull(context.getMap(name2).put("1", "value1"));
                 return true;
             }
         });
 
         assertTrue(b);
-        assertNull(h2.getMap(map).get("1"));
-        assertEquals("value1", h2.getMap(anotherMap).get("1"));
+        assertNull(h2.getMap(name1).get("1"));
+        assertEquals("value1", h2.getMap(name2).get("1"));
     }
 
     @Test
     public void testRollbackMap() throws Throwable {
-        Config config = new Config();
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(4);
-        final HazelcastInstance h1 = factory.newHazelcastInstance(config);
+        final HazelcastInstance h1 = createHazelcastInstance(getConfig());
 
         final TransactionContext transactionContext = h1.newTransactionContext();
 
@@ -914,7 +908,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test(expected = TransactionNotActiveException.class)
     public void testTxnMapOuterTransaction() throws Throwable {
-        final HazelcastInstance h1 = createHazelcastInstance();
+        final HazelcastInstance h1 = createHazelcastInstance(getConfig());
 
         final TransactionContext transactionContext = h1.newTransactionContext();
         transactionContext.beginTransaction();
@@ -926,7 +920,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue615keySet() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -986,7 +980,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue615KeysetWithPredicate() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -1041,12 +1035,12 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue615KeysetPredicates() throws TransactionException {
-        final String MAP_NAME = "defaultMap";
-        final Config config = new Config();
+        final String name = randomString();
+        final Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
-        final IMap map = h2.getMap(MAP_NAME);
+        final IMap map = h2.getMap(name);
         final Employee employee1 = new Employee("abc-123-xvz", 34, true, 10D);
         final Employee employee2 = new Employee("abc-1xvz", 4, true, 7D);
         final Employee employee3 = new Employee("abc-1xasda...vz", 7, true, 1D);
@@ -1057,7 +1051,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
         final TransactionContext context = h1.newTransactionContext();
         context.beginTransaction();
 
-        final TransactionalMap<Object, Object> txMap = context.getMap(MAP_NAME);
+        final TransactionalMap<Object, Object> txMap = context.getMap(name);
 
         assertNull(txMap.put(employee2, employee2));
 
@@ -1076,15 +1070,15 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testPortableKeysetAndValuesWithPredicates() throws Exception {
-        final String mapName = randomString();
-        final Config config = new Config();
+        final String name = randomString();
+        final Config config = getConfig();
         config.getSerializationConfig().addPortableFactory(666, new PortableFactory() {
             public Portable create(int classId) {
                 return new SampleObjects.PortableEmployee();
             }
         });
         final HazelcastInstance instance = createHazelcastInstance(config);
-        IMap map = instance.getMap(mapName);
+        IMap map = instance.getMap(name);
 
         final SampleObjects.PortableEmployee emp1 = new SampleObjects.PortableEmployee(34, "abc-123-xvz");
         final SampleObjects.PortableEmployee emp2 = new SampleObjects.PortableEmployee(20, "abc-123-xvz");
@@ -1093,7 +1087,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
         final TransactionContext context = instance.newTransactionContext();
         context.beginTransaction();
-        final TransactionalMap txMap = context.getMap(mapName);
+        final TransactionalMap txMap = context.getMap(name);
 
         assertNull(txMap.put(emp2, emp2));
         assertEquals(2, txMap.size());
@@ -1111,7 +1105,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue615values() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -1146,7 +1140,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue615ValuesWithPredicate() throws TransactionException {
-        Config config = new Config();
+        Config config = getConfig();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         final HazelcastInstance h1 = factory.newHazelcastInstance(config);
         final HazelcastInstance h2 = factory.newHazelcastInstance(config);
@@ -1186,18 +1180,19 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testValuesWithPredicates_notContains_oldValues() throws TransactionException {
-        final String mapName = "testValuesWithPredicate_notContains_oldValues";
+        Config config = getConfig();
+        final String name = randomString();
         final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final HazelcastInstance h1 = factory.newHazelcastInstance();
-        final HazelcastInstance h2 = factory.newHazelcastInstance();
-        final IMap<Integer, Employee> map = h1.getMap(mapName);
+        final HazelcastInstance h1 = factory.newHazelcastInstance(config);
+        final HazelcastInstance h2 = factory.newHazelcastInstance(config);
+        final IMap<Integer, Employee> map = h1.getMap(name);
         final Employee employeeAtAge22 = new Employee("emin", 22, true, 10D);
         final Employee employeeAtAge23 = new Employee("emin", 23, true, 10D);
         map.put(1, employeeAtAge22);
 
         h1.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
-                TransactionalMap<Object, Object> txMap = context.getMap(mapName);
+                TransactionalMap<Object, Object> txMap = context.getMap(name);
                 assertEquals(1, txMap.values(new SqlPredicate("age > 21")).size());
                 txMap.put(1, employeeAtAge23);
                 Collection coll = txMap.values(new SqlPredicate("age > 21"));
@@ -1213,17 +1208,14 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test(expected = IllegalArgumentException.class)
     public void testValuesWithPagingPredicate() throws TransactionException {
-        final int nodeCount = 1;
         final String mapName = randomMapName("testValuesWithPagingPredicate");
-        final Config config = new Config();
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(nodeCount);
-        final HazelcastInstance node = factory.newHazelcastInstance(config);
-        final IMap map = node.getMap(mapName);
+        final HazelcastInstance instance = createHazelcastInstance(getConfig());
+        final IMap map = instance.getMap(mapName);
 
         final Employee emp = new Employee("name", 77, true, 10D);
         map.put(1, emp);
 
-        node.executeTransaction(options, new TransactionalTask<Boolean>() {
+        instance.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
                 final TransactionalMap<Object, Object> txMap = context.getMap(mapName);
                 PagingPredicate predicate = new PagingPredicate(5);
@@ -1235,17 +1227,14 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testValuesWithPredicate_removingExistentEntry() throws TransactionException {
-        final int nodeCount = 1;
         final String mapName = randomMapName("_testValuesWithPredicate_removingExistentEntry_");
-        final Config config = new Config();
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(nodeCount);
-        final HazelcastInstance node = factory.newHazelcastInstance(config);
-        final IMap map = node.getMap(mapName);
+        final HazelcastInstance instance = createHazelcastInstance(getConfig());
+        final IMap map = instance.getMap(mapName);
 
         final Employee emp = new Employee("name", 77, true, 10D);
         map.put(1, emp);
 
-        node.executeTransaction(options, new TransactionalTask<Boolean>() {
+        instance.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
                 final TransactionalMap<Object, Object> txMap = context.getMap(mapName);
                 txMap.remove(1);
@@ -1254,22 +1243,19 @@ public class MapTransactionTest extends HazelcastTestSupport {
                 return true;
             }
         });
-        node.shutdown();
+        instance.shutdown();
     }
 
     @Test
     public void testValues_resultSetContainsUpdatedEntry() throws TransactionException {
-        final int nodeCount = 1;
-        final String mapName = randomMapName();
-        final Config config = new Config();
-        final TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(nodeCount);
-        final HazelcastInstance node = factory.newHazelcastInstance(config);
-        final IMap map = node.getMap(mapName);
+        final String mapName = randomString();
+        final HazelcastInstance instance = createHazelcastInstance(getConfig());
+        final IMap map = instance.getMap(mapName);
 
         final Employee emp = new Employee("name", 77, true, 10D);
         map.put(1, emp);
 
-        node.executeTransaction(options, new TransactionalTask<Boolean>() {
+        instance.executeTransaction(options, new TransactionalTask<Boolean>() {
             public Boolean execute(TransactionalTaskContext context) throws TransactionException {
                 final TransactionalMap<Integer, Employee> txMap = context.getMap(mapName);
                 emp.setAge(30);
@@ -1281,14 +1267,14 @@ public class MapTransactionTest extends HazelcastTestSupport {
                 return true;
             }
         });
-        node.shutdown();
+        instance.shutdown();
     }
 
     @Test
     public void testUpdatesInTxnFiringUpdateEvent() {
         final String mapName = randomMapName("testUpdatesInTxnFiringUpdateEvent");
-        final HazelcastInstance node = createHazelcastInstance();
-        final IMap<String, String> map = node.getMap(mapName);
+        final HazelcastInstance instance = createHazelcastInstance(getConfig());
+        final IMap<String, String> map = instance.getMap(mapName);
         final CountDownLatch expectedUpdateEventCount = new CountDownLatch(1);
         map.addEntryListener(new EntryAdapter<String, String>() {
 
@@ -1301,7 +1287,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
         map.put("foo", "one");
 
-        TransactionContext context = node.newTransactionContext();
+        TransactionContext context = instance.newTransactionContext();
         context.beginTransaction();
         TransactionalMap<String, String> transactionalMap = context.getMap(mapName);
         transactionalMap.put("foo", "three");
@@ -1313,9 +1299,9 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void testUpdatesInTxnFiresUpdateEventWithNonNullOldValue() throws Exception {
-        final String mapName = randomMapName();
-        final HazelcastInstance node = createHazelcastInstance();
-        final IMap<String, String> map = node.getMap(mapName);
+        final String name = randomString();
+        final HazelcastInstance node = createHazelcastInstance(getConfig());
+        final IMap<String, String> map = node.getMap(name);
         final CountDownLatch expectedUpdateEventCount = new CountDownLatch(1);
         map.put("foo", "one");
         map.addEntryListener(new EntryAdapter<String, String>() {
@@ -1330,7 +1316,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
         TransactionContext context = node.newTransactionContext();
         context.beginTransaction();
-        TransactionalMap<String, String> transactionalMap = context.getMap(mapName);
+        TransactionalMap<String, String> transactionalMap = context.getMap(name);
         transactionalMap.put("foo", "two");
         context.commitTransaction();
         assertOpenEventually("Not reached expected update event count", expectedUpdateEventCount);
@@ -1338,7 +1324,7 @@ public class MapTransactionTest extends HazelcastTestSupport {
 
     @Test
     public void transactionalMap_shouldNotHaveNegativeSize() throws Exception {
-        HazelcastInstance instance = createHazelcastInstance();
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
         instance.executeTransaction(new TransactionalTask<Object>() {
             @Override
             public Object execute(TransactionalTaskContext context) throws TransactionException {

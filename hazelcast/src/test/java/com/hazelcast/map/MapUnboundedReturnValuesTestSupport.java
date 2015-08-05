@@ -33,17 +33,10 @@ abstract class MapUnboundedReturnValuesTestSupport extends HazelcastTestSupport 
 
     protected static final int PRE_CHECK_TRIGGER_LIMIT_INACTIVE = -1;
     protected static final int PRE_CHECK_TRIGGER_LIMIT_ACTIVE = Integer.MAX_VALUE;
-
-    protected enum KeyType {
-        STRING,
-        INTEGER
-    }
-
     private TestHazelcastInstanceFactory factory;
     private HazelcastInstance instance;
     private IMap<Object, Integer> map;
     private ILogger logger;
-
     private int configLimit;
     private int lowerLimit;
     private int upperLimit;
@@ -146,7 +139,7 @@ abstract class MapUnboundedReturnValuesTestSupport extends HazelcastTestSupport 
     private void internalSetUp(int partitionCount, int clusterSize, int limit, int preCheckTrigger) {
         Config config = createConfig(partitionCount, limit, preCheckTrigger);
         factory = createTestHazelcastInstanceFactory(clusterSize);
-        map = getMapWithNodeCount(clusterSize, config, factory);
+        map = getMapWithNodeCount(config, factory);
 
         configLimit = limit;
         lowerLimit = Math.round(limit * 0.95f);
@@ -155,7 +148,7 @@ abstract class MapUnboundedReturnValuesTestSupport extends HazelcastTestSupport 
     }
 
     private Config createConfig(int partitionCount, int limit, int preCheckTrigger) {
-        Config config = new Config();
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_PARTITION_COUNT, String.valueOf(partitionCount));
         config.setProperty(GroupProperties.PROP_QUERY_RESULT_SIZE_LIMIT, String.valueOf(limit));
         config.setProperty(GroupProperties.PROP_QUERY_MAX_LOCAL_PARTITION_LIMIT_FOR_PRE_CHECK, String.valueOf(preCheckTrigger));
@@ -169,23 +162,17 @@ abstract class MapUnboundedReturnValuesTestSupport extends HazelcastTestSupport 
         return createHazelcastInstanceFactory(nodeCount);
     }
 
-    private <K, V> IMap<K, V> getMapWithNodeCount(int nodeCount, Config config, TestHazelcastInstanceFactory factory) {
-        String mapName = randomMapName();
-
-        MapConfig mapConfig = new MapConfig();
-        mapConfig.setName(mapName);
+    private <K, V> IMap<K, V> getMapWithNodeCount(Config config, TestHazelcastInstanceFactory factory) {
+        String name = randomString();
+        MapConfig mapConfig = config.getMapConfig(name);
+        mapConfig.setName(name);
         mapConfig.setAsyncBackupCount(0);
         mapConfig.setBackupCount(0);
-        config.addMapConfig(mapConfig);
 
-        while (nodeCount > 1) {
-            factory.newHazelcastInstance(config);
-            nodeCount--;
-        }
 
-        instance = factory.newHazelcastInstance(config);
+        instance = factory.newInstances(config)[0];
         logger = instance.getLoggingService().getLogger(getClass());
-        return instance.getMap(mapName);
+        return instance.getMap(name);
     }
 
     private void mapPut(KeyType keyType, int index) {
@@ -404,5 +391,10 @@ abstract class MapUnboundedReturnValuesTestSupport extends HazelcastTestSupport 
     private void shutdown(TestHazelcastInstanceFactory factory, IMap map) {
         map.destroy();
         factory.terminateAll();
+    }
+
+    protected enum KeyType {
+        STRING,
+        INTEGER
     }
 }
