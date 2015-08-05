@@ -32,12 +32,11 @@ public class MergePolicySerializationTest extends HazelcastTestSupport {
 
     @Test
     public void testIssue2665() {
-        String mapName = randomMapName();
+        String name = randomString();
         String serviceName = "hz:impl:mapService";
 
-        Config config =new Config();
-        HazelcastInstance instance = createHazelcastInstance(config);
-        IMap<String, MyObject> map = instance.getMap(mapName);
+        HazelcastInstance instance = createHazelcastInstance(getConfig());
+        IMap<String, MyObject> map = instance.getMap(name);
         MyObject myObjectExisting = new MyObject();
         map.put("key", myObjectExisting);
 
@@ -47,7 +46,7 @@ public class MergePolicySerializationTest extends HazelcastTestSupport {
         int partitionId = nodeEngine.getPartitionService().getPartitionId("key");
         Data dataKey = mapServiceContext.toData("key");
 
-        RecordStore recordStore = mapServiceContext.getRecordStore(partitionId,mapName);
+        RecordStore recordStore = mapServiceContext.getRecordStore(partitionId,name);
         MapMergePolicy mergePolicy = mapServiceContext.getMergePolicyProvider().getMergePolicy(PutIfAbsentMapMergePolicy.class.getName());
         EntryView<String, MyObject> mergingEntryView = new SimpleEntryView("key",new MyObject());
         recordStore.merge(dataKey, mergingEntryView, mergePolicy);

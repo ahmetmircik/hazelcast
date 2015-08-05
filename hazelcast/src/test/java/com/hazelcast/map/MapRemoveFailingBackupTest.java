@@ -55,17 +55,17 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
     @Test
     public void testMapRemoveFailingBackupShouldNotLeadToStaleDataWhenReadBackupIsEnabled() throws Exception {
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
-        final String mapName = randomMapName();
+        final String name = randomString();
         final String key = "2";
         final String value = "value2";
-        Config config = new Config();
+        Config config = getConfig();
         config.setProperty(GroupProperties.PROP_PARTITION_BACKUP_SYNC_INTERVAL, "5");
-        config.getMapConfig(mapName).setReadBackupData(true);
-        HazelcastInstance hz1 = factory.newHazelcastInstance(config);
-        HazelcastInstance hz2 = factory.newHazelcastInstance(config);
-        final HazelcastInstanceImpl hz1Impl = TestUtil.getHazelcastInstanceImpl(hz1);
-        final IMap<Object, Object> map1 = hz1.getMap(mapName);
-        final IMap<Object, Object> map2 = hz2.getMap(mapName);
+        config.getMapConfig(name).setReadBackupData(true);
+        HazelcastInstance instance1 = factory.newHazelcastInstance(config);
+        HazelcastInstance instance2 = factory.newHazelcastInstance(config);
+        final HazelcastInstanceImpl hz1Impl = TestUtil.getHazelcastInstanceImpl(instance1);
+        final IMap<Object, Object> map1 = instance1.getMap(name);
+        final IMap<Object, Object> map2 = instance2.getMap(name);
         MapProxyImpl<Object, Object> mock1 = (MapProxyImpl<Object, Object>) spy(map1);
         when(mock1.remove(anyString())).then(new Answer<Object>() {
             @Override
@@ -73,7 +73,7 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
                 NodeEngineImpl nodeEngine = hz1Impl.node.nodeEngine;
                 Object object = invocation.getArguments()[0];
                 final Data key = nodeEngine.toData(object);
-                RemoveOperation operation = new RemoveOperation(mapName, key);
+                RemoveOperation operation = new RemoveOperation(name, key);
                 int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
                 operation.setThreadId(ThreadUtil.getThreadId());
                 OperationService operationService = nodeEngine.getOperationService();
