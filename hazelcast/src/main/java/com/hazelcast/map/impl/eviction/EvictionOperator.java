@@ -33,6 +33,7 @@ import com.hazelcast.util.MemoryInfoAccessor;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Map;
 
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 
@@ -94,14 +95,16 @@ public final class EvictionOperator {
         final long criteriaValue = criterias[evictableBaseIndex];
         int evictedRecordCounter = 0;
         String mapName = recordStore.getName();
-        final Iterator<Record> iterator = recordStore.iterator();
+        final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
         while (iterator.hasNext()) {
-            final Record record = iterator.next();
-            final long value = getEvictionCriteriaValue(record, evictionPolicy);
+            Map.Entry<Data, Record> entry = iterator.next();
+            Data key = entry.getKey();
+            Record record = entry.getValue();
+            long value = getEvictionCriteriaValue(record, evictionPolicy);
             if (value <= criteriaValue) {
-                if (!recordStore.isLocked(record.getKey())) {
-                    recordStore.doPostEvictOperations(record, backup);
-                    fireEvent(record, mapName, mapServiceContext);
+                if (!recordStore.isLocked(key)) {
+                    recordStore.doPostEvictOperations(key, record, backup);
+                    fireEvent(key, record, mapName, mapServiceContext);
                     iterator.remove();
                     evictedRecordCounter++;
                 }
@@ -117,9 +120,10 @@ public final class EvictionOperator {
         final int size = recordStore.size();
         long[] criterias = null;
         int index = 0;
-        final Iterator<Record> iterator = recordStore.iterator();
+        final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
         while (iterator.hasNext()) {
-            final Record record = iterator.next();
+            Map.Entry<Data, Record> entry = iterator.next();
+            Record record = entry.getValue();
             if (criterias == null) {
                 criterias = new long[size];
             }
@@ -151,14 +155,13 @@ public final class EvictionOperator {
         return index < 0 ? 0 : index;
     }
 
-    public void fireEvent(Record record, String mapName, MapServiceContext mapServiceContext) {
+    public void fireEvent(Data dataKey, Record record, String mapName, MapServiceContext mapServiceContext) {
         if (!hasListener(mapName)) {
             return;
         }
         final MapEventPublisher mapEventPublisher = mapServiceContext.getMapEventPublisher();
         final NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
         final Address thisAddress = nodeEngine.getThisAddress();
-        final Data dataKey = record.getKey();
         final Data dataValue = mapServiceContext.toData(record.getValue());
         mapEventPublisher.publishEvent(thisAddress, mapName, EntryEventType.EVICTED, true,
                 dataKey, dataValue, null);

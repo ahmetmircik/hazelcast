@@ -33,6 +33,7 @@ import com.hazelcast.spi.impl.AbstractNamedOperation;
 import com.hazelcast.util.Clock;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 
 public class AddIndexOperation extends AbstractNamedOperation implements PartitionAwareOperation, MutatingOperation {
 
@@ -63,10 +64,11 @@ public class AddIndexOperation extends AbstractNamedOperation implements Partiti
         SerializationService ss = getNodeEngine().getSerializationService();
         Index index = indexService.addOrGetIndex(attributeName, ordered);
         final long now = getNow();
-        final Iterator<Record> iterator = recordStore.iterator(now, false);
+        final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator(now, false);
         while (iterator.hasNext()) {
-            final Record record = iterator.next();
-            Data key = record.getKey();
+            Map.Entry<Data, Record> entry = iterator.next();
+            Record record = entry.getValue();
+            Data key = entry.getKey();
             Object value = record.getValue();
             index.saveEntryIndex(new QueryEntry(ss, key, key, value));
         }

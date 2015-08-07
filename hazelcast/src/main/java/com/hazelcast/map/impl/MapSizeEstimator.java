@@ -16,16 +16,21 @@
 
 package com.hazelcast.map.impl;
 
+import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.nio.serialization.Data;
 
 /**
  * Size estimator for map.
- *
- * @param <T> : An instance of {@link com.hazelcast.map.impl.record.Record}.
  */
-class MapSizeEstimator<T extends Record> implements SizeEstimator<T> {
+public class MapSizeEstimator implements SizeEstimator {
 
     private volatile long size;
+    private final boolean objectFormatUsed;
+
+    public MapSizeEstimator(InMemoryFormat memoryFormat) {
+        this.objectFormatUsed = InMemoryFormat.OBJECT.equals(memoryFormat);
+    }
 
     @Override
     public long getSize() {
@@ -39,21 +44,34 @@ class MapSizeEstimator<T extends Record> implements SizeEstimator<T> {
 
     @Override
     public void reset() {
-        size = 0;
+        size = 0L;
     }
 
     @Override
-    public long getCost(T record) {
-        if (record == null) {
+    public long calculateSize(Object object) {
+        // currently we do not calculate heap cost for InMemoryFormat.OBJECT.
+        if (object == null || objectFormatUsed) {
             return 0L;
         }
-        final long cost = record.getCost();
-        if (cost == 0L) {
-            return cost;
+        final int refCost = 4;
+
+        if (object instanceof Data) {
+            long keyCost = ((Data) object).getHeapCost();
+            // CHM ref cost of key.
+            keyCost += refCost;
+            return keyCost;
         }
-        final int numberOfIntegers = 4;
-        // entry size in CHM
-        long refSize = numberOfIntegers * ((Integer.SIZE / Byte.SIZE));
-        return refSize + cost;
+
+        if (object instanceof Record) {
+            long recordCost = ((Record) object).getCost();
+            // CHM ref cost of value.
+            recordCost += refCost;
+            // CHM ref costs of other.
+            recordCost += refCost;
+            recordCost += refCost;
+            return recordCost;
+        }
+
+        return 0L;
     }
 }

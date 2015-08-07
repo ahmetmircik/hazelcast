@@ -24,6 +24,7 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.monitor.impl.LocalMapStatsImpl;
 import com.hazelcast.monitor.impl.NearCacheStatsImpl;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.partition.InternalPartitionService;
 import com.hazelcast.spi.NodeEngine;
@@ -32,6 +33,7 @@ import com.hazelcast.util.ConstructorFunction;
 import com.hazelcast.util.ExceptionUtil;
 
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -116,25 +118,26 @@ public class LocalMapStatsProvider {
         int lockedEntryCount = 0;
         long lastAccessTime = 0;
         long lastUpdateTime = 0;
-        long ownedEntryMemoryCost = 0;
         long hits = 0;
 
-        final Iterator<Record> iterator = recordStore.iterator();
+        final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
         while (iterator.hasNext()) {
-            final Record record = iterator.next();
+            Map.Entry<Data, Record> entry = iterator.next();
+            Data key = entry.getKey();
+            Record record = entry.getValue();
+
             hits += getHits(record);
-            ownedEntryMemoryCost += record.getCost();
-            lockedEntryCount += isLocked(record, recordStore);
+            lockedEntryCount += isLocked(key, recordStore);
             lastAccessTime = Math.max(lastAccessTime, record.getLastAccessTime());
             lastUpdateTime = Math.max(lastUpdateTime, record.getLastUpdateTime());
         }
 
-        localMapOnDemandCalculatedStats.incrementOwnedEntryMemoryCost(ownedEntryMemoryCost);
         localMapOnDemandCalculatedStats.incrementLockedEntryCount(lockedEntryCount);
         localMapOnDemandCalculatedStats.incrementHits(hits);
         localMapOnDemandCalculatedStats.incrementDirtyEntryCount(recordStore.getMapDataStore().notFinishedOperationsCount());
         localMapStats.setLastAccessTime(lastAccessTime);
         localMapStats.setLastUpdateTime(lastUpdateTime);
+        localMapOnDemandCalculatedStats.incrementOwnedEntryMemoryCost(recordStore.getHeapCost());
         localMapOnDemandCalculatedStats.incrementHeapCost(recordStore.getHeapCost());
         localMapOnDemandCalculatedStats.incrementOwnedEntryCount(recordStore.size());
     }
@@ -148,8 +151,8 @@ public class LocalMapStatsProvider {
      * Return 1 if locked, otherwise 0.
      * Used to find {@link LocalMapStatsImpl#lockedEntryCount}.
      */
-    private int isLocked(Record record, RecordStore recordStore) {
-        if (recordStore.isLocked(record.getKey())) {
+    private int isLocked(Data key, RecordStore recordStore) {
+        if (recordStore.isLocked(key)) {
             return 1;
         }
         return 0;
@@ -161,7 +164,6 @@ public class LocalMapStatsProvider {
     private void addReplicaPartitionStats(LocalMapOnDemandCalculatedStats localMapOnDemandCalculatedStats,
                                           String mapName, int partitionId, InternalPartition partition,
                                           InternalPartitionService partitionService, int backupCount, Address thisAddress) {
-        long heapCost = 0;
         long backupEntryCount = 0;
         long backupEntryMemoryCost = 0;
 
@@ -174,15 +176,14 @@ public class LocalMapStatsProvider {
             if (gotReplicaAddress(replicaAddress, thisAddress)) {
                 RecordStore recordStore = getRecordStoreOrNull(mapName, partitionId);
                 if (hasRecords(recordStore)) {
-                    heapCost += recordStore.getHeapCost();
+                    backupEntryMemoryCost += recordStore.getHeapCost();
                     backupEntryCount += recordStore.size();
-                    backupEntryMemoryCost += getMemoryCost(recordStore);
                 }
             }
         }
-        localMapOnDemandCalculatedStats.incrementHeapCost(heapCost);
-        localMapOnDemandCalculatedStats.incrementBackupEntryCount(backupEntryCount);
+        localMapOnDemandCalculatedStats.incrementHeapCost(backupEntryMemoryCost);
         localMapOnDemandCalculatedStats.incrementBackupEntryMemoryCost(backupEntryMemoryCost);
+        localMapOnDemandCalculatedStats.incrementBackupEntryCount(backupEntryCount);
     }
 
     private boolean hasRecords(RecordStore recordStore) {
@@ -201,15 +202,6 @@ public class LocalMapStatsProvider {
         nodeEngine.getLogger(getClass()).warning("Partition: " + partition + ", replica: " + replica + " has no owner!");
     }
 
-    private long getMemoryCost(RecordStore recordStore) {
-        final Iterator<Record> iterator = recordStore.iterator();
-        long cost = 0L;
-        while (iterator.hasNext()) {
-            final Record record = iterator.next();
-            cost += record.getCost();
-        }
-        return cost;
-    }
 
     private RecordStore getRecordStoreOrNull(String mapName, int partitionId) {
         final PartitionContainer partitionContainer = mapServiceContext.getPartitionContainer(partitionId);

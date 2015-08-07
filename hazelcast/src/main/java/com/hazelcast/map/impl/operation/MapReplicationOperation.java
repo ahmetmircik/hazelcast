@@ -21,7 +21,6 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.PartitionContainer;
-import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntries;
@@ -30,6 +29,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.map.impl.record.RecordReplicationInfo;
 import com.hazelcast.map.impl.record.Records;
+import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -73,11 +73,13 @@ public class MapReplicationOperation extends AbstractOperation implements Mutati
             String name = entry.getKey();
             // now prepare data to migrate records
             Set<RecordReplicationInfo> recordSet = new HashSet<RecordReplicationInfo>(recordStore.size());
-            final Iterator<Record> iterator = recordStore.iterator();
+            final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
             while (iterator.hasNext()) {
-                final Record record = iterator.next();
+                Entry<Data, Record> mapEntry = iterator.next();
+                Data key = mapEntry.getKey();
+                Record record = mapEntry.getValue();
                 RecordReplicationInfo recordReplicationInfo;
-                recordReplicationInfo = createRecordReplicationInfo(record, mapService);
+                recordReplicationInfo = createRecordReplicationInfo(key, record, mapService);
                 recordSet.add(recordReplicationInfo);
             }
             data.put(name, recordSet);
@@ -118,7 +120,7 @@ public class MapReplicationOperation extends AbstractOperation implements Mutati
                     Data key = recordReplicationInfo.getKey();
                     final Data value = recordReplicationInfo.getValue();
                     final MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
-                    Record newRecord = mapContainer.createRecord(key, value, -1L, Clock.currentTimeMillis());
+                    Record newRecord = mapContainer.createRecord(value, -1L, Clock.currentTimeMillis());
                     applyRecordInfo(newRecord, recordReplicationInfo);
                     recordStore.putRecord(key, newRecord);
                 }
@@ -208,9 +210,9 @@ public class MapReplicationOperation extends AbstractOperation implements Mutati
         return data == null || data.isEmpty();
     }
 
-    private RecordReplicationInfo createRecordReplicationInfo(Record record, MapService mapService) {
+    private RecordReplicationInfo createRecordReplicationInfo(Data key, Record record, MapService mapService) {
         final RecordInfo info = Records.buildRecordInfo(record);
-        return new RecordReplicationInfo(record.getKey(), mapService.getMapServiceContext().toData(record.getValue()),
+        return new RecordReplicationInfo(key, mapService.getMapServiceContext().toData(record.getValue()),
                 info);
     }
 }

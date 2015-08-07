@@ -16,25 +16,37 @@
 
 package com.hazelcast.map.impl.recordstore;
 
+import com.hazelcast.config.InMemoryFormat;
+import com.hazelcast.map.impl.MapSizeEstimator;
+import com.hazelcast.map.impl.SizeEstimator;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.nio.serialization.Data;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class InternalRecordStoreImpl<V extends Record> implements InternalRecordStore<Data, V> {
 
+    private SizeEstimator sizeEstimator;
+
+    private final RecordFactory<V> recordFactory;
     // Concurrency level is 1 since at most one thread can write at a time.
     private final ConcurrentMap<Data, V> records = new ConcurrentHashMap<Data, V>(1000, 0.75f, 1);
 
-    public InternalRecordStoreImpl() {
+    public InternalRecordStoreImpl(RecordFactory<V> recordFactory, InMemoryFormat memoryFormat) {
+        this.recordFactory = recordFactory;
+        this.sizeEstimator = new MapSizeEstimator(memoryFormat);
     }
 
     @Override
     public void clear() {
         records.clear();
+
+        sizeEstimator.reset();
     }
 
     @Override
@@ -43,8 +55,24 @@ public class InternalRecordStoreImpl<V extends Record> implements InternalRecord
     }
 
     @Override
-    public void add(V record) {
-        records.put(record.getKey(), record);
+    public void put(Data key, V record) {
+        V previousRecord = records.put(key, record);
+
+        if (previousRecord == null) {
+            updateSizeEstimator(calculateHeapCost(key));
+        }
+
+        updateSizeEstimator(-calculateHeapCost(previousRecord));
+        updateSizeEstimator(calculateHeapCost(record));
+    }
+
+    @Override
+    public void updateRecordValue(V record, Object value) {
+        updateSizeEstimator(-calculateHeapCost(record));
+
+        recordFactory.setValue(record, value);
+
+        updateSizeEstimator(calculateHeapCost(record));
     }
 
     @Override
@@ -55,6 +83,11 @@ public class InternalRecordStoreImpl<V extends Record> implements InternalRecord
     @Override
     public Set<Data> keySet() {
         return records.keySet();
+    }
+
+    @Override
+    public Set<Map.Entry<Data, V>> entrySet() {
+        return records.entrySet();
     }
 
     @Override
@@ -73,17 +106,39 @@ public class InternalRecordStoreImpl<V extends Record> implements InternalRecord
     }
 
     @Override
+    public SizeEstimator getSizeEstimator() {
+        return sizeEstimator;
+    }
+
+    @Override
     public boolean containsKey(Data key) {
         return records.containsKey(key);
     }
 
     @Override
     public Object remove(Data key) {
-        V remove = records.remove(key);
-        Object oldValue = remove.getValue();
-        if (remove != null) {
-            remove.invalidate();
+        V record = records.remove(key);
+
+        updateSizeEstimator(-calculateHeapCost(record));
+        updateSizeEstimator(-calculateHeapCost(key));
+
+        Object oldValue = record.getValue();
+        if (record != null) {
+            record.invalidate();
         }
         return oldValue;
     }
+
+    protected void updateSizeEstimator(long recordSize) {
+        sizeEstimator.add(recordSize);
+    }
+
+    protected long calculateHeapCost(Object obj) {
+        return sizeEstimator.calculateSize(obj);
+    }
+
+    public void setSizeEstimator(SizeEstimator sizeEstimator) {
+        this.sizeEstimator = sizeEstimator;
+    }
+
 }

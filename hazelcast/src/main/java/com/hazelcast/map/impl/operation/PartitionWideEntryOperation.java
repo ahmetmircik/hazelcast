@@ -28,6 +28,7 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.QueryEntry;
 import com.hazelcast.spi.BackupAwareOperation;
 import com.hazelcast.spi.Operation;
+
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
@@ -56,10 +57,11 @@ public class PartitionWideEntryOperation extends AbstractMultipleEntryOperation 
     public void run() {
         final long now = getNow();
 
-        final Iterator<Record> iterator = recordStore.iterator(now, false);
+        final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator(now, false);
         while (iterator.hasNext()) {
-            final Record record = iterator.next();
-            final Data dataKey = record.getKey();
+            Map.Entry<Data, Record> recordEntry = iterator.next();
+            Record record = recordEntry.getValue();
+            Data dataKey = recordEntry.getKey();
             final Object oldValue = record.getValue();
 
             if (!applyPredicate(dataKey, dataKey, oldValue)) {

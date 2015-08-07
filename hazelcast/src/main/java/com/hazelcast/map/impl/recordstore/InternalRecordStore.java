@@ -16,12 +16,17 @@
 
 package com.hazelcast.map.impl.recordstore;
 
+import com.hazelcast.map.impl.SizeEstimator;
+
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 public interface InternalRecordStore<K, V> {
 
-    void add(V record);
+    void put(K key, V record);
+
+    void updateRecordValue(V record, Object value);
 
     V get(K key);
 
@@ -33,6 +38,8 @@ public interface InternalRecordStore<K, V> {
 
     Set<K> keySet();
 
+    Set<Map.Entry<K, V>> entrySet();
+
     int size();
 
     boolean isEmpty();
@@ -40,4 +47,8 @@ public interface InternalRecordStore<K, V> {
     void clear();
 
     void destroy();
+
+    SizeEstimator getSizeEstimator();
+
+    void setSizeEstimator(SizeEstimator sizeEstimator);
 }

@@ -16,8 +16,6 @@
 
 package com.hazelcast.map.impl.record;
 
-import com.hazelcast.nio.serialization.Data;
-
 /**
  * @param <V>
  */
@@ -26,10 +24,7 @@ abstract class AbstractRecordWithStats<V> extends AbstractRecord<V> {
     protected RecordStatistics recordStatistics;
 
     protected AbstractRecordWithStats() {
-    }
-
-    protected AbstractRecordWithStats(Data key) {
-        super(key);
+        super();
         this.recordStatistics = new RecordStatistics();
     }
 
