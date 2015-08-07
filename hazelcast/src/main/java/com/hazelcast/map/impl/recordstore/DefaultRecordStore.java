@@ -478,11 +478,11 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = record.getValue();
             final long lastUpdateTime = record.getLastUpdateTime();
             mapDataStore.flush(key, value, lastUpdateTime, backup);
+            value = deleteRecord(key);
+            removeIndex(key);
             if (!backup) {
                 mapServiceContext.interceptRemove(name, value);
             }
-            deleteRecord(key);
-            removeIndex(key);
         }
         return value;
     }
@@ -1061,7 +1061,10 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return getOrNullIfExpired(key, record, now, backup);
     }
 
-    private void deleteRecord(Data key) {
-        internalRecordStore.remove(key);
+    /**
+     * Returns value of removed record.
+     */
+    private Object deleteRecord(Data key) {
+        return internalRecordStore.remove(key);
     }
 }
