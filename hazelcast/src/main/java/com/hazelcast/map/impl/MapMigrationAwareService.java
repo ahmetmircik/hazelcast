@@ -19,6 +19,7 @@ package com.hazelcast.map.impl;
 import com.hazelcast.map.impl.operation.MapReplicationOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.partition.MigrationEndpoint;
 import com.hazelcast.query.impl.IndexService;
@@ -30,6 +31,7 @@ import com.hazelcast.spi.PartitionReplicationEvent;
 import com.hazelcast.util.Clock;
 
 import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Defines migration behavior of map service.
@@ -90,16 +92,18 @@ class MapMigrationAwareService implements MigrationAwareService {
             final MapContainer mapContainer = mapServiceContext.getMapContainer(recordStore.getName());
             final IndexService indexService = mapContainer.getIndexService();
             if (indexService.hasIndex()) {
-                final Iterator<Record> iterator = recordStore.iterator(now, false);
+                final Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator(now, false);
                 while (iterator.hasNext()) {
-                    final Record record = iterator.next();
+                    Map.Entry<Data, Record> entry = iterator.next();
+                    Data key = entry.getKey();
+                    Record record = entry.getValue();
+
                     if (event.getMigrationEndpoint() == MigrationEndpoint.SOURCE) {
-                        indexService.removeEntryIndex(record.getKey());
+                        indexService.removeEntryIndex(key);
                     } else {
                         Object value = record.getValue();
                         if (value != null) {
-                            indexService.saveEntryIndex(new QueryEntry(serializationService, record.getKey(),
-                                    record.getKey(), value));
+                            indexService.saveEntryIndex(new QueryEntry(serializationService, key, key, value));
                         }
                     }
                 }

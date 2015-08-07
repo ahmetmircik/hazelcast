@@ -26,7 +26,6 @@ import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MapPartitionDestroyOperation;
-import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.listener.MapPartitionLostListener;
 import com.hazelcast.map.merge.MergePolicyProvider;
@@ -517,8 +516,4 @@ class MapServiceContextImpl implements MapServiceContext {
         return DefaultMapOperationProvider.get();
     }
 
-    @Override
-    public RecordStore createRecordStore(NodeEngine nodeEngine, MapContainer container, int partitionId, MapKeyLoader keyLoader) {
-        return new DefaultRecordStore(nodeEngine, container, partitionId, keyLoader);
-    }
 }

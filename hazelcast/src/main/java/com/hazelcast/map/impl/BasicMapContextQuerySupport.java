@@ -80,11 +80,12 @@ class BasicMapContextQuerySupport implements MapContextQuerySupport {
         List<QueryableEntry> resultList = new LinkedList<QueryableEntry>();
 
         PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
-        Iterator<Record> iterator = container.getRecordStore(mapName).loadAwareIterator(getNow(), false);
+        Iterator<Map.Entry<Data, Record>> iterator = container.getRecordStore(mapName).loadAwareIterator(getNow(), false);
         Map.Entry<Integer, Map.Entry> nearestAnchorEntry = PagingPredicateAccessor.getNearestAnchorEntry(pagingPredicate);
         while (iterator.hasNext()) {
-            Record record = iterator.next();
-            Data key = record.getKey();
+            Map.Entry<Data, Record> entry = iterator.next();
+            Record record = entry.getValue();
+            Data key = entry.getKey();
             Object value = getValueOrCachedValue(record);
             if (value == null) {
                 continue;

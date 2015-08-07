@@ -37,9 +37,9 @@ public class ObjectRecordFactory implements RecordFactory<Object> {
     }
 
     @Override
-    public Record<Object> newRecord(Data key, Object value) {
+    public Record<Object> newRecord(Object value) {
         Object objectValue = serializationService.toObject(value);
-        return statisticsEnabled ? new ObjectRecordWithStats(key, objectValue) : new ObjectRecord(key, objectValue);
+        return statisticsEnabled ? new ObjectRecordWithStats(objectValue) : new ObjectRecord(objectValue);
     }
 
     @Override

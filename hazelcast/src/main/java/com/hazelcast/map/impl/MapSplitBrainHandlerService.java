@@ -25,6 +25,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.merge.MapMergePolicy;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.InternalPartitionService;
 import com.hazelcast.query.impl.IndexService;
 import com.hazelcast.spi.NodeEngine;
@@ -57,8 +58,8 @@ class MapSplitBrainHandlerService implements SplitBrainHandlerService {
         final long now = getNow();
 
         final Map<String, MapContainer> mapContainers = mapServiceContext.getMapContainers();
-        final Map<MapContainer, Collection<Record>> recordMap = new HashMap<MapContainer,
-                Collection<Record>>(mapContainers.size());
+        final Map<MapContainer, Collection<Map.Entry<Data, Record>>> recordMap = new HashMap<MapContainer,
+                Collection<Map.Entry<Data, Record>>>(mapContainers.size());
         final InternalPartitionService partitionService = nodeEngine.getPartitionService();
         final int partitionCount = partitionService.getPartitionCount();
         final Address thisAddress = nodeEngine.getClusterService().getThisAddress();
@@ -68,15 +69,15 @@ class MapSplitBrainHandlerService implements SplitBrainHandlerService {
                 RecordStore recordStore = mapServiceContext.getPartitionContainer(i).getRecordStore(mapContainer.getName());
                 // add your owned entries to the map so they will be merged
                 if (thisAddress.equals(partitionService.getPartitionOwner(i))) {
-                    Collection<Record> records = recordMap.get(mapContainer);
+                    Collection<Map.Entry<Data, Record>> records = recordMap.get(mapContainer);
                     if (records == null) {
-                        records = new ArrayList<Record>();
+                        records = new ArrayList<Map.Entry<Data, Record>>();
                         recordMap.put(mapContainer, records);
                     }
-                    final Iterator<Record> iterator = recordStore.iterator(now, false);
+                    Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator(now, false);
                     while (iterator.hasNext()) {
-                        final Record record = iterator.next();
-                        records.add(record);
+                        Map.Entry<Data, Record> entry = iterator.next();
+                        records.add(entry);
                     }
                 }
                 // clear all records either owned or backup
@@ -94,9 +95,9 @@ class MapSplitBrainHandlerService implements SplitBrainHandlerService {
 
     private class Merger implements Runnable {
         private static final int TIMEOUT_FACTOR = 500;
-        Map<MapContainer, Collection<Record>> recordMap;
+        Map<MapContainer, Collection<Map.Entry<Data, Record>>> recordMap;
 
-        public Merger(Map<MapContainer, Collection<Record>> recordMap) {
+        public Merger(Map<MapContainer, Collection<Map.Entry<Data, Record>>> recordMap) {
             this.recordMap = recordMap;
         }
 
@@ -120,21 +121,23 @@ class MapSplitBrainHandlerService implements SplitBrainHandlerService {
             };
 
             for (MapContainer mapContainer : recordMap.keySet()) {
-                Collection<Record> recordList = recordMap.get(mapContainer);
+                Collection<Map.Entry<Data, Record>> recordList = recordMap.get(mapContainer);
                 String mergePolicyName = mapContainer.getMapConfig().getMergePolicy();
 
                 // todo number of records may be high.
                 // todo below can be optimized a many records can be send in single invocation
                 final MapMergePolicy finalMergePolicy
                         = mapServiceContext.getMergePolicyProvider().getMergePolicy(mergePolicyName);
-                for (Record record : recordList) {
+                for (Map.Entry<Data, Record> entry : recordList) {
                     recordCount++;
-                    EntryView entryView = EntryViews.createSimpleEntryView(record.getKey(),
+                    Data key = entry.getKey();
+                    Record record = entry.getValue();
+                    EntryView entryView = EntryViews.createSimpleEntryView(key,
                             mapServiceContext.toData(record.getValue()), record);
                     MergeOperation operation = new MergeOperation(mapContainer.getName(),
-                            record.getKey(), entryView, finalMergePolicy);
+                            key, entryView, finalMergePolicy);
                     try {
-                        int partitionId = nodeEngine.getPartitionService().getPartitionId(record.getKey());
+                        int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
                         ICompletableFuture f = nodeEngine.getOperationService()
                                 .invokeOnPartition(SERVICE_NAME, operation, partitionId);
 

@@ -47,7 +47,7 @@ public class SizeEstimatorTest extends HazelcastTestSupport {
 
     @Test
     public void testSinglePut() throws InterruptedException {
-        long expectedPerEntryHeapCost = 166L;
+        long expectedPerEntryHeapCost = 162L;
         SizeEstimatorTestMapBuilder<Integer, Long> testMapBuilder = new SizeEstimatorTestMapBuilder<Integer, Long>(factory);
         IMap<Integer, Long> map = testMapBuilder.withNodeCount(1).withBackupCount(0).build(getConfig());
         map.put(0, 10L);
@@ -56,7 +56,7 @@ public class SizeEstimatorTest extends HazelcastTestSupport {
 
     @Test
     public void testExactHeapCostAfterUpdateWithMultipleBackupNodes() throws InterruptedException {
-        long expectedPerEntryHeapCost = 166L;
+        long expectedPerEntryHeapCost = 162L;
         int putCount = 1;
         int nodeCount = 1;
         SizeEstimatorTestMapBuilder<Integer, Long> testMapBuilder = new SizeEstimatorTestMapBuilder<Integer, Long>(factory);
@@ -123,7 +123,9 @@ public class SizeEstimatorTest extends HazelcastTestSupport {
         final String NEAR_CACHED_MAP = randomString();
 
         Config config = getConfig();
-        config.getMapConfig(NEAR_CACHED_MAP).setBackupCount(0);
+        NearCacheConfig nearCacheConfig = new NearCacheConfig();
+        nearCacheConfig.setInMemoryFormat(InMemoryFormat.BINARY);
+        config.getMapConfig(NEAR_CACHED_MAP).setBackupCount(0).setNearCacheConfig(nearCacheConfig);
         config.getMapConfig(NO_NEAR_CACHED_MAP).setBackupCount(0);
 
         final HazelcastInstance h[] = factory.newInstances(config);

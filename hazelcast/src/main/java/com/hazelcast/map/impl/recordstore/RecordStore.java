@@ -16,11 +16,13 @@
 
 package com.hazelcast.map.impl.recordstore;
 
+import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.map.merge.MapMergePolicy;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
@@ -158,15 +160,14 @@ public interface RecordStore<V extends Record> {
      *
      * @return read only iterator for map values.
      */
-    Iterator<V> iterator();
+    Iterator<Map.Entry<Data, Record>> iterator();
 
     /**
      * Iterates over record store values by respecting expiration.
      *
      * @return read only iterator for map values.
      */
-    Iterator<V> iterator(long now, boolean backup);
-
+    Iterator<Map.Entry<Data, Record>> iterator(long now, boolean backup);
 
     /**
      * Iterates over record store values but first waits map store to load.
@@ -178,7 +179,7 @@ public interface RecordStore<V extends Record> {
      * @param backup <code>true</code> if a backup partition, otherwise <code>false</code>.
      * @return read only iterator for map values.
      */
-    Iterator<V> loadAwareIterator(long now, boolean backup);
+    Iterator<Map.Entry<Data, Record>> loadAwareIterator(long now, boolean backup);
 
     /**
      * Returns records map.
@@ -285,11 +286,11 @@ public interface RecordStore<V extends Record> {
      */
     V getRecordOrNull(Data key);
 
-    boolean isRecordExpirable(Record record, long now, boolean backup);
+    boolean isRecordExpirable(Data key, Record record, long now, boolean backup);
 
     void evictEntries(long now, boolean backup);
 
-    Object doPostEvictOperations(Record removedRecord, boolean backup);
+    Object doPostEvictOperations(Data key, Record removedRecord, boolean backup);
 
     /**
      * Loads all keys and values
@@ -303,5 +304,5 @@ public interface RecordStore<V extends Record> {
      **/
     void maybeDoInitialLoad();
 
-    InternalRecordStore createInternalRecordStore();
+    InternalRecordStore createInternalRecordStore(RecordFactory<V> recordFactory, InMemoryFormat memoryFormat);
 }

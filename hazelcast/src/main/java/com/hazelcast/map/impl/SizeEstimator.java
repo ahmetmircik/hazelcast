@@ -27,7 +27,7 @@ public interface SizeEstimator<T> {
 
     void add(long size);
 
-    long getCost(T record);
+    long calculateSize(T object);
 
     void reset();
 }

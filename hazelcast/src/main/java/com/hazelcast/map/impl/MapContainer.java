@@ -23,6 +23,7 @@ import com.hazelcast.core.IFunction;
 import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
+import com.hazelcast.map.impl.nearcache.NearCacheSizeEstimator;
 import com.hazelcast.map.impl.record.DataRecordFactory;
 import com.hazelcast.map.impl.record.ObjectRecordFactory;
 import com.hazelcast.map.impl.record.Record;
@@ -46,7 +47,6 @@ import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateMaxIdleMillis
 import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateTTLMillis;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.pickTTL;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTime;
-import static com.hazelcast.map.impl.SizeEstimators.createNearCacheSizeEstimator;
 import static com.hazelcast.map.impl.mapstore.MapStoreContextFactory.createMapStoreContext;
 
 /**
@@ -102,7 +102,7 @@ public class MapContainer {
         initWanReplication(mapServiceContext.getNodeEngine());
         interceptors = new CopyOnWriteArrayList<MapInterceptor>();
         interceptorMap = new ConcurrentHashMap<String, MapInterceptor>();
-        nearCacheSizeEstimator = createNearCacheSizeEstimator();
+        nearCacheSizeEstimator = new NearCacheSizeEstimator();
         mapStoreContext = createMapStoreContext(this);
         mapStoreContext.start();
     }
@@ -187,8 +187,8 @@ public class MapContainer {
         interceptors.remove(interceptor);
     }
 
-    public Record createRecord(Data key, Object value, long ttlMillis, long now) {
-        Record record = getRecordFactory().newRecord(key, value);
+    public Record createRecord(Object value, long ttlMillis, long now) {
+        Record record = getRecordFactory().newRecord(value);
         record.setLastAccessTime(now);
         record.setLastUpdateTime(now);
         record.setCreationTime(now);

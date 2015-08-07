@@ -28,13 +28,16 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.NodeEngine;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.map.impl.ExpirationTimeSetter.*;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateExpirationWithDelay;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateMaxIdleMillis;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTime;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 
 /**
@@ -52,7 +55,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
      * Iterates over a pre-set entry count/percentage in one round.
      * Used in expiration logic for traversing entries. Initializes lazily.
      */
-    private Iterator<Record> expirationIterator;
+    private Iterator<Map.Entry<Data, Record>> expirationIterator;
 
     /**
      * If there is no clean-up caused by puts after some time,
@@ -149,35 +152,42 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         return Math.round(maxIterationCount);
     }
 
+    // TODO refactor this method, record variable may be confusing.
     private int evictExpiredEntriesInternal(int maxIterationCount, long now, boolean backup) {
         int evictedCount = 0;
         int checkedEntryCount = 0;
         initExpirationIterator();
-        List<Record> records = new ArrayList<Record>();
+        List<Map.Entry<Data, Record>> entries = new ArrayList<Map.Entry<Data, Record>>();
         while (expirationIterator.hasNext()) {
             if (checkedEntryCount >= maxIterationCount) {
                 break;
             }
             checkedEntryCount++;
-            Record record = expirationIterator.next();
-            if (isRecordExpirable(record, now, backup)) {
-                records.add(record);
+
+            Map.Entry<Data, Record> entry = expirationIterator.next();
+            Record record = entry.getValue();
+            Data dataKey = entry.getKey();
+            if (isRecordExpirable(dataKey, record, now, backup)) {
+                entries.add(entry);
                 evictedCount++;
             }
         }
 
-        for (Record record : records) {
-            doPostEvictOperations(record, backup);
-            getEvictionOperator().fireEvent(record, name, mapServiceContext);
-            internalRecordStore.remove(record.getKey());
+        for (Map.Entry<Data, Record> e : entries) {
+            Data key = e.getKey();
+            Record recordValue = e.getValue();
+            doPostEvictOperations(key, recordValue, backup);
+            getEvictionOperator().fireEvent(key, recordValue, name, mapServiceContext);
+            internalRecordStore.remove(key);
         }
+
 
         return evictedCount;
     }
 
     private void initExpirationIterator() {
         if (expirationIterator == null || !expirationIterator.hasNext()) {
-            expirationIterator = internalRecordStore.values().iterator();
+            expirationIterator = internalRecordStore.entrySet().iterator();
         }
     }
 
@@ -304,14 +314,13 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
      * @param record {@link com.hazelcast.map.impl.record.Record}
      * @return null if evictable.
      */
-    protected Record getOrNullIfExpired(Record record, long now, boolean backup) {
+    protected Record getOrNullIfExpired(Data key, Record record, long now, boolean backup) {
         if (!isRecordStoreExpirable()) {
             return record;
         }
         if (record == null) {
             return null;
         }
-        final Data key = record.getKey();
         if (isLocked(key)) {
             return record;
         }
@@ -320,17 +329,17 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         }
         evictInternal(key, backup);
         if (!backup) {
-            getEvictionOperator().fireEvent(record, name, mapServiceContext);
+            getEvictionOperator().fireEvent(key, record, name, mapServiceContext);
         }
         return null;
     }
 
     @Override
-    public boolean isRecordExpirable(Record record, long now, boolean backup) {
+    public boolean isRecordExpirable(Data key, Record record, long now, boolean backup) {
         checkNotNull(record, "record cannot be null");
 
         return isRecordStoreExpirable()
-                && !isLocked(record.getKey())
+                && !isLocked(key)
                 && isExpired(record, now, backup);
     }
 
@@ -415,25 +424,27 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     /**
      * Read only iterator. Iterates by checking whether a record expired or not.
      */
-    protected final class RecordStoreIterator implements Iterator<Record> {
 
+    protected final class RecordStoreIterator implements Iterator<Map.Entry<Data, Record>> {
         private final long now;
         private final boolean checkExpiration;
         private final boolean backup;
-        private final Iterator<Record> iterator;
-        private Record nextRecord;
-        private Record lastReturned;
+        private final Iterator<Map.Entry<Data, Record>> iterator;
+        private Map.Entry<Data, Record> nextEntry;
+        private Map.Entry<Data, Record> lastReturned;
 
-        protected RecordStoreIterator(Collection<Record> values, long now, boolean backup) {
-            this(values, now, true, backup);
+
+        protected RecordStoreIterator(Set<Map.Entry<Data, Record>> entries, long now, boolean backup) {
+            this(entries, now, true, backup);
         }
 
-        protected RecordStoreIterator(Collection<Record> values) {
-            this(values, -1L, false, false);
+        protected RecordStoreIterator(Set<Map.Entry<Data, Record>> entries) {
+            this(entries, -1L, false, false);
         }
 
-        private RecordStoreIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
-            this.iterator = values.iterator();
+        private RecordStoreIterator(Set<Map.Entry<Data, Record>> entries, long now,
+                                    boolean checkExpiration, boolean backup) {
+            this.iterator = entries.iterator();
             this.now = now;
             this.checkExpiration = checkExpiration;
             this.backup = backup;
@@ -442,15 +453,15 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
 
         @Override
         public boolean hasNext() {
-            return nextRecord != null;
+            return nextEntry != null;
         }
 
         @Override
-        public Record next() {
-            if (nextRecord == null) {
+        public Map.Entry<Data, Record> next() {
+            if (nextEntry == null) {
                 throw new NoSuchElementException();
             }
-            lastReturned = nextRecord;
+            lastReturned = nextEntry;
             advance();
             return lastReturned;
         }
@@ -468,21 +479,21 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         private void advance() {
             final long now = this.now;
             final boolean checkExpiration = this.checkExpiration;
-            final Iterator<Record> iterator = this.iterator;
+            final Iterator<Map.Entry<Data, Record>> iterator = this.iterator;
 
             while (iterator.hasNext()) {
-                nextRecord = iterator.next();
-                if (nextRecord != null) {
+                nextEntry = iterator.next();
+                if (nextEntry != null) {
                     if (!checkExpiration) {
                         return;
                     }
 
-                    if (!isExpired(nextRecord, now, backup)) {
+                    if (!isExpired(nextEntry.getValue(), now, backup)) {
                         return;
                     }
                 }
             }
-            nextRecord = null;
+            nextEntry = null;
         }
     }
 }

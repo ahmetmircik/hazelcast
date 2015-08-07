@@ -115,5 +115,4 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport, 
 
     MapOperationProvider getMapOperationProvider(String name);
 
-    RecordStore createRecordStore(NodeEngine nodeEngine, MapContainer mapContainer, int partitionId, MapKeyLoader keyLoader);
 }
