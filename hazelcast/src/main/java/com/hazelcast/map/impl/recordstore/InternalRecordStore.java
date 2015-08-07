@@ -26,7 +26,7 @@ public interface InternalRecordStore<K, V> {
 
     void put(K key, V record);
 
-    void updateRecordValue(V record, Object value);
+    void updateRecordValue(K key, V record, Object value);
 
     V get(K key);
 

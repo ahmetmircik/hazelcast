@@ -68,7 +68,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     private final Collection<Future> loadingFutures = new ArrayList<Future>();
 
     public DefaultRecordStore(MapContainer mapContainer, int partitionId,
-                              MapKeyLoader keyLoader,  ILogger logger) {
+                              MapKeyLoader keyLoader, ILogger logger) {
         super(mapContainer, partitionId);
 
         this.logger = logger;
@@ -183,7 +183,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             record = createRecord(value, ttl, now);
             internalRecordStore.put(key, record);
         } else {
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
         }
         if (putTransient) {
             mapDataStore.addTransient(key, now);
@@ -771,7 +771,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = mapServiceContext.interceptPut(name, oldValue, value);
             value = mapDataStore.add(key, value, now);
             onStore(record);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             saveIndex(key, record);
         }
     }
@@ -797,7 +797,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = mapServiceContext.interceptPut(name, oldValue, value);
             value = mapDataStore.add(key, value, now);
             onStore(record);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
             saveIndex(key, record);
         }
@@ -822,7 +822,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = mapServiceContext.interceptPut(name, record.getValue(), value);
             value = mapDataStore.add(key, value, now);
             onStore(record);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
         }
         saveIndex(key, record);
@@ -890,7 +890,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         update = mapServiceContext.interceptPut(name, oldValue, update);
         update = mapDataStore.add(key, update, now);
         onStore(record);
-        updateRecord(record, update, now);
+        updateRecord(key, record, update, now);
         saveIndex(key, record);
         return oldValue;
     }
@@ -913,7 +913,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         update = mapServiceContext.interceptPut(mapName, current, update);
         update = mapDataStore.add(key, update, now);
         onStore(record);
-        updateRecord(record, update, now);
+        updateRecord(key, record, update, now);
         saveIndex(key, record);
         return true;
     }
@@ -933,7 +933,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
         } else {
             value = mapServiceContext.interceptPut(name, record.getValue(), value);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
         }
         saveIndex(key, record);
@@ -964,7 +964,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         } else {
             oldValue = record.getValue();
             value = mapServiceContext.interceptPut(name, record.getValue(), value);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
         }
         saveIndex(key, record);
@@ -988,7 +988,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = mapServiceContext.interceptPut(name, record.getValue(), value);
             value = mapDataStore.add(key, value, now);
             onStore(record);
-            updateRecord(record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
         }
         saveIndex(key, record);

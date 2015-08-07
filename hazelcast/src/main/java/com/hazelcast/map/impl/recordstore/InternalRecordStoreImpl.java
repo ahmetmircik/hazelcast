@@ -67,7 +67,7 @@ public class InternalRecordStoreImpl<V extends Record> implements InternalRecord
     }
 
     @Override
-    public void updateRecordValue(V record, Object value) {
+    public void updateRecordValue(Data key, V record, Object value) {
         updateSizeEstimator(-calculateHeapCost(record));
 
         recordFactory.setValue(record, value);
