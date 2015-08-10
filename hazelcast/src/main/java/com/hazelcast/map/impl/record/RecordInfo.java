@@ -123,7 +123,7 @@ public class RecordInfo implements DataSerializable {
     public void readData(ObjectDataInput in) throws IOException {
         boolean statsEnabled = in.readBoolean();
         if (statsEnabled) {
-            statistics = new RecordStatistics();
+            statistics = new RecordStatisticsImpl();
             statistics.readData(in);
         }
         version = in.readLong();

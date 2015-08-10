@@ -25,7 +25,7 @@ abstract class AbstractRecordWithStats<V> extends AbstractRecord<V> {
 
     protected AbstractRecordWithStats() {
         super();
-        this.recordStatistics = new RecordStatistics();
+        this.recordStatistics = new RecordStatisticsImpl();
     }
 
     @Override
@@ -59,6 +59,6 @@ abstract class AbstractRecordWithStats<V> extends AbstractRecord<V> {
         final long cost = super.getCost();
         // reference cost of RecordStatistics object.
         final int objectReferenceInBytes = 4;
-        return cost + objectReferenceInBytes + recordStatistics.size();
+        return cost + objectReferenceInBytes + recordStatistics.getMemoryCost();
     }
 }

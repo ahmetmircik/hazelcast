@@ -16,78 +16,26 @@
 
 package com.hazelcast.map.impl.record;
 
-import com.hazelcast.nio.ObjectDataInput;
-import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.DataSerializable;
-import com.hazelcast.util.Clock;
-import java.io.IOException;
 
-/**
- * TODO empty statistics.
- * Some statistics of a {@link com.hazelcast.map.impl.record.Record}
- */
-public class RecordStatistics implements DataSerializable {
+public interface RecordStatistics extends DataSerializable {
 
-    // TODO is volatile needed? if yes then hits should be atomicnumber
-    protected int hits;
-    protected long lastStoredTime;
-    protected long expirationTime;
+    int getHits();
 
-    public RecordStatistics() {
+    void setHits(int hits);
 
-    }
+    long getExpirationTime();
 
-    public int getHits() {
-        return hits;
-    }
+    void setExpirationTime(long expirationTime);
 
-    public void setHits(int hits) {
-        this.hits = hits;
-    }
+    void access();
 
-    public long getExpirationTime() {
-        return expirationTime;
-    }
+    void store();
 
-    public void setExpirationTime(long expirationTime) {
-        this.expirationTime = expirationTime;
-    }
+    long getLastStoredTime();
 
-    public void access() {
-        hits++;
-    }
+    void setLastStoredTime(long lastStoredTime);
 
-    public void store() {
-        lastStoredTime = Clock.currentTimeMillis();
-    }
-
-    public long getLastStoredTime() {
-        return lastStoredTime;
-    }
-
-    public void setLastStoredTime(long lastStoredTime) {
-        this.lastStoredTime = lastStoredTime;
-    }
-
-    public long size() {
-        //size of the instance.
-        final int numberOfLongVariables = 3;
-        return numberOfLongVariables * (Long.SIZE / Byte.SIZE) + (Integer.SIZE / Byte.SIZE);
-    }
-
-    @Override
-    public void writeData(ObjectDataOutput out) throws IOException {
-        out.writeInt(hits);
-        out.writeLong(lastStoredTime);
-        out.writeLong(expirationTime);
-    }
-
-    @Override
-    public void readData(ObjectDataInput in) throws IOException {
-        hits = in.readInt();
-        lastStoredTime = in.readLong();
-        expirationTime = in.readLong();
-    }
-
+    long getMemoryCost();
 
 }
