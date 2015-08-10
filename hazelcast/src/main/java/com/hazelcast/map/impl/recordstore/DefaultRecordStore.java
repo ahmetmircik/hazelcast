@@ -1033,16 +1033,14 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     private Object removeRecord(Data key, Record record, long now) {
         Object oldValue = record.getValue();
-        if (oldValue instanceof Data) {
-            oldValue = toData(oldValue);
-        }
-        oldValue = mapServiceContext.interceptRemove(name, oldValue);
+
         if (oldValue != null) {
             removeIndex(key);
             mapDataStore.remove(key, now);
             onStore(record);
         }
-        deleteRecord(key);
+        oldValue = deleteRecord(key);
+        oldValue = mapServiceContext.interceptRemove(name, oldValue);
         return oldValue;
     }
 
