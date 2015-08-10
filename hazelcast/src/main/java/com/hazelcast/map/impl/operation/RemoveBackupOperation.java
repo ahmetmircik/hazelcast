@@ -28,10 +28,10 @@ import com.hazelcast.spi.BackupOperation;
 import com.hazelcast.spi.impl.MutatingOperation;
 import java.io.IOException;
 
-public final class RemoveBackupOperation extends KeyBasedMapOperation implements BackupOperation, MutatingOperation,
+public class RemoveBackupOperation extends KeyBasedMapOperation implements BackupOperation, MutatingOperation,
         IdentifiedDataSerializable {
 
-    private boolean unlockKey;
+    boolean unlockKey;
 
     public RemoveBackupOperation() {
     }
