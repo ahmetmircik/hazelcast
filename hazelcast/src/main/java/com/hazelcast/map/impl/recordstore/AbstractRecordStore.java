@@ -112,11 +112,12 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         accessRecord(record, now);
     }
 
-    protected void updateRecord(Data key, Record record, Object value, long now) {
+    // returns old value.
+    protected Object updateRecord(Data key, Record record, Object value, long now) {
         accessRecord(record, now);
         record.setLastUpdateTime(now);
         record.onUpdate();
-        internalRecordStore.updateRecordValue(key, record, value);
+        return internalRecordStore.updateRecordValue(key, record, value);
     }
 
     @Override
