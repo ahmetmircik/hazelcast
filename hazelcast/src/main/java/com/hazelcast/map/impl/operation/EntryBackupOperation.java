@@ -44,6 +44,8 @@ public class EntryBackupOperation extends KeyBasedMapOperation implements Backup
 
     @Override
     public void innerBeforeRun() {
+        super.innerBeforeRun();
+
         if (entryProcessor instanceof HazelcastInstanceAware) {
             HazelcastInstance hazelcastInstance = getNodeEngine().getHazelcastInstance();
             ((HazelcastInstanceAware) entryProcessor).setHazelcastInstance(hazelcastInstance);

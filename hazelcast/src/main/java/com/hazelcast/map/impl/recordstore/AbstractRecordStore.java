@@ -59,6 +59,8 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
 
     protected final int partitionId;
 
+    protected final InMemoryFormat inMemoryFormat;
+
     protected AbstractRecordStore(MapContainer mapContainer, int partitionId) {
         this.mapContainer = mapContainer;
         this.partitionId = partitionId;
@@ -66,8 +68,8 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         this.serializationService = mapServiceContext.getNodeEngine().getSerializationService();
         this.name = mapContainer.getName();
         this.recordFactory = mapContainer.getRecordFactory();
-        this.internalRecordStore = createInternalRecordStore(recordFactory,
-                mapContainer.getMapConfig().getInMemoryFormat());
+        this.inMemoryFormat = mapContainer.getMapConfig().getInMemoryFormat();
+        this.internalRecordStore = createInternalRecordStore(recordFactory, inMemoryFormat);
     }
 
     @Override
@@ -112,12 +114,11 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         accessRecord(record, now);
     }
 
-    // returns old value.
-    protected Object updateRecord(Data key, Record record, Object value, long now) {
+    protected void updateRecord(Data key, Record record, Object value, long now) {
         accessRecord(record, now);
         record.setLastUpdateTime(now);
         record.onUpdate();
-        return internalRecordStore.updateRecordValue(key, record, value);
+        internalRecordStore.updateRecordValue(key, record, value);
     }
 
     @Override
@@ -129,8 +130,16 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     protected void saveIndex(Data dataKey, Record record) {
         final IndexService indexService = mapContainer.getIndexService();
         if (indexService.hasIndex()) {
+
+            Object value = record.getValue();
+            // When using format InMemoryFormat.NATIVE, just copy key & value to heap.
+            if (InMemoryFormat.NATIVE.equals(inMemoryFormat)) {
+                dataKey = toData(dataKey);
+                value = toData(record.getValue());
+            }
+
             SerializationService ss = mapServiceContext.getNodeEngine().getSerializationService();
-            QueryableEntry queryableEntry = new QueryEntry(ss, dataKey, dataKey, record.getValue());
+            QueryableEntry queryableEntry = new QueryEntry(ss, dataKey, dataKey, value);
             indexService.saveEntryIndex(queryableEntry);
         }
     }

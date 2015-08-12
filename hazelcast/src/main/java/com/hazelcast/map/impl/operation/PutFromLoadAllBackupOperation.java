@@ -35,7 +35,7 @@ import java.util.List;
  *
  * @see PutFromLoadAllOperation
  */
-public class PutFromLoadAllBackupOperation extends AbstractMapOperation implements BackupOperation, MutatingOperation,
+public class PutFromLoadAllBackupOperation extends MapOperation implements BackupOperation, MutatingOperation,
         DataSerializable {
 
     private List<Data> keyValueSequence;

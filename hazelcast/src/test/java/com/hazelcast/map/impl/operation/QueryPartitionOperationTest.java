@@ -16,7 +16,7 @@ import static org.junit.Assert.assertEquals;
 public class QueryPartitionOperationTest extends QueryOperationTestSupport {
 
     @Override
-    protected AbstractMapOperation createQueryOperation() {
+    protected MapOperation createQueryOperation() {
         return new QueryPartitionOperation(MAP_NAME, TruePredicate.INSTANCE);
     }
 

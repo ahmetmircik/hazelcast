@@ -41,7 +41,8 @@ public class MapClearMessageTask
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new ClearOperationFactory(parameters.name);
+        String mapName = parameters.name;
+        return new ClearOperationFactory(mapName);
     }
 
     @Override

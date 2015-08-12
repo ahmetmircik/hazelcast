@@ -30,7 +30,7 @@ import java.util.Collection;
 
 import static java.util.Collections.singletonList;
 
-public class QueryPartitionOperation extends AbstractMapOperation implements PartitionAwareOperation, ReadonlyOperation {
+public class QueryPartitionOperation extends MapOperation implements PartitionAwareOperation, ReadonlyOperation {
 
     private Predicate predicate;
     private QueryResult result;

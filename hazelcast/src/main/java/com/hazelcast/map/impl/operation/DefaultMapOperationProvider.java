@@ -33,12 +33,17 @@ public final class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public KeyBasedMapOperation createPutOperation(String name, Data key, Data value, long ttl) {
+    public MapOperation createPutOperation(String name, Data key, Data value, long ttl) {
         return new PutOperation(name, key, value, ttl);
     }
 
     @Override
-    public KeyBasedMapOperation createRemoveOperation(String name, Data key) {
+    public MapOperation createRemoveOperation(String name, Data key) {
         return new RemoveOperation(name, key);
+    }
+
+    @Override
+    public MapOperation createContainsKeyOperation(String name, Data dataKey) {
+        return new ContainsKeyOperation(name, dataKey);
     }
 }

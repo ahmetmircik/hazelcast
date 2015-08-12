@@ -45,6 +45,8 @@ public class TxnUnlockOperation extends LockAwareOperation implements MapTxnOper
 
     @Override
     public void innerBeforeRun() {
+        super.innerBeforeRun();
+
         if (!recordStore.canAcquireLock(dataKey, ownerUuid, threadId)) {
             throw new TransactionException("Cannot acquire lock uuid: " + ownerUuid + ", threadId: " + threadId);
         }

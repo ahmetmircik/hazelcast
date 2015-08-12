@@ -23,7 +23,7 @@ import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.operation.KeyBasedMapOperation;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
@@ -62,7 +62,7 @@ public class MapRemoveAsyncMessageTask
         MapService mapService = getService(MapService.SERVICE_NAME);
         MapServiceContext mapServiceContext = mapService.getMapServiceContext();
         MapOperationProvider operationProvider = mapServiceContext.getMapOperationProvider(parameters.name);
-        KeyBasedMapOperation op = operationProvider.createRemoveOperation(parameters.name, parameters.key);
+        MapOperation op = operationProvider.createRemoveOperation(parameters.name, parameters.key);
         op.setThreadId(parameters.threadId);
         return op;
     }

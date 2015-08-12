@@ -35,9 +35,9 @@ public abstract class QueryOperationTestSupport {
     private final Collection<QueryableEntry> queryEntries = new ArrayList<QueryableEntry>();
     private final Set<QueryableEntry> queryEntrySet = new HashSet<QueryableEntry>();
     private final MapContextQuerySupport mapContextQuerySupport = mock(MapContextQuerySupport.class);
-    private AbstractMapOperation queryOperation = createQueryOperation();
+    private MapOperation queryOperation = createQueryOperation();
 
-    protected abstract AbstractMapOperation createQueryOperation();
+    protected abstract MapOperation createQueryOperation();
 
     /**
      * Initializes all mocks needed to execute a query operation.

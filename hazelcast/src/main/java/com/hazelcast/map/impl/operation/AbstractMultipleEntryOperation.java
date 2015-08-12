@@ -44,7 +44,7 @@ import java.util.Map;
 import static com.hazelcast.map.impl.EntryViews.createSimpleEntryView;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 
-abstract class AbstractMultipleEntryOperation extends AbstractMapOperation implements MutatingOperation {
+abstract class AbstractMultipleEntryOperation extends MapOperation implements MutatingOperation {
 
     protected MapEntrySet responses;
     protected EntryProcessor entryProcessor;

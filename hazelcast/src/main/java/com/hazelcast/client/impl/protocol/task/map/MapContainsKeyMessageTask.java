@@ -21,7 +21,9 @@ import com.hazelcast.client.impl.protocol.codec.MapContainsKeyCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.ContainsKeyOperation;
+import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -38,7 +40,12 @@ public class MapContainsKeyMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        ContainsKeyOperation operation = new ContainsKeyOperation(parameters.name, parameters.key);
+        String mapName = parameters.name;
+
+        MapService service = ((MapService) getService(MapService.SERVICE_NAME));
+        MapServiceContext mapServiceContext = service.getMapServiceContext();
+        MapOperationProvider operationProvider = mapServiceContext.getMapOperationProvider(mapName);
+        MapOperation operation = operationProvider.createContainsKeyOperation(mapName, parameters.key);
         operation.setThreadId(parameters.threadId);
         return operation;
     }

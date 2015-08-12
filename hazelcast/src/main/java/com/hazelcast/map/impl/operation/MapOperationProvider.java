@@ -23,7 +23,9 @@ import com.hazelcast.nio.serialization.Data;
  */
 public interface MapOperationProvider {
 
-    KeyBasedMapOperation createPutOperation(String name, Data key, Data value, long ttl);
+    MapOperation createPutOperation(String name, Data key, Data value, long ttl);
 
-    KeyBasedMapOperation createRemoveOperation(String name, Data key);
+    MapOperation createRemoveOperation(String name, Data key);
+
+    MapOperation createContainsKeyOperation(String name, Data dataKey);
 }

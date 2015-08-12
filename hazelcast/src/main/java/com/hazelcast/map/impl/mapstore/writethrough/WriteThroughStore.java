@@ -36,8 +36,10 @@ public class WriteThroughStore extends AbstractMapDataStore<Data, Object> {
 
     @Override
     public Object add(Data key, Object value, long time) {
+        Object objectKey = toObject(key);
         Object objectValue = toObject(value);
-        getStore().store(toObject(key), objectValue);
+
+        getStore().store(objectKey, objectValue);
         // if store is not a post-processing map-store, then avoid extra de-serialization phase.
         return getStore().isPostProcessingMapStore() ? objectValue : value;
     }

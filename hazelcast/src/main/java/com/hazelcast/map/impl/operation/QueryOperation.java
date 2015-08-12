@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 import static com.hazelcast.util.FutureUtil.returnWithDeadline;
 import static com.hazelcast.util.SortingUtil.getSortedSubList;
 
-public class QueryOperation extends AbstractMapOperation implements ReadonlyOperation {
+public class QueryOperation extends MapOperation implements ReadonlyOperation {
 
     private static final long QUERY_EXECUTION_TIMEOUT_MINUTES = 5;
 

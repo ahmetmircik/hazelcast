@@ -64,6 +64,8 @@ public class TxnSetOperation extends BasePutOperation implements MapTxnOperation
 
     @Override
     public void innerBeforeRun() {
+        super.innerBeforeRun();
+
         if (!recordStore.canAcquireLock(dataKey, ownerUuid, threadId)) {
             throw new TransactionException("Cannot acquire lock uuid: " + ownerUuid + ", threadId: " + threadId);
         }

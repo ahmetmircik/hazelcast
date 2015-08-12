@@ -797,7 +797,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             value = mapServiceContext.interceptPut(name, oldValue, value);
             value = mapDataStore.add(key, value, now);
             onStore(record);
-            oldValue = updateRecord(key, record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
             saveIndex(key, record);
         }
@@ -890,7 +890,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         update = mapServiceContext.interceptPut(name, oldValue, update);
         update = mapDataStore.add(key, update, now);
         onStore(record);
-        oldValue = updateRecord(key, record, update, now);
+        updateRecord(key, record, update, now);
         saveIndex(key, record);
         return oldValue;
     }
@@ -964,7 +964,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         } else {
             oldValue = record.getValue();
             value = mapServiceContext.interceptPut(name, oldValue, value);
-            oldValue = updateRecord(key, record, value, now);
+            updateRecord(key, record, value, now);
             updateExpiryTime(record, ttl, mapContainer.getMapConfig());
         }
         saveIndex(key, record);

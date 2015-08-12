@@ -22,7 +22,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapPortableHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.operation.KeyBasedMapOperation;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -86,7 +86,7 @@ public class MapRemoveRequest extends KeyBasedClientRequest implements Portable,
         MapService mapService = getService();
         MapServiceContext mapServiceContext = mapService.getMapServiceContext();
         MapOperationProvider operationProvider = mapServiceContext.getMapOperationProvider(name);
-        KeyBasedMapOperation op = operationProvider.createRemoveOperation(name, key);
+        MapOperation op = operationProvider.createRemoveOperation(name, key);
         op.setThreadId(threadId);
         return op;
     }
