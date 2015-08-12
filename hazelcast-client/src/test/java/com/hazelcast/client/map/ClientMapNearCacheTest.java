@@ -29,6 +29,7 @@ import com.hazelcast.monitor.NearCacheStats;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -52,7 +53,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
-@Category(QuickTest.class)
+@Category({QuickTest.class, ParallelTest.class})
 public class ClientMapNearCacheTest {
 
     private static final int MAX_CACHE_SIZE = 100;
@@ -153,30 +154,6 @@ public class ClientMapNearCacheTest {
     @AfterClass
     public static void cleanup() throws Exception {
         hazelcastFactory.terminateAll();
-    }
-
-    @Test
-    public void testNearCacheFasterThanGoingToTheCluster() {
-        final IMap map = client.getMap(randomMapName(NEAR_CACHE_WITH_INVALIDATION));
-
-        final int size = 2007;
-        for (int i = 0; i < size; i++) {
-            map.put(i, i);
-        }
-
-        long begin = System.currentTimeMillis();
-        for (int i = 0; i < size; i++) {
-            map.get(i);
-        }
-        long readFromClusterTime = System.currentTimeMillis() - begin;
-
-        begin = System.currentTimeMillis();
-        for (int i = 0; i < size; i++) {
-            map.get(i);
-        }
-        long readFromCacheTime = System.currentTimeMillis() - begin;
-
-        assertTrue("readFromCacheTime > readFromClusterTime", readFromCacheTime < readFromClusterTime);
     }
 
     @Test

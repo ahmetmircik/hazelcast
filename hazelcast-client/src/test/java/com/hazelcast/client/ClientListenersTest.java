@@ -18,6 +18,7 @@ import com.hazelcast.nio.serialization.Portable;
 import com.hazelcast.nio.serialization.PortableFactory;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.After;
 import org.junit.Before;
@@ -28,7 +29,7 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.CountDownLatch;
 
 @RunWith(HazelcastParallelClassRunner.class)
-@Category(QuickTest.class)
+@Category({QuickTest.class, ParallelTest.class})
 public class ClientListenersTest extends HazelcastTestSupport {
 
     private final TestHazelcastFactory hazelcastFactory = new TestHazelcastFactory();
@@ -47,7 +48,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             @Override
             public Portable create(int classId) {
                 if (classId == 6) {
-                    return new ClientRegressionTest.SamplePortable();
+                    return new ClientRegressionWithMockNetworkTest.SamplePortable();
                 }
                 return null;
             }
@@ -69,7 +70,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             }
         }, true);
 
-        map.put(1, new ClientRegressionTest.SamplePortable(1));
+        map.put(1, new ClientRegressionWithMockNetworkTest.SamplePortable(1));
         assertOpenEventually(latch);
     }
 
@@ -90,7 +91,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             }
         }, true);
 
-        queue.offer(new ClientRegressionTest.SamplePortable(1));
+        queue.offer(new ClientRegressionWithMockNetworkTest.SamplePortable(1));
         assertOpenEventually(latch);
     }
 
@@ -111,7 +112,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             }
         }, true);
 
-        set.add(new ClientRegressionTest.SamplePortable(1));
+        set.add(new ClientRegressionWithMockNetworkTest.SamplePortable(1));
         assertOpenEventually(latch);
     }
 
@@ -132,7 +133,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             }
         }, true);
 
-        list.add(new ClientRegressionTest.SamplePortable(1));
+        list.add(new ClientRegressionWithMockNetworkTest.SamplePortable(1));
         assertOpenEventually(latch);
     }
 
@@ -148,7 +149,7 @@ public class ClientListenersTest extends HazelcastTestSupport {
             }
         });
 
-        topic.publish(new ClientRegressionTest.SamplePortable(1));
+        topic.publish(new ClientRegressionWithMockNetworkTest.SamplePortable(1));
         assertOpenEventually(latch);
     }
 
