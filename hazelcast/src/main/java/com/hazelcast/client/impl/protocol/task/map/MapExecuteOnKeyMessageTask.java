@@ -44,7 +44,7 @@ public class MapExecuteOnKeyMessageTask
         final EntryProcessor processor = serializationService.toObject(parameters.entryProcessor);
         MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
         MapOperation op = operationProvider.createEntryOperation(parameters.name, parameters.key, processor);
-//        op.setThreadId(parameters.threadId);
+        op.setThreadId(parameters.threadId);
         return op;
     }
 
