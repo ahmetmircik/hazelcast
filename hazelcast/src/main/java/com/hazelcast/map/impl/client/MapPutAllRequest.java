@@ -21,7 +21,8 @@ import com.hazelcast.client.impl.client.SecureRequest;
 import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.MapPortableHook;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.MapPutAllOperationFactory;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -32,6 +33,7 @@ import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
 import com.hazelcast.spi.OperationFactory;
 import com.hazelcast.util.ExceptionUtil;
+
 import java.io.IOException;
 import java.security.Permission;
 import java.util.HashMap;
@@ -60,7 +62,8 @@ public class MapPutAllRequest extends AllPartitionsClientRequest implements Port
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new MapPutAllOperationFactory(name, entrySet);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createPutAllOperationFactory(name, entrySet);
     }
 
     @Override

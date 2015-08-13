@@ -22,7 +22,9 @@ import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.SimpleEntryView;
-import com.hazelcast.map.impl.operation.GetEntryViewOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.security.permission.ActionConstants;
@@ -40,7 +42,8 @@ public class MapGetEntryViewMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        GetEntryViewOperation op = new GetEntryViewOperation(parameters.name, parameters.key);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createGetEntryViewOperation(parameters.name, parameters.key);
         op.setThreadId(parameters.threadId);
         return op;
     }

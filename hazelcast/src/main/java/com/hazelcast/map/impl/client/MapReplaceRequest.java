@@ -17,7 +17,9 @@
 package com.hazelcast.map.impl.client;
 
 import com.hazelcast.map.impl.MapPortableHook;
-import com.hazelcast.map.impl.operation.ReplaceOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.Operation;
 
@@ -35,7 +37,8 @@ public class MapReplaceRequest extends MapPutRequest {
     }
 
     protected Operation prepareOperation() {
-        ReplaceOperation op = new ReplaceOperation(name, key, value);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createReplaceOperation(name, key, value);
         op.setThreadId(threadId);
         return op;
     }

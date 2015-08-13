@@ -22,6 +22,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationFactory;
+
 import java.io.IOException;
 
 public class MapPutAllOperationFactory implements OperationFactory {
@@ -39,7 +40,8 @@ public class MapPutAllOperationFactory implements OperationFactory {
 
     @Override
     public Operation createOperation() {
-        PutAllOperation putAllOperation = new PutAllOperation(name, entrySet);
+        MapOperation putAllOperation
+                = DefaultMapOperationProvider.get().createPutAllOperation(name, entrySet, false);
         putAllOperation.setServiceName(MapService.SERVICE_NAME);
         return putAllOperation;
     }

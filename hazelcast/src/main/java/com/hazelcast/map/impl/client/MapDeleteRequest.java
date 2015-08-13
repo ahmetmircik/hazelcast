@@ -20,7 +20,9 @@ import com.hazelcast.client.impl.client.KeyBasedClientRequest;
 import com.hazelcast.client.impl.client.SecureRequest;
 import com.hazelcast.map.impl.MapPortableHook;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.DeleteOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -30,6 +32,7 @@ import com.hazelcast.nio.serialization.PortableWriter;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
 import com.hazelcast.spi.Operation;
+
 import java.io.IOException;
 import java.security.Permission;
 
@@ -63,7 +66,8 @@ public class MapDeleteRequest extends KeyBasedClientRequest implements Portable,
 
     @Override
     protected Operation prepareOperation() {
-        DeleteOperation op = new DeleteOperation(name, key);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createDeleteOperation(name, key);
         op.setThreadId(threadId);
         return op;
     }

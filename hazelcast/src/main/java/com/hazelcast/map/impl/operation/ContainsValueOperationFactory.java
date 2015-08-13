@@ -21,6 +21,7 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationFactory;
+
 import java.io.IOException;
 
 public final class ContainsValueOperationFactory implements OperationFactory {
@@ -38,7 +39,8 @@ public final class ContainsValueOperationFactory implements OperationFactory {
 
     @Override
     public Operation createOperation() {
-        return new ContainsValueOperation(name, value);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createContainsValueOperation(name, value);
     }
 
     @Override

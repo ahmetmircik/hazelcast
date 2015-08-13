@@ -22,7 +22,8 @@ import com.hazelcast.client.impl.protocol.task.AbstractAllPartitionsMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.MapGetAllOperationFactory;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.security.permission.ActionConstants;
@@ -44,7 +45,8 @@ public class MapGetAllMessageTask
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new MapGetAllOperationFactory(parameters.name, parameters.keys);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createGetAllOperationFactory(parameters.name, parameters.keys);
     }
 
     @Override

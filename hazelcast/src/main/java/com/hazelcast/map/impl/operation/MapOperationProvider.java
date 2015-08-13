@@ -16,16 +16,64 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.map.EntryProcessor;
+import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.spi.OperationFactory;
 
-/**
- * TODO add a proper JavaDoc
- */
+import java.util.List;
+import java.util.Set;
+
 public interface MapOperationProvider {
 
     MapOperation createPutOperation(String name, Data key, Data value, long ttl);
 
+    MapOperation createTryPutOperation(String name, Data dataKey, Data value, long timeout);
+
+    MapOperation createSetOperation(String name, Data dataKey, Data value, long ttl);
+
+    MapOperation createPutIfAbsentOperation(String name, Data key, Data value, long ttl);
+
+    MapOperation createPutTransientOperation(String name, Data key, Data value, long ttl);
+
     MapOperation createRemoveOperation(String name, Data key);
 
+    MapOperation createTryRemoveOperation(String name, Data dataKey, long timeout);
+
+    MapOperation createWanOriginatedDeleteOperation(String name, Data key);
+
+    MapOperation createReplaceOperation(String name, Data dataKey, Data value);
+
+    MapOperation createRemoveIfSameOperation(String name, Data dataKey, Data value);
+
+    MapOperation createReplaceIfSameOperation(String name, Data dataKey, Data expect, Data update);
+
+    MapOperation createDeleteOperation(String name, Data key);
+
+    MapOperation createEntryOperation(String name, Data dataKey, EntryProcessor entryProcessor);
+
+    MapOperation createEvictOperation(String name, Data dataKey, boolean asyncBackup);
+
     MapOperation createContainsKeyOperation(String name, Data dataKey);
+
+    MapOperation createContainsValueOperation(String name, Data testValue);
+
+    OperationFactory createContainsValueOperationFactory(String name, Data testValue);
+
+    MapOperation createGetAllOperation(String name, Set<Data> keys);
+
+    OperationFactory createGetAllOperationFactory(String name, Set<Data> keys);
+
+    MapOperation createGetEntryViewOperation(String name, Data dataKey);
+
+    MapOperation createGetOperation(String name, Data dataKey);
+
+    MapOperation createLoadAllOperation(String name, List<Data> keys, boolean replaceExistingValues);
+
+    MapOperation createPutAllOperation(String name, MapEntrySet entrySet, boolean initialLoad);
+
+    OperationFactory createPutAllOperationFactory(String name, MapEntrySet entrySet);
+
+    MapOperation createPutFromLoadAllOperation(String name, List<Data> keyValueSequence);
 }
+

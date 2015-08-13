@@ -65,8 +65,8 @@ public class InterceptorTest extends HazelcastTestSupport {
         } catch (Exception ignore) {
         }
 
-        assertEquals(map.size(), 6);
-        assertEquals(map.get(1), null);
+        assertEquals(6, map.size());
+        assertEquals(null, map.get(1));
         assertEquals(map.get(2), "ISTANBUL:");
         assertEquals(map.get(3), "TOKYO:");
         assertEquals(map.get(4), "LONDON:");

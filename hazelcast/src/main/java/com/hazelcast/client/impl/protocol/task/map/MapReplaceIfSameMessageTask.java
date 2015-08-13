@@ -19,7 +19,9 @@ package com.hazelcast.client.impl.protocol.task.map;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.codec.MapReplaceIfSameCodec;
 import com.hazelcast.instance.Node;
-import com.hazelcast.map.impl.operation.ReplaceIfSameOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.spi.Operation;
 
@@ -32,7 +34,8 @@ public class MapReplaceIfSameMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        ReplaceIfSameOperation op = new ReplaceIfSameOperation(parameters.name, parameters.key,
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createReplaceIfSameOperation(parameters.name, parameters.key,
                 parameters.testValue, parameters.value);
         op.setThreadId(parameters.threadId);
         return op;

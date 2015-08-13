@@ -19,7 +19,9 @@ package com.hazelcast.client.impl.protocol.task.map;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.codec.MapSetCodec;
 import com.hazelcast.instance.Node;
-import com.hazelcast.map.impl.operation.SetOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.spi.Operation;
 
@@ -34,7 +36,9 @@ public class MapSetMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        SetOperation op = new SetOperation(parameters.name, parameters.key, parameters.value, parameters.ttl);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createSetOperation(parameters.name, parameters.key,
+                parameters.value, parameters.ttl);
         op.setThreadId(parameters.threadId);
         return op;
     }

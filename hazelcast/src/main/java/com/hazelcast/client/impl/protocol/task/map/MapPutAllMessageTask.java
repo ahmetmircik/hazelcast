@@ -22,7 +22,8 @@ import com.hazelcast.client.impl.protocol.task.AbstractAllPartitionsMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapEntrySet;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.MapPutAllOperationFactory;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.security.permission.ActionConstants;
@@ -46,7 +47,9 @@ public class MapPutAllMessageTask
         for (Map.Entry<Data, Data> entry : parameters.entries.entrySet()) {
             mapEntrySet.add(entry.getKey(), entry.getValue());
         }
-        return new MapPutAllOperationFactory(parameters.name, mapEntrySet);
+
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createPutAllOperationFactory(parameters.name, mapEntrySet);
     }
 
     @Override

@@ -21,7 +21,8 @@ import com.hazelcast.client.impl.client.RetryableRequest;
 import com.hazelcast.client.impl.client.SecureRequest;
 import com.hazelcast.map.impl.MapPortableHook;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.ContainsValueOperationFactory;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -51,7 +52,8 @@ public class MapContainsValueRequest extends AllPartitionsClientRequest implemen
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new ContainsValueOperationFactory(name, value);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createContainsValueOperationFactory(name, value);
     }
 
     @Override

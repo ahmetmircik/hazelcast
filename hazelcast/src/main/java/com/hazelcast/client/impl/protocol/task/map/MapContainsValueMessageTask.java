@@ -21,7 +21,8 @@ import com.hazelcast.client.impl.protocol.codec.MapContainsValueCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractAllPartitionsMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.ContainsValueOperationFactory;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -39,7 +40,8 @@ public class MapContainsValueMessageTask
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new ContainsValueOperationFactory(parameters.name, parameters.value);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createContainsValueOperationFactory(parameters.name, parameters.value);
     }
 
     @Override

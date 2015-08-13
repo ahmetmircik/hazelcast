@@ -52,34 +52,20 @@ import com.hazelcast.map.impl.operation.AddInterceptorOperation;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.ClearOperation;
-import com.hazelcast.map.impl.operation.ContainsValueOperationFactory;
-import com.hazelcast.map.impl.operation.DeleteOperation;
-import com.hazelcast.map.impl.operation.EntryOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
 import com.hazelcast.map.impl.operation.EvictAllOperation;
-import com.hazelcast.map.impl.operation.EvictOperation;
-import com.hazelcast.map.impl.operation.GetEntryViewOperation;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.operation.IsEmptyOperationFactory;
-import com.hazelcast.map.impl.operation.LoadAllOperation;
 import com.hazelcast.map.impl.operation.LoadMapOperation;
 import com.hazelcast.map.impl.operation.MapFlushOperation;
-import com.hazelcast.map.impl.operation.MapGetAllOperationFactory;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MultipleEntryOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionCheckIfLoadedOperationFactory;
 import com.hazelcast.map.impl.operation.PartitionWideEntryWithPredicateOperationFactory;
 import com.hazelcast.map.impl.operation.PutAllOperation;
-import com.hazelcast.map.impl.operation.PutIfAbsentOperation;
-import com.hazelcast.map.impl.operation.PutTransientOperation;
-import com.hazelcast.map.impl.operation.RemoveIfSameOperation;
 import com.hazelcast.map.impl.operation.RemoveInterceptorOperation;
-import com.hazelcast.map.impl.operation.ReplaceIfSameOperation;
-import com.hazelcast.map.impl.operation.ReplaceOperation;
-import com.hazelcast.map.impl.operation.SetOperation;
 import com.hazelcast.map.impl.operation.SizeOperationFactory;
-import com.hazelcast.map.impl.operation.TryPutOperation;
-import com.hazelcast.map.impl.operation.TryRemoveOperation;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.map.listener.MapPartitionLostListener;
@@ -249,7 +235,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                 return fromBackup;
             }
         }
-        final GetOperation operation = new GetOperation(name, key);
+        MapOperation operation = operationProvider.createGetOperation(name, key);
         operation.setThreadId(ThreadUtil.getThreadId());
         final Data value = (Data) invokeOperation(key, operation);
 
@@ -361,7 +347,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             }
         }
 
-        GetOperation operation = new GetOperation(name, key);
+        MapOperation operation = operationProvider.createGetOperation(name, key);
         try {
             final OperationService operationService = nodeEngine.getOperationService();
             final InvocationBuilder invocationBuilder
@@ -399,21 +385,21 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected boolean tryPutInternal(final Data key, final Data value, final long timeout, final TimeUnit timeunit) {
-        TryPutOperation operation = new TryPutOperation(name, key, value, getTimeInMillis(timeout, timeunit));
+        MapOperation operation = operationProvider.createTryPutOperation(name, key, value, getTimeInMillis(timeout, timeunit));
         boolean putSuccessful = (Boolean) invokeOperation(key, operation);
         invalidateNearCache(key);
         return putSuccessful;
     }
 
     protected Data putIfAbsentInternal(final Data key, final Data value, final long ttl, final TimeUnit timeunit) {
-        PutIfAbsentOperation operation = new PutIfAbsentOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        MapOperation operation = operationProvider.createPutIfAbsentOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         Data previousValue = (Data) invokeOperation(key, operation);
         invalidateNearCache(key);
         return previousValue;
     }
 
     protected void putTransientInternal(final Data key, final Data value, final long ttl, final TimeUnit timeunit) {
-        PutTransientOperation operation = new PutTransientOperation(name, key, value, getTimeInMillis(ttl, timeunit));
+        MapOperation operation = operationProvider.createPutTransientOperation(name, key, value, getTimeInMillis(ttl, timeunit));
         invokeOperation(key, operation);
         invalidateNearCache(key);
     }
@@ -469,27 +455,28 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected boolean replaceInternal(final Data key, final Data expect, final Data update) {
-        ReplaceIfSameOperation operation = new ReplaceIfSameOperation(name, key, expect, update);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createReplaceIfSameOperation(name, key, expect, update);
         boolean replaceSuccessful = (Boolean) invokeOperation(key, operation);
         invalidateNearCache(key);
         return replaceSuccessful;
     }
 
     protected Data replaceInternal(final Data key, final Data value) {
-        ReplaceOperation operation = new ReplaceOperation(name, key, value);
+        MapOperation operation = operationProvider.createReplaceOperation(name, key, value);
         final Data result = (Data) invokeOperation(key, operation);
         invalidateNearCache(key);
         return result;
     }
 
     protected void setInternal(final Data key, final Data value, final long ttl, final TimeUnit timeunit) {
-        SetOperation operation = new SetOperation(name, key, value, timeunit.toMillis(ttl));
+        MapOperation operation = operationProvider.createSetOperation(name, key, value, timeunit.toMillis(ttl));
         invokeOperation(key, operation);
         invalidateNearCache(key);
     }
 
     protected boolean evictInternal(final Data key) {
-        EvictOperation operation = new EvictOperation(name, key, false);
+        MapOperation operation = operationProvider.createEvictOperation(name, key, false);
         final boolean evictSuccess = (Boolean) invokeOperation(key, operation);
         invalidateNearCache(key);
         return evictSuccess;
@@ -566,7 +553,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     private Operation createLoadAllOperation(final List<Data> keys, boolean replaceExistingValues) {
-        return new LoadAllOperation(name, keys, replaceExistingValues);
+        return operationProvider.createLoadAllOperation(name, keys, replaceExistingValues);
     }
 
     protected Data removeInternal(Data key) {
@@ -577,20 +564,23 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     }
 
     protected void deleteInternal(Data key) {
-        DeleteOperation operation = new DeleteOperation(name, key);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createDeleteOperation(name, key);
         invokeOperation(key, operation);
         invalidateNearCache(key);
     }
 
     protected boolean removeInternal(final Data key, final Data value) {
-        RemoveIfSameOperation operation = new RemoveIfSameOperation(name, key, value);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createRemoveIfSameOperation(name, key, value);
         boolean removed = (Boolean) invokeOperation(key, operation);
         invalidateNearCache(key);
         return removed;
     }
 
     protected boolean tryRemoveInternal(final Data key, final long timeout, final TimeUnit timeunit) {
-        TryRemoveOperation operation = new TryRemoveOperation(name, key, getTimeInMillis(timeout, timeunit));
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createTryRemoveOperation(name, key, getTimeInMillis(timeout, timeunit));
         boolean removed = (Boolean) invokeOperation(key, operation);
         invalidateNearCache(key);
         return removed;
@@ -705,8 +695,9 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     public boolean containsValueInternal(Data dataValue) {
         final NodeEngine nodeEngine = getNodeEngine();
         try {
+            OperationFactory operationFactory = operationProvider.createContainsValueOperationFactory(name, dataValue);
             Map<Integer, Object> results = nodeEngine.getOperationService()
-                    .invokeOnAllPartitions(SERVICE_NAME, new ContainsValueOperationFactory(name, dataValue));
+                    .invokeOnAllPartitions(SERVICE_NAME, operationFactory);
             for (Object result : results.values()) {
                 Boolean contains = (Boolean) getService().getMapServiceContext().toObject(result);
                 if (contains) {
@@ -756,8 +747,9 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         Collection<Integer> partitions = getPartitionsForKeys(keys);
         Map<Integer, Object> responses;
         try {
+            OperationFactory operationFactory = operationProvider.createGetAllOperationFactory(name, keys);
             responses = nodeEngine.getOperationService()
-                    .invokeOnPartitions(SERVICE_NAME, new MapGetAllOperationFactory(name, keys), partitions);
+                    .invokeOnPartitions(SERVICE_NAME, operationFactory, partitions);
             for (Object response : responses.values()) {
                 Set<Map.Entry<Data, Data>> entries
                         = ((MapEntrySet) mapService.getMapServiceContext().toObject(response)).getEntrySet();
@@ -990,7 +982,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected EntryView getEntryViewInternal(final Data key) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        GetEntryViewOperation operation = new GetEntryViewOperation(name, key);
+        MapOperation operation = operationProvider.createGetEntryViewOperation(name, key);
         operation.setThreadId(ThreadUtil.getThreadId());
         operation.setServiceName(SERVICE_NAME);
         try {
@@ -1005,7 +997,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     public Data executeOnKeyInternal(Data key, EntryProcessor entryProcessor) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        EntryOperation operation = new EntryOperation(name, key, entryProcessor);
+        MapOperation operation = operationProvider.createEntryOperation(name, key, entryProcessor);
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             Future future = nodeEngine.getOperationService()
@@ -1050,7 +1042,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     public ICompletableFuture executeOnKeyInternal(Data key, EntryProcessor entryProcessor, ExecutionCallback callback) {
         final NodeEngine nodeEngine = getNodeEngine();
         int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
-        EntryOperation operation = new EntryOperation(name, key, entryProcessor);
+        MapOperation operation = operationProvider.createEntryOperation(name, key, entryProcessor);
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             if (callback == null) {

@@ -21,6 +21,7 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationFactory;
+
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
@@ -40,7 +41,8 @@ public class MapGetAllOperationFactory implements OperationFactory {
 
     @Override
     public Operation createOperation() {
-        return new GetAllOperation(name, keys);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createGetAllOperation(name, keys);
     }
 
     @Override

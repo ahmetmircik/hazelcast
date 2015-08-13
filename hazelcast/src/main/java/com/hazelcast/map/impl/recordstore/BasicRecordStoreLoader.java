@@ -21,7 +21,9 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
-import com.hazelcast.map.impl.operation.PutFromLoadAllOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.ExecutionService;
@@ -219,7 +221,8 @@ class BasicRecordStoreLoader implements RecordStoreLoader {
 
     private Operation createOperation(List<Data> keyValueSequence, final AtomicInteger finishedBatchCounter) {
         final NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
-        final Operation operation = new PutFromLoadAllOperation(name, keyValueSequence);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createPutFromLoadAllOperation(name, keyValueSequence);
         operation.setNodeEngine(nodeEngine);
         operation.setOperationResponseHandler(new OperationResponseHandler() {
             @Override

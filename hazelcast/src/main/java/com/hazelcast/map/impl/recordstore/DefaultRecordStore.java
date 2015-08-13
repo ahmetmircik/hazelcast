@@ -1039,8 +1039,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             mapDataStore.remove(key, now);
             onStore(record);
         }
-        oldValue = deleteRecord(key);
-        oldValue = mapServiceContext.interceptRemove(name, oldValue);
+        mapServiceContext.interceptRemove(name, oldValue);
+        deleteRecord(key);
         return oldValue;
     }
 

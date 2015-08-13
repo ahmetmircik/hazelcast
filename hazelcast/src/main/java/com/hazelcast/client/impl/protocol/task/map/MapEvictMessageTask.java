@@ -21,7 +21,9 @@ import com.hazelcast.client.impl.protocol.codec.MapEvictCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.EvictOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -38,7 +40,8 @@ public class MapEvictMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        EvictOperation operation = new EvictOperation(parameters.name, parameters.key, false);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createEvictOperation(parameters.name, parameters.key, false);
         operation.setThreadId(parameters.threadId);
         return operation;
     }

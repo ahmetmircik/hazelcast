@@ -22,7 +22,8 @@ import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.EntryOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -40,7 +41,8 @@ public class MapExecuteOnKeyMessageTask
     @Override
     protected Operation prepareOperation() {
         final EntryProcessor processor = serializationService.toObject(parameters.entryProcessor);
-        return new EntryOperation(parameters.name, parameters.key, processor);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createEntryOperation(parameters.name, parameters.key, processor);
     }
 
     @Override

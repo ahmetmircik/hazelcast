@@ -21,7 +21,9 @@ import com.hazelcast.client.impl.protocol.codec.MapDeleteCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.DeleteOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -38,7 +40,8 @@ public class MapDeleteMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        DeleteOperation op = new DeleteOperation(parameters.name, parameters.key);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation op = operationProvider.createDeleteOperation(parameters.name, parameters.key);
         op.setThreadId(parameters.threadId);
         return op;
     }

@@ -22,7 +22,9 @@ import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.GetOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -51,7 +53,8 @@ public class MapGetAsyncMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        GetOperation operation = new GetOperation(parameters.name, parameters.key);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createGetOperation(parameters.name, parameters.key);
         operation.setThreadId(parameters.threadId);
         return operation;
     }

@@ -21,7 +21,9 @@ import com.hazelcast.client.impl.protocol.codec.MapTryRemoveCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.TryRemoveOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -49,7 +51,9 @@ public class MapTryRemoveMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        TryRemoveOperation operation = new TryRemoveOperation(parameters.name, parameters.key, parameters.timeout);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        MapOperation operation = operationProvider.createTryRemoveOperation(parameters.name,
+                parameters.key, parameters.timeout);
         operation.setThreadId(parameters.threadId);
         return operation;
     }

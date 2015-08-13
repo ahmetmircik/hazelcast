@@ -47,7 +47,8 @@ public class MapLoadAllOperationFactory implements OperationFactory {
 
     @Override
     public Operation createOperation() {
-        return new LoadAllOperation(name, keys, replaceExistingValues);
+        MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
+        return operationProvider.createLoadAllOperation(name, keys, replaceExistingValues);
     }
 
     @Override
