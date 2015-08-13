@@ -23,6 +23,7 @@ import com.hazelcast.instance.Node;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
@@ -43,7 +44,9 @@ public class MapSubmitToKeyMessageTask
     protected Operation prepareOperation() {
         final EntryProcessor processor = serializationService.toObject(parameters.entryProcessor);
         MapOperationProvider operationProvider = DefaultMapOperationProvider.get();
-        return operationProvider.createEntryOperation(parameters.name, parameters.key, processor);
+        MapOperation op = operationProvider.createEntryOperation(parameters.name, parameters.key, processor);
+//        op.setThreadId(parameters.threadId);
+        return op;
     }
 
     @Override
