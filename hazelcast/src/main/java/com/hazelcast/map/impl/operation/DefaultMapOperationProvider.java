@@ -130,7 +130,7 @@ public final class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public OperationFactory createGetAllOperationFactory(String name, Set<Data> keys) {
+    public OperationFactory createGetAllOperationFactory(String name, List<Data> keys) {
         return new MapGetAllOperationFactory(name, keys);
     }
 

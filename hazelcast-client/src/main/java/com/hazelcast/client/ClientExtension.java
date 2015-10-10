@@ -19,8 +19,9 @@ package com.hazelcast.client;
 import com.hazelcast.cache.impl.nearcache.NearCacheManager;
 import com.hazelcast.client.impl.HazelcastClientInstanceImpl;
 import com.hazelcast.client.spi.ClientProxy;
-import com.hazelcast.nio.SocketInterceptor;
+import com.hazelcast.client.spi.ClientProxyFactory;
 import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.nio.SocketInterceptor;
 import com.hazelcast.nio.tcp.SocketChannelWrapperFactory;
 
 /**
@@ -51,7 +52,7 @@ public interface ClientExtension {
      * otherwise returns <code>null</code>.
      *
      * @return the created {@link SocketInterceptor} instance if available,
-     *         otherwise <code>null</code>
+     * otherwise <code>null</code>
      */
     SocketInterceptor createSocketInterceptor();
 
@@ -69,7 +70,6 @@ public interface ClientExtension {
      */
     NearCacheManager createNearCacheManager();
 
-
     /**
      * Returns a proxy for the corresponding service.
      *
@@ -78,4 +78,13 @@ public interface ClientExtension {
      * @throws java.lang.IllegalArgumentException if type is not known
      */
     <T> Class<? extends ClientProxy> getServiceProxy(Class<T> service);
+
+    /**
+     * Creates a {@code ClientProxyFactory} for the supplied service class.
+     *
+     * @param service service for the proxy to create.
+     * @return {@code ClientProxyFactory} for the service.
+     * @throws java.lang.IllegalArgumentException if service is not known
+     */
+    <T> ClientProxyFactory createServiceProxyFactory(Class<T> service);
 }

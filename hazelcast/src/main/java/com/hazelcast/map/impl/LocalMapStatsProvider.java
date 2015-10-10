@@ -16,15 +16,15 @@
 
 package com.hazelcast.map.impl;
 
+import com.hazelcast.cache.impl.nearcache.NearCache;
 import com.hazelcast.cluster.ClusterService;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.impl.nearcache.NearCache;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordStatistics;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.monitor.NearCacheStats;
 import com.hazelcast.monitor.impl.LocalMapStatsImpl;
-import com.hazelcast.monitor.impl.NearCacheStatsImpl;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.InternalPartition;
@@ -259,12 +259,9 @@ public class LocalMapStatsProvider {
         if (!mapContainer.getMapConfig().isNearCacheEnabled()) {
             return;
         }
-
-        String mapName = mapContainer.getName();
-        NearCache nearCache = nearCacheProvider.getNearCache(mapName);
-        NearCacheStatsImpl nearCacheStats = nearCache.getNearCacheStats();
-        SizeEstimator nearCacheSizeEstimator = mapContainer.getNearCacheSizeEstimator();
-        long nearCacheHeapCost = nearCacheSizeEstimator.getSize();
+        NearCache nearCache = nearCacheProvider.getOrCreateNearCache(mapContainer.getName());
+        NearCacheStats nearCacheStats = nearCache.getNearCacheStats();
+        long nearCacheHeapCost = mapContainer.getNearCacheSizeEstimator().getSize();
 
         stats.setNearCacheStats(nearCacheStats);
         onDemandStats.incrementHeapCost(nearCacheHeapCost);

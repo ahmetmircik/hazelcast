@@ -113,7 +113,7 @@ class MapServiceContextImpl implements MapServiceContext {
         this.ownedPartitions = new AtomicReference<Collection<Integer>>();
         this.expirationManager = new ExpirationManager(this, nodeEngine);
         this.evictionOperator = new EvictionOperatorImpl();
-        this.nearCacheProvider = new NearCacheProvider(this, nodeEngine);
+        this.nearCacheProvider = createNearCacheProvider(nodeEngine);
         this.localMapStatsProvider = createLocalMapStatsProvider();
         this.mergePolicyProvider = new MergePolicyProvider(nodeEngine);
         this.mapEventPublisher = createMapEventPublisherSupport();
@@ -132,6 +132,11 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     // this method is overridden in another context.
+    NearCacheProvider createNearCacheProvider(NodeEngine nodeEngine) {
+        return new NearCacheProvider(this, nodeEngine);
+    }
+
+    // this method is overridden.
     PartitionContainer[] createPartitionContainers() {
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         return new PartitionContainer[partitionCount];

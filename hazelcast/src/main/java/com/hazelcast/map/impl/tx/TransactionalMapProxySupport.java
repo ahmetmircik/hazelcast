@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapKeySet;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.nearcache.NearCache;
 import com.hazelcast.map.impl.operation.ContainsKeyOperation;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.operation.MapEntrySetOperation;
@@ -63,6 +62,7 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static com.hazelcast.cache.impl.nearcache.NearCache.NULL_OBJECT;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 
 /**
@@ -120,7 +120,7 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
         if (nearCacheEnabled) {
             Object cached = mapService.getMapServiceContext().getNearCacheProvider().getFromNearCache(name, key);
             if (cached != null) {
-                if (cached.equals(NearCache.NULL_OBJECT)) {
+                if (cached.equals(NULL_OBJECT)) {
                     cached = null;
                 }
                 return cached;
