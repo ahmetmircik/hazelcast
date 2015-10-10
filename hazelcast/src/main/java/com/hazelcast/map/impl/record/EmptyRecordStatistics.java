@@ -14,45 +14,73 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation;
+package com.hazelcast.map.impl.record;
 
-import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.MapService;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.spi.Operation;
-import com.hazelcast.spi.OperationFactory;
+
 import java.io.IOException;
 
-public class MapPutAllOperationFactory implements OperationFactory {
+/**
+ * Empty {@link RecordStatistics} implementation which returns zero for all stats.
+ */
+public class EmptyRecordStatistics implements RecordStatistics {
 
-    private String name;
-    private MapEntries entries = new MapEntries();
-
-    public MapPutAllOperationFactory() {
-    }
-
-    public MapPutAllOperationFactory(String name, MapEntries entries) {
-        this.name = name;
-        this.entries = entries;
+    public EmptyRecordStatistics() {
     }
 
     @Override
-    public Operation createOperation() {
-        PutAllOperation putAllOperation = new PutAllOperation(name, entries);
-        putAllOperation.setServiceName(MapService.SERVICE_NAME);
-        return putAllOperation;
+    public int getHits() {
+        return 0;
+    }
+
+    @Override
+    public void setHits(int hits) {
+
+    }
+
+    @Override
+    public long getExpirationTime() {
+        return 0;
+    }
+
+    @Override
+    public void setExpirationTime(long expirationTime) {
+
+    }
+
+    @Override
+    public void access() {
+
+    }
+
+    @Override
+    public void store() {
+
+    }
+
+    @Override
+    public long getLastStoredTime() {
+        return 0;
+    }
+
+    @Override
+    public void setLastStoredTime(long lastStoredTime) {
+
+    }
+
+    @Override
+    public long getMemoryCost() {
+        return 0;
     }
 
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
-        out.writeUTF(name);
-        out.writeObject(entries);
+
     }
 
     @Override
     public void readData(ObjectDataInput in) throws IOException {
-        name = in.readUTF();
-        entries = in.readObject();
+
     }
 }

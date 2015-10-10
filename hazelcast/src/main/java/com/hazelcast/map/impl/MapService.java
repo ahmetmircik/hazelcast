@@ -40,6 +40,7 @@ import com.hazelcast.spi.TransactionalService;
 import com.hazelcast.transaction.TransactionalObject;
 import com.hazelcast.transaction.impl.Transaction;
 import com.hazelcast.wan.WanReplicationEvent;
+
 import java.util.Map;
 import java.util.Properties;
 
@@ -67,7 +68,7 @@ public class MapService implements ManagedService, MigrationAwareService,
 
     /**
      * Service name of map service used
-     * to register {@link com.hazelcast.spi.impl.ServiceManager#registerService}
+     * to register {@link com.hazelcast.spi.impl.servicemanager.impl.ServiceManagerImpl#registerService}
      */
     public static final String SERVICE_NAME = "hz:impl:mapService";
 
@@ -190,5 +191,10 @@ public class MapService implements ManagedService, MigrationAwareService,
     @Override
     public void clientDisconnected(String clientUuid) {
         clientAwareService.clientDisconnected(clientUuid);
+    }
+
+    @Override
+    public String toString() {
+        return "MapService";
     }
 }

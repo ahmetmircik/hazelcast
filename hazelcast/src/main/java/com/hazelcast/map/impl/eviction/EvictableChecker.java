@@ -14,27 +14,15 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl;
+package com.hazelcast.map.impl.eviction;
 
-
-import com.hazelcast.map.impl.nearcache.NearCacheSizeEstimator;
+import com.hazelcast.map.impl.MapContainer;
 
 /**
- * Static factory methods for corresponding size estimators.
- *
- * todo: this class doesn't service a lot of purpose; it is a layer of indirection without benefit.
+ * Checks whether a specific threshold is exceeded or not
+ * according to start eviction process.
  */
-public final class SizeEstimators {
+public interface EvictableChecker {
 
-    private SizeEstimators() {
-    }
-
-    public static SizeEstimator createMapSizeEstimator() {
-        return new MapSizeEstimator();
-    }
-
-    public static SizeEstimator createNearCacheSizeEstimator() {
-        return new NearCacheSizeEstimator();
-    }
+    boolean isEvictable(MapContainer mapContainer, int partitionId);
 }
-

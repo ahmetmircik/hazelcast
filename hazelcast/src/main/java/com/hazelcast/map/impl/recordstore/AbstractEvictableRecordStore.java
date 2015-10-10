@@ -22,9 +22,8 @@ import com.hazelcast.core.EntryView;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.instance.GroupProperty;
 import com.hazelcast.map.impl.MapContainer;
-import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.eviction.EvictableChecker;
 import com.hazelcast.map.impl.eviction.EvictionOperator;
-import com.hazelcast.map.impl.eviction.MaxSizeChecker;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.NodeEngine;
@@ -81,10 +80,13 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
         GroupProperties groupProperties = nodeEngine.getGroupProperties();
         expiryDelayMillis = groupProperties.getMillis(GroupProperty.MAP_EXPIRY_DELAY_SECONDS);
-        evictionOperator = mapServiceContext.getEvictionOperator();
+        evictionOperator = mapContainer.getEvictionOperator();
     }
 
+    @Override
     public boolean isEvictionEnabled() {
+        // this can be updated dynamically by UpdateMapConfigOperation.
+        // that is why this check was put in a method instead of a class final field.
         EvictionPolicy evictionPolicy = getEvictionPolicy();
         return !EvictionPolicy.NONE.equals(evictionPolicy);
     }
@@ -166,7 +168,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
 
     private void initExpirationIterator() {
         if (expirationIterator == null || !expirationIterator.hasNext()) {
-            expirationIterator = records.values().iterator();
+            expirationIterator = storage.values().iterator();
         }
     }
 
@@ -175,7 +177,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
     /**
-     * TODO make checkEvictable fast by carrying threshold logic to partition.
+     * TODO make isEvictable fast by carrying threshold logic to partition.
      * This cleanup adds some latency to write operations.
      * But it sweeps records much better under high write loads.
      * <p/>
@@ -248,6 +250,10 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
 
+    private EvictionOperator getEvictionOperator() {
+        return mapContainer.getEvictionOperator();
+    }
+
     /**
      * Eviction waits at least {@link MapConfig#minEvictionCheckMillis} milliseconds to run.
      *
@@ -266,8 +272,9 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
     private boolean isEvictable() {
-        final MaxSizeChecker maxSizeChecker = evictionOperator.getMaxSizeChecker();
-        return maxSizeChecker.checkEvictable(mapContainer, partitionId);
+        EvictionOperator evictionOperator = getEvictionOperator();
+        EvictableChecker evictableChecker = evictionOperator.getEvictableChecker();
+        return evictableChecker.isEvictable(mapContainer, partitionId);
     }
 
     protected void markRecordStoreExpirable(long ttl) {
@@ -277,6 +284,8 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
     abstract Object evictInternal(Data key, boolean backup);
+
+    abstract Object evictInternal(Data key, Record removedRecord, boolean backup);
 
     /**
      * Check if record is reachable according to ttl or idle times.
@@ -348,14 +357,11 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
      * @param value the value to be processed.
      */
     private void doPostExpirationOperations(Data key, Object value) {
-        final String mapName = this.name;
-        final MapServiceContext mapServiceContext = this.mapServiceContext;
-
         // Fire EVICTED event also in case of expiration because historically eviction-listener
         // listens all kind of eviction and expiration events and by firing EVICTED event we are preserving
         // this behavior.
-        evictionOperator.fireEvent(key, value, mapName, EVICTED, mapServiceContext);
-        evictionOperator.fireEvent(key, value, mapName, EXPIRED, mapServiceContext);
+        evictionOperator.fireEvent(key, value, name, EVICTED, mapServiceContext);
+        evictionOperator.fireEvent(key, value, name, EXPIRED, mapServiceContext);
     }
 
     void increaseRecordEvictionCriteriaNumber(Record record, EvictionPolicy evictionPolicy) {
@@ -399,11 +405,18 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         markRecordStoreExpirable(record.getTtl());
     }
 
+    /**
+     * Returns value of removed record.
+     */
+    protected Object deleteRecord(Data key) {
+        return storage.remove(key);
+    }
+
 
     /**
      * Read only iterator. Iterates by checking whether a record expired or not.
      */
-    protected final class ReadOnlyRecordIterator implements Iterator<Record> {
+    protected final class RecordStoreIterator implements Iterator<Record> {
 
         private final long now;
         private final boolean checkExpiration;
@@ -412,15 +425,15 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         private Record nextRecord;
         private Record lastReturned;
 
-        protected ReadOnlyRecordIterator(Collection<Record> values, long now, boolean backup) {
+        protected RecordStoreIterator(Collection<Record> values, long now, boolean backup) {
             this(values, now, true, backup);
         }
 
-        protected ReadOnlyRecordIterator(Collection<Record> values) {
+        protected RecordStoreIterator(Collection<Record> values) {
             this(values, -1L, false, false);
         }
 
-        private ReadOnlyRecordIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
+        private RecordStoreIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
             this.iterator = values.iterator();
             this.now = now;
             this.checkExpiration = checkExpiration;

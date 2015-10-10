@@ -19,22 +19,29 @@ package com.hazelcast.map.impl.tx;
 import com.hazelcast.core.Member;
 import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.map.QueryResultSizeExceededException;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapKeySet;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.query.QueryResult;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.nearcache.NearCache;
 import com.hazelcast.map.impl.operation.ContainsKeyOperation;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.operation.MapEntrySetOperation;
 import com.hazelcast.map.impl.operation.MapKeySetOperation;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
+import com.hazelcast.map.impl.operation.SizeOperationFactory;
 import com.hazelcast.map.impl.query.QueryOperation;
 import com.hazelcast.map.impl.query.QueryPartitionOperation;
-import com.hazelcast.map.impl.operation.SizeOperationFactory;
+import com.hazelcast.map.impl.query.QueryResult;
+import com.hazelcast.map.impl.query.QueryResultSet;
+import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.spi.AbstractDistributedObject;
 import com.hazelcast.spi.NodeEngine;
+import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.impl.BinaryOperationFactory;
 import com.hazelcast.transaction.TransactionException;
@@ -44,7 +51,6 @@ import com.hazelcast.transaction.impl.Transaction;
 import com.hazelcast.util.EmptyStatement;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
-import com.hazelcast.map.impl.query.QueryResultSet;
 import com.hazelcast.util.ThreadUtil;
 
 import java.util.ArrayList;
@@ -69,13 +75,23 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
     protected final Transaction tx;
     protected final PartitioningStrategy partitionStrategy;
     protected final Map<Data, VersionedValue> valueMap = new HashMap<Data, VersionedValue>();
+    protected final RecordFactory recordFactory;
+    protected final MapOperationProvider operationProvider;
 
     public TransactionalMapProxySupport(String name, MapService mapService, NodeEngine nodeEngine,
                                         Transaction transaction) {
         super(nodeEngine, mapService);
         this.name = name;
         this.tx = transaction;
-        this.partitionStrategy = mapService.getMapServiceContext().getMapContainer(name).getPartitioningStrategy();
+        MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+        this.operationProvider = mapServiceContext.getMapOperationProvider(name);
+        MapContainer mapContainer = mapServiceContext.getMapContainer(name);
+        this.recordFactory = mapContainer.getRecordFactoryConstructor().createNew(null);
+        this.partitionStrategy = mapContainer.getPartitioningStrategy();
+    }
+
+    protected boolean isEquals(Object value1, Object value2) {
+        return recordFactory.isEquals(value1, value2);
     }
 
     protected void checkTransactionState() {
@@ -155,8 +171,10 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
     public Data putInternal(Data key, Data value, long ttl, TimeUnit timeUnit) {
         VersionedValue versionedValue = lockAndGet(key, tx.getTimeoutMillis());
         final long timeInMillis = getTimeInMillis(ttl, timeUnit);
-        final TxnSetOperation op = new TxnSetOperation(name, key, value, versionedValue.version, timeInMillis);
-        tx.add(new MapTransactionLogRecord(name, key, getPartitionId(key), op, versionedValue.version, tx.getOwnerUuid()));
+        MapOperation operation
+                = operationProvider.createTxnSetOperation(name, key, value, versionedValue.version, timeInMillis);
+        tx.add(new MapTransactionLogRecord(name, key, getPartitionId(key),
+                operation, versionedValue.version, tx.getOwnerUuid()));
         return versionedValue.value;
     }
 
@@ -185,7 +203,7 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
 
     public boolean replaceIfSameInternal(Data key, Object oldValue, Data newValue) {
         VersionedValue versionedValue = lockAndGet(key, tx.getTimeoutMillis());
-        if (!getService().getMapServiceContext().compare(name, oldValue, versionedValue.value)) {
+        if (!isEquals(oldValue, versionedValue.value)) {
             addUnlockTransactionRecord(key, versionedValue.version);
             return false;
         }
@@ -196,19 +214,22 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
 
     public Data removeInternal(Data key) {
         VersionedValue versionedValue = lockAndGet(key, tx.getTimeoutMillis());
+
         tx.add(new MapTransactionLogRecord(name, key, getPartitionId(key),
-                new TxnDeleteOperation(name, key, versionedValue.version), versionedValue.version, tx.getOwnerUuid()));
+                operationProvider.createTxnDeleteOperation(name, key, versionedValue.version),
+                versionedValue.version, tx.getOwnerUuid()));
         return versionedValue.value;
     }
 
     public boolean removeIfSameInternal(Data key, Object value) {
         VersionedValue versionedValue = lockAndGet(key, tx.getTimeoutMillis());
-        if (!getService().getMapServiceContext().compare(name, versionedValue.value, value)) {
+        if (!isEquals(versionedValue.value, value)) {
             addUnlockTransactionRecord(key, versionedValue.version);
             return false;
         }
         tx.add(new MapTransactionLogRecord(name, key, getPartitionId(key),
-                new TxnDeleteOperation(name, key, versionedValue.version), versionedValue.version, tx.getOwnerUuid()));
+                operationProvider.createTxnDeleteOperation(name, key, versionedValue.version),
+                versionedValue.version, tx.getOwnerUuid()));
         return true;
     }
 
@@ -223,8 +244,8 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
             return versionedValue;
         }
         final NodeEngine nodeEngine = getNodeEngine();
-        TxnLockAndGetOperation operation
-                = new TxnLockAndGetOperation(name, key, timeout, timeout, tx.getOwnerUuid());
+        MapOperation operation
+                = operationProvider.createTxnLockAndGetOperation(name, key, timeout, timeout, tx.getOwnerUuid());
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
             int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
@@ -315,13 +336,22 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
 
     private List<Future> invokeQueryOperation(Predicate predicate, OperationService operationService,
                                               Collection<Member> members, IterationType iterationType) {
+        String mapName = this.name;
         List<Future> futures = new ArrayList<Future>();
         for (Member member : members) {
+            Operation operation = new QueryOperation(mapName, predicate, iterationType);
             Future future = operationService
-                    .invokeOnTarget(SERVICE_NAME, new QueryOperation(name, predicate, iterationType), member.getAddress());
+                    .invokeOnTarget(SERVICE_NAME, operation, member.getAddress());
             futures.add(future);
         }
+
         return futures;
+    }
+
+    private MapOperationProvider getMapOperationProvider(String mapName) {
+        MapService mapService = getService();
+        MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+        return mapServiceContext.getMapOperationProvider(mapName);
     }
 
     @SuppressWarnings("unchecked")
@@ -379,6 +409,7 @@ public abstract class TransactionalMapProxySupport extends AbstractDistributedOb
         return name;
     }
 
+    @Override
     public final String getServiceName() {
         return MapService.SERVICE_NAME;
     }

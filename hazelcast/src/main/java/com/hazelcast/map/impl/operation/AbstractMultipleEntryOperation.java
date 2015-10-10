@@ -46,7 +46,7 @@ import static com.hazelcast.map.impl.EntryViews.createSimpleEntryView;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 import static com.hazelcast.map.impl.recordstore.RecordStore.DEFAULT_TTL;
 
-abstract class AbstractMultipleEntryOperation extends AbstractMapOperation implements MutatingOperation {
+abstract class AbstractMultipleEntryOperation extends MapOperation implements MutatingOperation {
 
     protected MapEntries responses;
     protected EntryProcessor entryProcessor;
@@ -67,7 +67,7 @@ abstract class AbstractMultipleEntryOperation extends AbstractMapOperation imple
     }
 
     @Override
-    public void innerBeforeRun() {
+    public void innerBeforeRun() throws Exception {
         super.innerBeforeRun();
         this.recordStore = getRecordStore();
     }

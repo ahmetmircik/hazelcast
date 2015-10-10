@@ -266,7 +266,7 @@ public class NearCache {
     }
 
     private long calculateCost(NearCacheRecord record) {
-        return getNearCacheSizeEstimator().getCost(record);
+        return getNearCacheSizeEstimator().calculateSize(record);
     }
 
     public SizeEstimator getNearCacheSizeEstimator() {

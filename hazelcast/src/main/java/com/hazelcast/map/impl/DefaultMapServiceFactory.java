@@ -40,7 +40,7 @@ class DefaultMapServiceFactory extends AbstractMapServiceFactory {
 
     private final MapServiceContext mapServiceContext;
 
-    public DefaultMapServiceFactory(MapServiceContext mapServiceContext) {
+    DefaultMapServiceFactory(MapServiceContext mapServiceContext) {
         this.mapServiceContext = checkNotNull(mapServiceContext, "mapServiceContext should not be null");
     }
 

@@ -23,14 +23,21 @@ import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.event.MapEventPublisherImpl;
 import com.hazelcast.map.impl.eviction.EvictionOperator;
+import com.hazelcast.map.impl.eviction.EvictionOperatorImpl;
 import com.hazelcast.map.impl.eviction.ExpirationManager;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
+import com.hazelcast.map.impl.operation.BasePutOperation;
+import com.hazelcast.map.impl.operation.BaseRemoveOperation;
+import com.hazelcast.map.impl.operation.DefaultMapOperationProvider;
+import com.hazelcast.map.impl.operation.GetOperation;
+import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MapPartitionDestroyOperation;
 import com.hazelcast.map.impl.query.MapQueryEngine;
 import com.hazelcast.map.impl.query.MapQueryEngineImpl;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.listener.MapPartitionLostListener;
 import com.hazelcast.map.merge.MergePolicyProvider;
+import com.hazelcast.monitor.impl.LocalMapStatsImpl;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.partition.InternalPartitionService;
@@ -41,6 +48,7 @@ import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.impl.eventservice.impl.TrueEventFilter;
+import com.hazelcast.util.Clock;
 import com.hazelcast.util.ConcurrencyUtil;
 import com.hazelcast.util.ConstructorFunction;
 import com.hazelcast.util.ExceptionUtil;
@@ -67,13 +75,13 @@ import static com.hazelcast.query.impl.predicates.QueryOptimizerFactory.newOptim
  * Default implementation of map service context.
  */
 class MapServiceContextImpl implements MapServiceContext {
-    private static final long DESTROY_TIMEOUT_SECONDS = 30;
+    protected static final long DESTROY_TIMEOUT_SECONDS = 30;
 
-    private final NodeEngine nodeEngine;
-    private final PartitionContainer[] partitionContainers;
-    private final ConcurrentMap<String, MapContainer> mapContainers;
-    private final AtomicReference<Collection<Integer>> ownedPartitions;
-    private final ConstructorFunction<String, MapContainer> mapConstructor = new ConstructorFunction<String, MapContainer>() {
+    protected final NodeEngine nodeEngine;
+    protected final PartitionContainer[] partitionContainers;
+    protected final ConcurrentMap<String, MapContainer> mapContainers;
+    protected final AtomicReference<Collection<Integer>> ownedPartitions;
+    protected final ConstructorFunction<String, MapContainer> mapConstructor = new ConstructorFunction<String, MapContainer>() {
         public MapContainer createNew(String mapName) {
             final MapServiceContext mapServiceContext = getService().getMapServiceContext();
             final Config config = nodeEngine.getConfig();
@@ -87,33 +95,49 @@ class MapServiceContextImpl implements MapServiceContext {
      * This is used by owner and backups together so it should be defined
      * getting this into account.
      */
-    private final AtomicInteger writeBehindQueueItemCounter = new AtomicInteger(0);
-    private final ExpirationManager expirationManager;
-    private final NearCacheProvider nearCacheProvider;
-    private final LocalMapStatsProvider localMapStatsProvider;
-    private final MergePolicyProvider mergePolicyProvider;
-    private final MapQueryEngine mapQueryEngine;
-    private final EventService eventService;
-    private MapEventPublisher mapEventPublisher;
-    private EvictionOperator evictionOperator;
-    private MapService mapService;
+    protected final AtomicInteger writeBehindQueueItemCounter = new AtomicInteger(0);
+    protected final ExpirationManager expirationManager;
+    protected final NearCacheProvider nearCacheProvider;
+    protected final LocalMapStatsProvider localMapStatsProvider;
+    protected final MergePolicyProvider mergePolicyProvider;
+    protected final MapQueryEngine mapQueryEngine;
+    protected MapEventPublisher mapEventPublisher;
+    protected EvictionOperator evictionOperator;
+    protected MapService mapService;
+    protected EventService eventService;
 
-    public MapServiceContextImpl(NodeEngine nodeEngine) {
+    MapServiceContextImpl(NodeEngine nodeEngine) {
         this.nodeEngine = nodeEngine;
-        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
-        this.partitionContainers = new PartitionContainer[partitionCount];
+        this.partitionContainers = createPartitionContainers();
         this.mapContainers = new ConcurrentHashMap<String, MapContainer>();
         this.ownedPartitions = new AtomicReference<Collection<Integer>>();
         this.expirationManager = new ExpirationManager(this, nodeEngine);
-        this.evictionOperator = EvictionOperator.create(this);
+        this.evictionOperator = new EvictionOperatorImpl();
         this.nearCacheProvider = new NearCacheProvider(this, nodeEngine);
-        this.localMapStatsProvider = new LocalMapStatsProvider(this, nodeEngine);
+        this.localMapStatsProvider = createLocalMapStatsProvider();
         this.mergePolicyProvider = new MergePolicyProvider(nodeEngine);
         this.mapEventPublisher = createMapEventPublisherSupport();
-        this.mapQueryEngine = new MapQueryEngineImpl(this, newOptimizer(nodeEngine.getGroupProperties()));
+        this.mapQueryEngine = createMapQueryEngine(nodeEngine);
         this.eventService = nodeEngine.getEventService();
     }
 
+    // this method is overridden in another context.
+    LocalMapStatsProvider createLocalMapStatsProvider() {
+        return new LocalMapStatsProvider(this);
+    }
+
+    // this method is overridden in another context.
+    MapQueryEngineImpl createMapQueryEngine(NodeEngine nodeEngine) {
+        return new MapQueryEngineImpl(this, newOptimizer(nodeEngine.getGroupProperties()));
+    }
+
+    // this method is overridden in another context.
+    PartitionContainer[] createPartitionContainers() {
+        int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
+        return new PartitionContainer[partitionCount];
+    }
+
+    // this method is overridden in another context.
     MapEventPublisherImpl createMapEventPublisherSupport() {
         return new MapEventPublisherImpl(this);
     }
@@ -159,6 +183,11 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
+    public void setService(MapService mapService) {
+        this.mapService = mapService;
+    }
+
+    @Override
     public void clearPartitions() {
         final PartitionContainer[] containers = partitionContainers;
         for (PartitionContainer container : containers) {
@@ -182,8 +211,10 @@ class MapServiceContextImpl implements MapServiceContext {
     public void flushMaps() {
         for (PartitionContainer partitionContainer : partitionContainers) {
             for (String mapName : mapContainers.keySet()) {
-                RecordStore recordStore = partitionContainer.getRecordStore(mapName);
-                recordStore.flush();
+                RecordStore recordStore = partitionContainer.getExistingRecordStore(mapName);
+                if (recordStore != null) {
+                    recordStore.flush();
+                }
             }
         }
     }
@@ -209,8 +240,7 @@ class MapServiceContextImpl implements MapServiceContext {
 
         try {
             for (Future f : futures) {
-                f.get(DESTROY_TIMEOUT_SECONDS,
-                        TimeUnit.SECONDS);
+                f.get(DESTROY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             }
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
@@ -269,16 +299,6 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public EvictionOperator getEvictionOperator() {
-        return evictionOperator;
-    }
-
-    @Override
-    public void setService(MapService mapService) {
-        this.mapService = mapService;
-    }
-
-    @Override
     public NodeEngine getNodeEngine() {
         return nodeEngine;
     }
@@ -294,21 +314,13 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public MapQueryEngine getMapQueryEngine() {
+    public MapQueryEngine getMapQueryEngine(String mapName) {
         return mapQueryEngine;
     }
 
     @Override
     public LocalMapStatsProvider getLocalMapStatsProvider() {
         return localMapStatsProvider;
-    }
-
-    /**
-     * Used for testing purposes.
-     */
-    @Override
-    public void setEvictionOperator(EvictionOperator evictionOperator) {
-        this.evictionOperator = evictionOperator;
     }
 
     @Override
@@ -324,21 +336,6 @@ class MapServiceContextImpl implements MapServiceContext {
     @Override
     public Data toData(Object object) {
         return nodeEngine.toData(object);
-    }
-
-    @Override
-    public boolean compare(String mapName, Object value1, Object value2) {
-        if (value1 == null && value2 == null) {
-            return true;
-        }
-        if (value1 == null) {
-            return false;
-        }
-        if (value2 == null) {
-            return false;
-        }
-        final MapContainer mapContainer = getMapContainer(mapName);
-        return mapContainer.getRecordFactory().isEquals(value1, value2);
     }
 
     @Override
@@ -495,4 +492,28 @@ class MapServiceContextImpl implements MapServiceContext {
     public boolean removePartitionLostListener(String mapName, String registrationId) {
         return eventService.deregisterListener(SERVICE_NAME, mapName, registrationId);
     }
+
+    @Override
+    public MapOperationProvider getMapOperationProvider(String name) {
+        return DefaultMapOperationProvider.get();
+    }
+
+    @Override
+    public void incrementOperationStats(long startTime, LocalMapStatsImpl localMapStats, String mapName, Operation operation) {
+        if (operation instanceof BasePutOperation) {
+            localMapStats.incrementPuts(Clock.currentTimeMillis() - startTime);
+            return;
+        }
+
+        if (operation instanceof BaseRemoveOperation) {
+            localMapStats.incrementRemoves(Clock.currentTimeMillis() - startTime);
+            return;
+        }
+
+        if (operation instanceof GetOperation) {
+            localMapStats.incrementGets(Clock.currentTimeMillis() - startTime);
+            return;
+        }
+    }
+
 }

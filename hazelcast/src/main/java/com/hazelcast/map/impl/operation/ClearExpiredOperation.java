@@ -57,6 +57,7 @@ public class ClearExpiredOperation extends AbstractOperation implements Partitio
         for (final RecordStore recordStore : recordStores.values()) {
             if (recordStore.size() > 0 && recordStore.isExpirable()) {
                 recordStore.evictExpiredEntries(expirationPercentage, backup);
+                recordStore.dispose();
             }
         }
     }

@@ -31,10 +31,10 @@ import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
  */
 class MapRemoteService implements RemoteService {
 
-    private final MapServiceContext mapServiceContext;
-    private final NodeEngine nodeEngine;
+    protected final MapServiceContext mapServiceContext;
+    protected final NodeEngine nodeEngine;
 
-    public MapRemoteService(MapServiceContext mapServiceContext) {
+    MapRemoteService(MapServiceContext mapServiceContext) {
         this.mapServiceContext = mapServiceContext;
         this.nodeEngine = mapServiceContext.getNodeEngine();
     }
@@ -58,7 +58,4 @@ class MapRemoteService implements RemoteService {
         nodeEngine.getEventService().deregisterAllListeners(SERVICE_NAME, name);
     }
 
-    MapServiceContext getMapServiceContext() {
-        return mapServiceContext;
-    }
 }

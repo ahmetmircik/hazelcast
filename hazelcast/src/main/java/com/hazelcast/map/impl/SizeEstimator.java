@@ -23,11 +23,37 @@ package com.hazelcast.map.impl;
  */
 public interface SizeEstimator<T> {
 
+    SizeEstimator NULL_SIZE_ESTIMATOR = new NullSizeEstimator();
+
     long getSize();
 
     void add(long size);
 
-    long getCost(T record);
+    long calculateSize(T object);
 
     void reset();
+
+
+    class NullSizeEstimator implements SizeEstimator {
+
+        @Override
+        public long getSize() {
+            return 0L;
+        }
+
+        @Override
+        public void add(long size) {
+
+        }
+
+        @Override
+        public long calculateSize(Object object) {
+            return 0L;
+        }
+
+        @Override
+        public void reset() {
+
+        }
+    }
 }
