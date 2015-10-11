@@ -314,7 +314,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         return tryRemoveInternal(timeout, timeunit, keyData);
     }
 
-    protected boolean tryRemoveInternal(long timeout, TimeUnit timeunit, Data keyData) {
+    protected Boolean tryRemoveInternal(long timeout, TimeUnit timeunit, Data keyData) {
         MapTryRemoveRequest request = new MapTryRemoveRequest(name, keyData,
                 ThreadUtil.getThreadId(), timeunit.toMillis(timeout));
         return invoke(request, keyData);
@@ -330,7 +330,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         return tryPutInternal(timeout, timeunit, keyData, valueData);
     }
 
-    protected boolean tryPutInternal(long timeout, TimeUnit timeunit, Data keyData, Data valueData) {
+    protected Boolean tryPutInternal(long timeout, TimeUnit timeunit, Data keyData, Data valueData) {
         MapTryPutRequest request = new MapTryPutRequest(name, keyData, valueData,
                 ThreadUtil.getThreadId(), timeunit.toMillis(timeout));
         return invoke(request, keyData);
@@ -403,7 +403,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         return replaceIfSameInternal(keyData, oldValueData, newValueData);
     }
 
-    protected boolean replaceIfSameInternal(Data keyData, Data oldValueData, Data newValueData) {
+    protected Boolean replaceIfSameInternal(Data keyData, Data oldValueData, Data newValueData) {
         MapReplaceIfSameRequest request = new MapReplaceIfSameRequest(name, keyData, oldValueData, newValueData,
                 ThreadUtil.getThreadId());
         return invoke(request, keyData);
@@ -651,7 +651,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V> {
         return evictInternal(keyData);
     }
 
-    protected boolean evictInternal(Data keyData) {
+    protected Boolean evictInternal(Data keyData) {
         MapEvictRequest request = new MapEvictRequest(name, keyData, ThreadUtil.getThreadId());
         return invoke(request);
     }
