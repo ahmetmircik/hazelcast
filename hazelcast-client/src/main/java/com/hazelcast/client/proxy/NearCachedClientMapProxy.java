@@ -21,17 +21,14 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.impl.client.BaseClientRemoveListenerRequest;
 import com.hazelcast.client.impl.client.ClientRequest;
 import com.hazelcast.client.map.impl.nearcache.ClientHeapNearCache;
-import com.hazelcast.client.spi.ClientClusterService;
 import com.hazelcast.client.spi.EventHandler;
 import com.hazelcast.config.NearCacheConfig;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.core.Member;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.client.MapAddNearCacheEntryListenerRequest;
-import com.hazelcast.map.impl.client.MapClearNearCacheRequest;
 import com.hazelcast.map.impl.client.MapRemoveEntryListenerRequest;
 import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.monitor.NearCacheStats;
@@ -51,7 +48,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.cache.impl.nearcache.NearCache.NULL_OBJECT;
-import static com.hazelcast.cluster.memberselector.MemberSelectors.LITE_MEMBER_SELECTOR;
 
 /**
  * A Client-side {@code IMap} implementation which is fronted by a near-cache.
@@ -223,8 +219,6 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     @Override
     public void evictAll() {
         nearCache.clear();
-        clearNearCachesOnLiteMembers();
-
         super.evictAll();
     }
 
@@ -305,17 +299,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     @Override
     public void clear() {
         nearCache.clear();
-        clearNearCachesOnLiteMembers();
-
         super.clear();
-    }
-
-    private void clearNearCachesOnLiteMembers() {
-        final ClientClusterService clusterService = getClient().getClientClusterService();
-        for (Member member : clusterService.getMembers(LITE_MEMBER_SELECTOR)) {
-            final MapClearNearCacheRequest request = new MapClearNearCacheRequest(name, member.getAddress());
-            invoke(request, member.getAddress());
-        }
     }
 
     @Override
