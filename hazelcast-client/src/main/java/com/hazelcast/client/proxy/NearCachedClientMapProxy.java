@@ -167,13 +167,13 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     }
 
     @Override
-    protected boolean tryRemoveInternal(long timeout, TimeUnit timeunit, Data keyData) {
+    protected Boolean tryRemoveInternal(long timeout, TimeUnit timeunit, Data keyData) {
         invalidateNearCache(keyData);
         return super.tryRemoveInternal(timeout, timeunit, keyData);
     }
 
     @Override
-    protected boolean tryPutInternal(long timeout, TimeUnit timeunit, Data keyData, Data valueData) {
+    protected Boolean tryPutInternal(long timeout, TimeUnit timeunit, Data keyData, Data valueData) {
         invalidateNearCache(keyData);
         return super.tryPutInternal(timeout, timeunit, keyData, valueData);
     }
@@ -197,7 +197,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     }
 
     @Override
-    protected boolean replaceIfSameInternal(Data keyData, Data oldValueData, Data newValueData) {
+    protected Boolean replaceIfSameInternal(Data keyData, Data oldValueData, Data newValueData) {
         invalidateNearCache(keyData);
         return super.replaceIfSameInternal(keyData, oldValueData, newValueData);
     }
@@ -215,7 +215,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     }
 
     @Override
-    protected boolean evictInternal(Data keyData) {
+    protected Boolean evictInternal(Data keyData) {
         invalidateNearCache(keyData);
         return super.evictInternal(keyData);
     }
