@@ -93,7 +93,7 @@ public class PutFromLoadAllOperation extends MapOperation implements PartitionAw
             return;
         }
 
-        if (mapContainer.getWanReplicationPublisher() != null && mapContainer.getWanMergePolicy() != null) {
+        if (mapContainer.isWanReplicationEnabled()) {
             final EntryView entryView = EntryViews.createSimpleEntryView(key, value, record);
             MapServiceContext mapServiceContext = mapService.getMapServiceContext();
             MapEventPublisher mapEventPublisher = mapServiceContext.getMapEventPublisher();

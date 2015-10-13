@@ -54,7 +54,6 @@ public class MultipleEntryOperation extends AbstractMultipleEntryOperation imple
     @Override
     public void run() throws Exception {
         final long now = getNow();
-
         final Set<Data> keys = this.keys;
         for (Data dataKey : keys) {
             if (keyNotOwnedByThisPartition(dataKey)) {

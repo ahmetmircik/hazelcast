@@ -26,12 +26,15 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.BackupOperation;
 import com.hazelcast.spi.impl.MutatingOperation;
+import com.hazelcast.util.Clock;
+
 import java.io.IOException;
 
 public class RemoveBackupOperation extends KeyBasedMapOperation implements BackupOperation, MutatingOperation,
         IdentifiedDataSerializable {
 
-    boolean unlockKey;
+    protected boolean unlockKey;
+    protected boolean wanOriginated;
 
     public RemoveBackupOperation() {
     }
@@ -43,6 +46,12 @@ public class RemoveBackupOperation extends KeyBasedMapOperation implements Backu
     public RemoveBackupOperation(String name, Data dataKey, boolean unlockKey) {
         super(name, dataKey);
         this.unlockKey = unlockKey;
+    }
+
+    public RemoveBackupOperation(String name, Data dataKey, boolean unlockKey, boolean wanOriginated) {
+        super(name, dataKey);
+        this.unlockKey = unlockKey;
+        this.wanOriginated = wanOriginated;
     }
 
     @Override
@@ -60,6 +69,11 @@ public class RemoveBackupOperation extends KeyBasedMapOperation implements Backu
     @Override
     public void afterRun() throws Exception {
         evict(true);
+        if (!wanOriginated
+                && !mapContainer.isWanReplicationEnabled()) {
+            mapService.getMapServiceContext()
+                    .getMapEventPublisher().publishWanReplicationRemoveBackup(name, dataKey, Clock.currentTimeMillis());
+        }
     }
 
     @Override
@@ -81,12 +95,14 @@ public class RemoveBackupOperation extends KeyBasedMapOperation implements Backu
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
         out.writeBoolean(unlockKey);
+        out.writeBoolean(wanOriginated);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
         unlockKey = in.readBoolean();
+        wanOriginated = in.readBoolean();
     }
 
 }
