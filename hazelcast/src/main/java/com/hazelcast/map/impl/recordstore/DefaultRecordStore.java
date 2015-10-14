@@ -283,7 +283,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                 return true;
             }
         }
-        postReadCleanUp(now, false);
+        postReadCleanUp(now);
         return false;
     }
 
@@ -436,7 +436,6 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         mapDataStore.clear();
         removeIndex(notLockedKeys);
         resetAccessSequenceNumber();
-
         return removeKeys(notLockedKeys);
     }
 
@@ -639,7 +638,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         Object value = record == null ? null : record.getValue();
         value = mapServiceContext.interceptGet(name, value);
 
-        postReadCleanUp(now, false);
+        postReadCleanUp(now);
         return value;
     }
 
@@ -739,7 +738,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             accessRecord(record, now);
         }
 
-        postReadCleanUp(now, false);
+        postReadCleanUp(now);
         return contains;
     }
 

@@ -11,9 +11,9 @@ import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.SizeEstimator;
-import com.hazelcast.map.impl.eviction.EvictionOperator;
-import com.hazelcast.map.impl.eviction.EvictionOperatorFactory;
-import com.hazelcast.map.impl.eviction.EvictableCheckerImpl;
+import com.hazelcast.map.impl.eviction.EvictionCheckerImpl;
+import com.hazelcast.map.impl.eviction.Evictor;
+import com.hazelcast.map.impl.eviction.EvictorImpl;
 import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -37,6 +37,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
@@ -128,7 +129,7 @@ public class EvictionMaxSizePolicyTest extends HazelcastTestSupport {
     /**
      * https://github.com/hazelcast/hazelcast/issues/5516
      *
-     * @see EvictableCheckerImpl#getApproximateMaxSize(int)
+     * @see EvictionCheckerImpl#getApproximateMaxSize(int)
      */
     @Test
     public void testUsedHeapSizePolicy_doesNotTriggerEviction_whenEntryHeapCostIsSmallerThanApproximateMaxSize() {
@@ -237,7 +238,8 @@ public class EvictionMaxSizePolicyTest extends HazelcastTestSupport {
         final MapProxyImpl mapProxy = (MapProxyImpl) map;
         final MapService mapService = (MapService) mapProxy.getService();
         final MapServiceContext mapServiceContext = mapService.getMapServiceContext();
-        final EvictionOperator evictionOperator = EvictionOperatorFactory.create(new MemoryInfoAccessor() {
+        EvictionCheckerImpl evictionChecker = new EvictionCheckerImpl(mapServiceContext);
+        MemoryInfoAccessor memoryInfoAccessor = new MemoryInfoAccessor() {
             @Override
             public long getTotalMemory() {
                 return MemoryUnit.MEGABYTES.toBytes(totalMemoryMB);
@@ -252,9 +254,11 @@ public class EvictionMaxSizePolicyTest extends HazelcastTestSupport {
             public long getMaxMemory() {
                 return MemoryUnit.MEGABYTES.toBytes(maxMemoryMB);
             }
-        }, mapServiceContext);
+        };
 
-        mapServiceContext.getMapContainer(map.getName()).setEvictionOperator(evictionOperator);
+        evictionChecker.setMemoryInfoAccessor(memoryInfoAccessor);
+        Evictor evictor = new EvictorImpl(evictionChecker, mapServiceContext);
+        mapServiceContext.getMapContainer(map.getName()).setEvictor(evictor);
     }
 
     void setMockRuntimeMemoryInfoAccessor(Collection<IMap> maps, final long totalMemory,

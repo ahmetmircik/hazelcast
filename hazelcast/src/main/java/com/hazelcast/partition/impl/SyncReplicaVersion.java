@@ -23,7 +23,7 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.partition.InternalPartitionService;
 import com.hazelcast.partition.ReplicaErrorLogger;
-import com.hazelcast.spi.impl.AllowedDuringShutdown;
+import com.hazelcast.spi.impl.AllowedDuringPassiveState;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
@@ -34,7 +34,7 @@ import java.io.IOException;
 
 // runs locally
 final class SyncReplicaVersion extends Operation implements PartitionAwareOperation,
-        UrgentSystemOperation, AllowedDuringShutdown {
+        UrgentSystemOperation, AllowedDuringPassiveState {
 
     public static final int OPERATION_TRY_COUNT = 10;
     public static final int OPERATION_TRY_PAUSE_MILLIS = 250;
@@ -147,7 +147,10 @@ final class SyncReplicaVersion extends Operation implements PartitionAwareOperat
     }
 
     @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" + "partitionId=" + getPartitionId() + ", replicaIndex=" + syncReplicaIndex + '}';
+    protected void toString(StringBuilder sb) {
+        super.toString(sb);
+
+        sb.append(", syncReplicaIndex=").append(syncReplicaIndex);
+        sb.append(", sync=").append(sync);
     }
 }

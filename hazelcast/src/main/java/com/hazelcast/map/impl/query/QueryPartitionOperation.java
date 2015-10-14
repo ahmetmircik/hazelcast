@@ -27,7 +27,6 @@ import com.hazelcast.util.IterationType;
 
 import java.io.IOException;
 
-
 public class QueryPartitionOperation extends MapOperation implements PartitionAwareOperation, ReadonlyOperation {
 
     private Predicate predicate;

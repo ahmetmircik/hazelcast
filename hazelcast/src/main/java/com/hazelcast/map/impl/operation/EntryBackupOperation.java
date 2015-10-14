@@ -102,17 +102,12 @@ public class EntryBackupOperation extends KeyBasedMapOperation implements Backup
 
     @Override
     public void afterRun() throws Exception {
-        evict(true);
+        evict();
     }
 
     @Override
     public Object getResponse() {
         return true;
-    }
-
-    @Override
-    public String toString() {
-        return "EntryBackupOperation{}";
     }
 
     private void processBackup(Map.Entry entry) {

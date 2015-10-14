@@ -53,7 +53,7 @@ public class WanOriginatedDeleteOperation extends BaseRemoveOperation {
         mapServiceContext.getMapEventPublisher()
                 .publishEvent(getCallerAddress(), name, EntryEventType.REMOVED, dataKey, dataOldValue, null);
         invalidateNearCaches();
-        evict(false);
+        evict();
     }
 
     @Override
@@ -70,10 +70,4 @@ public class WanOriginatedDeleteOperation extends BaseRemoveOperation {
     public void onWaitExpire() {
         sendResponse(false);
     }
-
-    @Override
-    public String toString() {
-        return "DeleteOperation{" + name + "}";
-    }
-
 }

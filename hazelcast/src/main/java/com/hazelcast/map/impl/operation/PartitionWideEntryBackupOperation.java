@@ -63,7 +63,7 @@ public class PartitionWideEntryBackupOperation extends AbstractMultipleEntryBack
             }
             entryAddedOrUpdatedBackup(entry, dataKey);
 
-            evict(true);
+            evict();
         }
 
         publishWanReplicationEventBackups();
@@ -84,11 +84,6 @@ public class PartitionWideEntryBackupOperation extends AbstractMultipleEntryBack
         }
         QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
         return getPredicate().apply(queryEntry);
-    }
-
-    @Override
-    public String toString() {
-        return "PartitionWideEntryBackupOperation{}";
     }
 
     @Override

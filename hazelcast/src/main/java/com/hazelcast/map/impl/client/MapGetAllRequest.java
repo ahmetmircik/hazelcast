@@ -39,7 +39,6 @@ import java.util.Map;
 
 public class MapGetAllRequest extends MapAllPartitionsClientRequest implements Portable, RetryableRequest, SecureRequest {
 
-    protected String name;
     private List<Data> keys = new ArrayList<Data>();
 
     public MapGetAllRequest() {

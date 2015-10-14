@@ -38,6 +38,9 @@ import java.util.Set;
  */
 public interface RecordStore<V extends Record> {
 
+    /**
+     * Default TTL value of a record.
+     */
     long DEFAULT_TTL = -1L;
 
     String getName();
@@ -271,6 +274,8 @@ public interface RecordStore<V extends Record> {
      */
     boolean isExpired(Record record, long now, boolean backup);
 
+    void doPostEvictionOperations(Data key, Object value, boolean isExpired);
+
     /**
      * Loads all given keys from defined map store.
      *
@@ -294,7 +299,7 @@ public interface RecordStore<V extends Record> {
      */
     V getRecordOrNull(Data key);
 
-    void evictEntries(long now, boolean backup);
+    void evictEntries(long now);
 
     /**
      * Loads all keys and values

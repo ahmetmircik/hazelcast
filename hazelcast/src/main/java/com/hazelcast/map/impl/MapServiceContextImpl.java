@@ -22,8 +22,10 @@ import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.event.MapEventPublisherImpl;
-import com.hazelcast.map.impl.eviction.EvictionOperator;
-import com.hazelcast.map.impl.eviction.EvictionOperatorImpl;
+import com.hazelcast.map.impl.eviction.EvictionChecker;
+import com.hazelcast.map.impl.eviction.EvictionCheckerImpl;
+import com.hazelcast.map.impl.eviction.Evictor;
+import com.hazelcast.map.impl.eviction.EvictorImpl;
 import com.hazelcast.map.impl.eviction.ExpirationManager;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.operation.BasePutOperation;
@@ -102,9 +104,10 @@ class MapServiceContextImpl implements MapServiceContext {
     protected final MergePolicyProvider mergePolicyProvider;
     protected final MapQueryEngine mapQueryEngine;
     protected MapEventPublisher mapEventPublisher;
-    protected EvictionOperator evictionOperator;
+    protected Evictor evictor;
     protected MapService mapService;
     protected EventService eventService;
+    protected MapOperationProvider operationProvider;
 
     MapServiceContextImpl(NodeEngine nodeEngine) {
         this.nodeEngine = nodeEngine;
@@ -112,13 +115,20 @@ class MapServiceContextImpl implements MapServiceContext {
         this.mapContainers = new ConcurrentHashMap<String, MapContainer>();
         this.ownedPartitions = new AtomicReference<Collection<Integer>>();
         this.expirationManager = new ExpirationManager(this, nodeEngine);
-        this.evictionOperator = new EvictionOperatorImpl();
-        this.nearCacheProvider = createNearCacheProvider(nodeEngine);
+        this.evictor = createEvictor();
+        this.nearCacheProvider = createNearCacheProvider();
         this.localMapStatsProvider = createLocalMapStatsProvider();
         this.mergePolicyProvider = new MergePolicyProvider(nodeEngine);
         this.mapEventPublisher = createMapEventPublisherSupport();
-        this.mapQueryEngine = createMapQueryEngine(nodeEngine);
+        this.mapQueryEngine = createMapQueryEngine();
         this.eventService = nodeEngine.getEventService();
+        this.operationProvider = new DefaultMapOperationProvider();
+    }
+
+    // this method is overridden in another context.
+    Evictor createEvictor() {
+        EvictionChecker evictionChecker = new EvictionCheckerImpl(this);
+        return new EvictorImpl(evictionChecker, this);
     }
 
     // this method is overridden in another context.
@@ -127,12 +137,12 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     // this method is overridden in another context.
-    MapQueryEngineImpl createMapQueryEngine(NodeEngine nodeEngine) {
+    MapQueryEngineImpl createMapQueryEngine() {
         return new MapQueryEngineImpl(this, newOptimizer(nodeEngine.getGroupProperties()));
     }
 
     // this method is overridden in another context.
-    NearCacheProvider createNearCacheProvider(NodeEngine nodeEngine) {
+    NearCacheProvider createNearCacheProvider() {
         return new NearCacheProvider(this, nodeEngine);
     }
 
@@ -142,7 +152,7 @@ class MapServiceContextImpl implements MapServiceContext {
         return new PartitionContainer[partitionCount];
     }
 
-    // this method is overridden in another context.
+    // this method is overridden.
     MapEventPublisherImpl createMapEventPublisherSupport() {
         return new MapEventPublisherImpl(this);
     }
@@ -469,9 +479,9 @@ class MapServiceContextImpl implements MapServiceContext {
 
     @Override
     public String addPartitionLostListener(MapPartitionLostListener listener, String mapName) {
-        final ListenerAdapter listenerAdapter = new InternalMapPartitionLostListenerAdapter(listener);
-        final EventFilter filter = new MapPartitionLostEventFilter();
-        final EventRegistration registration = eventService.registerListener(SERVICE_NAME, mapName, filter, listenerAdapter);
+        ListenerAdapter listenerAdapter = new InternalMapPartitionLostListenerAdapter(listener);
+        EventFilter filter = new MapPartitionLostEventFilter();
+        EventRegistration registration = eventService.registerListener(SERVICE_NAME, mapName, filter, listenerAdapter);
         return registration.getId();
     }
 
@@ -500,7 +510,7 @@ class MapServiceContextImpl implements MapServiceContext {
 
     @Override
     public MapOperationProvider getMapOperationProvider(String name) {
-        return DefaultMapOperationProvider.get();
+        return operationProvider;
     }
 
     @Override

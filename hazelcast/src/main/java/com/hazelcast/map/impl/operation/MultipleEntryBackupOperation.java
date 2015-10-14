@@ -62,7 +62,7 @@ public class MultipleEntryBackupOperation extends AbstractMultipleEntryBackupOpe
             }
             entryAddedOrUpdatedBackup(entry, dataKey);
 
-            evict(true);
+            evict();
         }
     }
 
@@ -91,10 +91,5 @@ public class MultipleEntryBackupOperation extends AbstractMultipleEntryBackupOpe
     @Override
     public Object getResponse() {
         return true;
-    }
-
-    @Override
-    public String toString() {
-        return "MultipleEntryBackupOperation{}";
     }
 }

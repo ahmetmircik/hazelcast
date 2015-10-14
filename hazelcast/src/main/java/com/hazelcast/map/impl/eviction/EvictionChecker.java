@@ -16,13 +16,19 @@
 
 package com.hazelcast.map.impl.eviction;
 
-import com.hazelcast.map.impl.MapContainer;
+import com.hazelcast.map.impl.recordstore.RecordStore;
 
 /**
- * Checks whether a specific threshold is exceeded or not
- * according to start eviction process.
+ * Checks whether a specific threshold is exceeded or not to start eviction process
+ * for a {@link RecordStore}.
  */
-public interface EvictableChecker {
+public interface EvictionChecker {
 
-    boolean isEvictable(MapContainer mapContainer, int partitionId);
+    /**
+     * Check whether the supplied record-store needs eviction.
+     *
+     * @param recordStore the recordStore
+     * @return {@code true} if eviction is required, {@code false} otherwise.
+     */
+    boolean checkEvictionPossible(RecordStore recordStore);
 }

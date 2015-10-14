@@ -80,6 +80,12 @@ public class FinalizeJoinOperation extends MemberInfoUpdateOperation implements 
         final Operation[] postJoinOperations = nodeEngine.getPostJoinOperations();
         final OperationService operationService = nodeEngine.getOperationService();
 
+        if (clusterState == ClusterState.PASSIVE) {
+            nodeEngine.getNode().changeNodeStateToPassive();
+        } else {
+            nodeEngine.getNode().changeNodeStateToActive();
+        }
+
         if (postJoinOperations != null && postJoinOperations.length > 0) {
             final Collection<Member> members = clusterService.getMembers();
             for (Member member : members) {
@@ -128,11 +134,10 @@ public class FinalizeJoinOperation extends MemberInfoUpdateOperation implements 
     }
 
     @Override
-    public String toString() {
-        return "FinalizeJoinOperation{"
-                + "postJoinOp=" + postJoinOp
-                + "} "
-                + super.toString();
+    protected void toString(StringBuilder sb) {
+        super.toString(sb);
+
+        sb.append(", postJoinOp=").append(postJoinOp);
     }
 }
 

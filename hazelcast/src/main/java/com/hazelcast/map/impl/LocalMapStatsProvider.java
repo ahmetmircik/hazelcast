@@ -70,7 +70,6 @@ public class LocalMapStatsProvider {
         this.nearCacheProvider = mapServiceContext.getNearCacheProvider();
         this.clusterService = nodeEngine.getClusterService();
         this.partitionService = nodeEngine.getPartitionService();
-
     }
 
     public LocalMapStatsImpl getLocalMapStatsImpl(String name) {

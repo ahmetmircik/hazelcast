@@ -59,7 +59,7 @@ public class PartitionContainer {
             keyLoader.setMaxBatch(groupProperties.getInteger(GroupProperty.MAP_LOAD_CHUNK_SIZE));
             keyLoader.setMaxSize(getMaxSizePerNode(mapConfig.getMaxSizeConfig()));
             keyLoader.setHasBackup(mapConfig.getBackupCount() > 0 || mapConfig.getAsyncBackupCount() > 0);
-            keyLoader.setOperationProvider(serviceContext.getMapOperationProvider(name));
+            keyLoader.setMapOperationProvider(serviceContext.getMapOperationProvider(name));
 
             ILogger logger = nodeEngine.getLogger(DefaultRecordStore.class);
             DefaultRecordStore recordStore = new DefaultRecordStore(mapContainer, partitionId, keyLoader, logger);

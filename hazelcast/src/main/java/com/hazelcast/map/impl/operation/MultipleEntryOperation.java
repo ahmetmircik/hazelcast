@@ -77,18 +77,13 @@ public class MultipleEntryOperation extends AbstractMultipleEntryOperation imple
 
             entryAddedOrUpdated(entry, dataKey, oldValue, now);
 
-            evict(false);
+            evict();
         }
     }
 
     @Override
     public Object getResponse() {
         return responses;
-    }
-
-    @Override
-    public String toString() {
-        return "MultipleEntryOperation{}";
     }
 
     @Override

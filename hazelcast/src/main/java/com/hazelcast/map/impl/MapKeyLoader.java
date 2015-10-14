@@ -334,7 +334,7 @@ public class MapKeyLoader {
         this.hasBackup = hasBackup;
     }
 
-    public void setOperationProvider(MapOperationProvider operationProvider) {
+    public void setMapOperationProvider(MapOperationProvider operationProvider) {
         this.operationProvider = operationProvider;
     }
 

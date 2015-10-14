@@ -29,7 +29,6 @@ import java.util.Set;
  * Provides {@link com.hazelcast.config.InMemoryFormat InMemoryFormat} specific
  * operations for {@link com.hazelcast.core.IMap IMap}.
  */
-//CHECKSTYLE:OFF
 public interface MapOperationProvider {
 
     MapOperation createPutOperation(String name, Data key, Data value, long ttl);
@@ -100,5 +99,4 @@ public interface MapOperationProvider {
 
     OperationFactory createGetAllOperationFactory(String name, List<Data> keys);
 }
-//CHECKSTYLE:ON
 

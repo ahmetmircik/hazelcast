@@ -28,20 +28,12 @@ import com.hazelcast.spi.OperationFactory;
 import java.util.List;
 import java.util.Set;
 
-//CHECKSTYLE:OFF
-
 /**
  * Creates map operations.
  */
-public final class DefaultMapOperationProvider implements MapOperationProvider {
+public class DefaultMapOperationProvider implements MapOperationProvider {
 
-    private static final MapOperationProvider INSTANCE = new DefaultMapOperationProvider();
-
-    private DefaultMapOperationProvider() {
-    }
-
-    public static MapOperationProvider get() {
-        return INSTANCE;
+    public DefaultMapOperationProvider() {
     }
 
     @Override
@@ -150,7 +142,8 @@ public final class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public OperationFactory createLoadAllOperationFactory(String name, List<Data> keys, boolean replaceExistingValues) {
+    public OperationFactory createLoadAllOperationFactory(String name, List<Data> keys,
+                                                          boolean replaceExistingValues) {
         return new MapLoadAllOperationFactory(name, keys, replaceExistingValues);
     }
 
@@ -170,7 +163,8 @@ public final class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public MapOperation createTxnLockAndGetOperation(String name, Data dataKey, long timeout, long ttl, String ownerUuid) {
+    public MapOperation createTxnLockAndGetOperation(String name, Data dataKey, long timeout, long ttl, String
+            ownerUuid) {
         return new TxnLockAndGetOperation(name, dataKey, timeout, ttl, ownerUuid);
     }
 
@@ -187,7 +181,8 @@ public final class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public OperationFactory createMultipleEntryOperationFactory(String name, Set<Data> keys, EntryProcessor entryProcessor) {
+    public OperationFactory createMultipleEntryOperationFactory(String name, Set<Data> keys, EntryProcessor
+            entryProcessor) {
         return new MultipleEntryOperationFactory(name, keys, entryProcessor);
     }
 

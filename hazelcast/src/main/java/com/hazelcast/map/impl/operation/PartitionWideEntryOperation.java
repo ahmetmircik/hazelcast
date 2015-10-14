@@ -83,7 +83,7 @@ public class PartitionWideEntryOperation extends AbstractMultipleEntryOperation 
             }
             entryAddedOrUpdated(entry, dataKey, oldValue, now);
 
-            evict(false);
+            evict();
         }
     }
 
@@ -130,11 +130,6 @@ public class PartitionWideEntryOperation extends AbstractMultipleEntryOperation 
 
     protected Predicate getPredicate() {
         return null;
-    }
-
-    @Override
-    public String toString() {
-        return "PartitionWideEntryOperation{}";
     }
 
     @Override

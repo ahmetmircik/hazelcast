@@ -123,11 +123,11 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected final MapServiceContext mapServiceContext;
     protected final InternalPartitionService partitionService;
     protected final Address thisAddress;
-    private final MapOperationProvider operationProvider;
-    private final MapContainer mapContainer;
-    private final OperationService operationService;
-    private final SerializationService serializationService;
-    private final boolean statisticsEnabled;
+    protected final MapOperationProvider operationProvider;
+    protected final MapContainer mapContainer;
+    protected final OperationService operationService;
+    protected final SerializationService serializationService;
+    protected final boolean statisticsEnabled;
 
     protected MapProxySupport(String name, MapService service, NodeEngine nodeEngine) {
         super(nodeEngine, service);
@@ -321,8 +321,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
 
     protected Data replaceInternal(final Data key, final Data value) {
         MapOperation operation = operationProvider.createReplaceOperation(name, key, value);
-        final Data result = (Data) invokeOperation(key, operation);
-        return result;
+        return (Data) invokeOperation(key, operation);
     }
 
     //warning: When UpdateEvent is fired it does *NOT* contain oldValue.
@@ -562,10 +561,10 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         if (keys.isEmpty()) {
             return;
         }
-        OperationFactory operationFactory = operationProvider.createGetAllOperationFactory(name, keys);
         Collection<Integer> partitions = getPartitionsForKeys(keys);
         Map<Integer, Object> responses;
         try {
+            OperationFactory operationFactory = operationProvider.createGetAllOperationFactory(name, keys);
             responses = operationService.invokeOnPartitions(SERVICE_NAME, operationFactory, partitions);
             for (Object response : responses.values()) {
                 MapEntries entries = ((MapEntries) toObject(response));

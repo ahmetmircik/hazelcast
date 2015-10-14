@@ -24,7 +24,6 @@ import com.hazelcast.nio.serialization.Data;
  * Size estimator for map.
  */
 public class MapSizeEstimator implements SizeEstimator {
-
     private volatile long size;
     private final boolean objectFormatUsed;
 

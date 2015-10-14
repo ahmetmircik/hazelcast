@@ -38,51 +38,53 @@ import java.util.List;
  * according to configured {@link com.hazelcast.config.MaxSizeConfig.MaxSizePolicy}
  * to start eviction process.
  *
- * @see EvictionOperatorImpl#evictableChecker
+ * @see EvictorImpl#evictionChecker
  */
-public class EvictableCheckerImpl implements EvictableChecker {
+public class EvictionCheckerImpl implements EvictionChecker {
 
     protected static final int ONE_HUNDRED_PERCENT = 100;
     protected static final int EVICTION_START_THRESHOLD_PERCENTAGE = 95;
     protected static final int ONE_KILOBYTE = 1024;
     protected static final int ONE_MEGABYTE = ONE_KILOBYTE * ONE_KILOBYTE;
 
-    protected final MemoryInfoAccessor memoryInfoAccessor;
     protected final MapServiceContext mapServiceContext;
 
+    // not final for testing purposes.
+    protected MemoryInfoAccessor memoryInfoAccessor;
 
-    public EvictableCheckerImpl(MapServiceContext mapServiceContext) {
-        this(new RuntimeMemoryInfoAccessor(), mapServiceContext);
-    }
-
-    public EvictableCheckerImpl(MemoryInfoAccessor memoryInfoAccessor, MapServiceContext mapServiceContext) {
-        this.memoryInfoAccessor = memoryInfoAccessor;
+    public EvictionCheckerImpl(MapServiceContext mapServiceContext) {
+        this.memoryInfoAccessor = new RuntimeMemoryInfoAccessor();
         this.mapServiceContext = mapServiceContext;
     }
 
     @Override
-    public boolean isEvictable(MapContainer mapContainer, int partitionId) {
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
-        final MaxSizeConfig.MaxSizePolicy maxSizePolicy = maxSizeConfig.getMaxSizePolicy();
+    public boolean checkEvictionPossible(RecordStore recordStore) {
+        String mapName = recordStore.getName();
+        int partitionId = recordStore.getPartitionId();
+
+        MapContainer mapContainer = recordStore.getMapContainer();
+        MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
+        MaxSizeConfig.MaxSizePolicy maxSizePolicy = maxSizeConfig.getMaxSizePolicy();
+
         boolean result;
         switch (maxSizePolicy) {
             case PER_NODE:
-                result = isEvictablePerNode(mapContainer);
+                result = checkPerNodeEviction(mapName, maxSizeConfig);
                 break;
             case PER_PARTITION:
-                result = isEvictablePerPartition(mapContainer, partitionId);
+                result = checkPerPartitionEviction(mapName, maxSizeConfig, partitionId);
                 break;
             case USED_HEAP_PERCENTAGE:
-                result = isEvictableHeapPercentage(mapContainer);
+                result = checkHeapPercentageEviction(mapName, maxSizeConfig);
                 break;
             case USED_HEAP_SIZE:
-                result = isEvictableHeapSize(mapContainer);
+                result = checkHeapSizeEviction(mapName, maxSizeConfig);
                 break;
             case FREE_HEAP_PERCENTAGE:
-                result = isEvictableFreeHeapPercentage(mapContainer);
+                result = checkFreeHeapPercentageEviction(maxSizeConfig);
                 break;
             case FREE_HEAP_SIZE:
-                result = isEvictableFreeHeapSize(mapContainer);
+                result = checkFreeHeapSizeEviction(maxSizeConfig);
                 break;
             default:
                 throw new IllegalArgumentException("Not an appropriate max size policy [" + maxSizePolicy + ']');
@@ -91,13 +93,10 @@ public class EvictableCheckerImpl implements EvictableChecker {
     }
 
 
-    protected boolean isEvictablePerNode(MapContainer mapContainer) {
+    protected boolean checkPerNodeEviction(String mapName, MaxSizeConfig maxSizeConfig) {
         long nodeTotalSize = 0;
 
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
         final double maxSize = getApproximateMaxSize(maxSizeConfig.getSize());
-        final String mapName = mapContainer.getName();
-        final MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
         final List<Integer> partitionIds = findPartitionIds();
         for (int partitionId : partitionIds) {
             final PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
@@ -112,11 +111,8 @@ public class EvictableCheckerImpl implements EvictableChecker {
         return false;
     }
 
-    protected boolean isEvictablePerPartition(final MapContainer mapContainer, int partitionId) {
-        final MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
+    protected boolean checkPerPartitionEviction(String mapName, MaxSizeConfig maxSizeConfig, int partitionId) {
         final double maxSize = getApproximateMaxSize(maxSizeConfig.getSize());
-        final String mapName = mapContainer.getName();
         final PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
         if (container == null) {
             return false;
@@ -125,37 +121,33 @@ public class EvictableCheckerImpl implements EvictableChecker {
         return size >= maxSize;
     }
 
-    protected boolean isEvictableHeapSize(final MapContainer mapContainer) {
-        final long usedHeapSize = getUsedHeapSize(mapContainer);
+    protected boolean checkHeapSizeEviction(String mapName, MaxSizeConfig maxSizeConfig) {
+        final long usedHeapSize = getUsedHeapSize(mapName);
         if (usedHeapSize == -1L) {
             return false;
         }
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
         final double maxSize = getApproximateMaxSize(maxSizeConfig.getSize());
         return maxSize < (1D * usedHeapSize / ONE_MEGABYTE);
     }
 
-    protected boolean isEvictableFreeHeapSize(final MapContainer mapContainer) {
+    protected boolean checkFreeHeapSizeEviction(MaxSizeConfig maxSizeConfig) {
         final long currentFreeHeapSize = getAvailableMemory();
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
         final double minFreeHeapSize = getApproximateMaxSize(maxSizeConfig.getSize());
         return minFreeHeapSize > (1D * currentFreeHeapSize / ONE_MEGABYTE);
     }
 
-    protected boolean isEvictableHeapPercentage(final MapContainer mapContainer) {
-        final long usedHeapSize = getUsedHeapSize(mapContainer);
+    protected boolean checkHeapPercentageEviction(String mapName, MaxSizeConfig maxSizeConfig) {
+        final long usedHeapSize = getUsedHeapSize(mapName);
         if (usedHeapSize == -1L) {
             return false;
         }
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
         final double maxSize = getApproximateMaxSize(maxSizeConfig.getSize());
         final long total = getTotalMemory();
         return maxSize < (1D * ONE_HUNDRED_PERCENT * usedHeapSize / total);
     }
 
-    protected boolean isEvictableFreeHeapPercentage(final MapContainer mapContainer) {
+    protected boolean checkFreeHeapPercentageEviction(MaxSizeConfig maxSizeConfig) {
         final long currentFreeHeapSize = getAvailableMemory();
-        final MaxSizeConfig maxSizeConfig = mapContainer.getMapConfig().getMaxSizeConfig();
         final double freeHeapPercentage = getApproximateMaxSize(maxSizeConfig.getSize());
         final long total = getTotalMemory();
         return freeHeapPercentage > (1D * ONE_HUNDRED_PERCENT * currentFreeHeapSize / total);
@@ -180,10 +172,8 @@ public class EvictableCheckerImpl implements EvictableChecker {
         return freeMemory + (maxMemory - totalMemory);
     }
 
-    protected long getUsedHeapSize(final MapContainer mapContainer) {
+    protected long getUsedHeapSize(String mapName) {
         long heapCost = 0L;
-        final String mapName = mapContainer.getName();
-        final MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
         final List<Integer> partitionIds = findPartitionIds();
         for (int partitionId : partitionIds) {
             final PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
@@ -192,6 +182,8 @@ public class EvictableCheckerImpl implements EvictableChecker {
             }
             heapCost += getRecordStoreHeapCost(mapName, container);
         }
+
+        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
         heapCost += mapContainer.getNearCacheSizeEstimator().getSize();
         return heapCost;
     }
@@ -256,6 +248,11 @@ public class EvictableCheckerImpl implements EvictableChecker {
         final InternalPartition partition = partitionService.getPartition(partitionId, false);
         final Address thisAddress = nodeEngine.getThisAddress();
         return partition.isOwnerOrBackup(thisAddress);
+    }
+
+    // only used when testing.
+    public void setMemoryInfoAccessor(MemoryInfoAccessor memoryInfoAccessor) {
+        this.memoryInfoAccessor = memoryInfoAccessor;
     }
 }
 
