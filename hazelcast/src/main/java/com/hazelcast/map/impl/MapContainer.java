@@ -28,7 +28,6 @@ import com.hazelcast.map.impl.eviction.EvictionCheckerImpl;
 import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.eviction.EvictorImpl;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
-import com.hazelcast.map.impl.nearcache.NearCacheSizeEstimator;
 import com.hazelcast.map.impl.query.QueryEntryFactory;
 import com.hazelcast.map.impl.record.DataRecordFactory;
 import com.hazelcast.map.impl.record.ObjectRecordFactory;
@@ -49,6 +48,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import static com.hazelcast.map.impl.SizeEstimators.createNearCacheSizeEstimator;
 import static com.hazelcast.map.impl.mapstore.MapStoreContextFactory.createMapStoreContext;
 
 /**
@@ -74,11 +74,12 @@ public class MapContainer {
             return ss.toData(input, partitioningStrategy);
         }
     };
-    protected WanReplicationPublisher wanReplicationPublisher;
 
-    protected MapMergePolicy wanMergePolicy;
+    protected WanReplicationPublisher wanReplicationPublisher;
     protected ConstructorFunction<Void, RecordFactory> recordFactoryConstructor;
+    protected MapMergePolicy wanMergePolicy;
     protected Evictor evictor;
+
     protected volatile MapConfig mapConfig;
 
 
@@ -100,10 +101,10 @@ public class MapContainer {
         initWanReplication(nodeEngine);
         this.interceptors = new CopyOnWriteArrayList<MapInterceptor>();
         this.interceptorMap = new ConcurrentHashMap<String, MapInterceptor>();
-        this.nearCacheSizeEstimator = new NearCacheSizeEstimator();
-        mapStoreContext = createMapStoreContext(this);
-        mapStoreContext.start();
-        indexes = new Indexes(serializationService);
+        this.nearCacheSizeEstimator = createNearCacheSizeEstimator(mapConfig.getNearCacheConfig());
+        this.mapStoreContext = createMapStoreContext(this);
+        this.mapStoreContext.start();
+        this.indexes = new Indexes(serializationService);
         this.evictor = createEvictor(mapServiceContext);
     }
 

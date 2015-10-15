@@ -114,9 +114,6 @@ public class PartitionContainer {
     public void destroyMap(String name) {
         RecordStore recordStore = maps.remove(name);
         if (recordStore != null) {
-            // TODO can we combine all those methos below.
-            recordStore.clearPartition();
-            recordStore.dispose();
             recordStore.destroy();
         } else {
             // It can be that, map is used only for locking,

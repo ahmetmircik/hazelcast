@@ -27,7 +27,6 @@ import com.hazelcast.map.merge.MapMergePolicy;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
 
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +35,7 @@ import java.util.Set;
 /**
  * Defines a record-store.
  */
-public interface RecordStore<V extends Record> {
+public interface RecordStore<R extends Record> {
 
     /**
      * Default TTL value of a record.
@@ -49,7 +48,7 @@ public interface RecordStore<V extends Record> {
 
     Object putIfAbsent(Data dataKey, Object value, long ttl);
 
-    V putBackup(Data key, Object value);
+    R putBackup(Data key, Object value);
 
     /**
      * @param key          the key to be processed.
@@ -58,7 +57,7 @@ public interface RecordStore<V extends Record> {
      * @param putTransient {@code true} if putting transient entry, otherwise {@code false}
      * @return previous record if exists otherwise null.
      */
-    V putBackup(Data key, Object value, long ttl, boolean putTransient);
+    R putBackup(Data key, Object value, long ttl, boolean putTransient);
 
     boolean tryPut(Data dataKey, Object value, long ttl);
 
@@ -151,7 +150,7 @@ public interface RecordStore<V extends Record> {
 
     boolean merge(Data dataKey, EntryView mergingEntryView, MapMergePolicy mergePolicy);
 
-    V getRecord(Data key);
+    R getRecord(Data key);
 
     /**
      * Puts a data key and a record value to record-store.
@@ -161,7 +160,7 @@ public interface RecordStore<V extends Record> {
      * @param record the value for record store.
      * @see com.hazelcast.map.impl.operation.MapReplicationOperation
      */
-    void putRecord(Data key, V record);
+    void putRecord(Data key, R record);
 
     /**
      * Iterates over record store entries.
@@ -211,7 +210,7 @@ public interface RecordStore<V extends Record> {
 
     Object evict(Data key, boolean backup);
 
-    Object evict(Data key, Record removedRecord, boolean backup);
+    Object evict(Data key, R removedRecord, boolean backup);
 
     /**
      * Evicts all keys except locked ones.
@@ -220,8 +219,6 @@ public interface RecordStore<V extends Record> {
      * @return number of evicted entries.
      */
     int evictAll(boolean backup);
-
-    Collection<Data> valuesData();
 
     MapContainer getMapContainer();
 
@@ -272,7 +269,7 @@ public interface RecordStore<V extends Record> {
      * @param backup <code>true</code> if a backup partition, otherwise <code>false</code>.
      * @return <code>true</code> if the record is expired, <code>false</code> otherwise.
      */
-    boolean isExpired(Record record, long now, boolean backup);
+    boolean isExpired(R record, long now, boolean backup);
 
     void doPostEvictionOperations(Data key, Object value, boolean isExpired);
 
@@ -297,7 +294,7 @@ public interface RecordStore<V extends Record> {
      * @return live record or null
      * @see #get
      */
-    V getRecordOrNull(Data key);
+    R getRecordOrNull(Data key);
 
     void evictEntries(long now);
 
@@ -313,10 +310,13 @@ public interface RecordStore<V extends Record> {
      **/
     void maybeDoInitialLoad();
 
-    Storage createStorage(RecordFactory<V> recordFactory, InMemoryFormat memoryFormat);
+    Storage createStorage(RecordFactory<R> recordFactory, InMemoryFormat memoryFormat);
 
     Record createRecord(Object value, long ttlMillis, long now);
 
+    /**
+     * This can be used to release unused resources.
+     */
     void dispose();
 
     void destroy();

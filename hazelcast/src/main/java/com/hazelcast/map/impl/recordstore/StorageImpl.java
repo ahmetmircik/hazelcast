@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.recordstore;
 
 import com.hazelcast.config.InMemoryFormat;
-import com.hazelcast.map.impl.MapSizeEstimator;
 import com.hazelcast.map.impl.SizeEstimator;
 import com.hazelcast.map.impl.record.AbstractRecord;
 import com.hazelcast.map.impl.record.Record;
@@ -29,22 +28,25 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import static com.hazelcast.map.impl.SizeEstimators.createMapSizeEstimator;
+
 /**
  * Default implementation of {@link Storage} layer used by a {@link RecordStore}
  *
- * @param <V> the value type to be put in this storage.
+ * @param <R> the value type to be put in this storage.
  */
-class StorageImpl<V extends Record> implements Storage<Data, V> {
+class StorageImpl<R extends Record> implements Storage<Data, R> {
 
+    private final RecordFactory<R> recordFactory;
+    // Concurrency level is 1 since at most one thread can write at a time.
+    private final ConcurrentMap<Data, R> records = new ConcurrentHashMap<Data, R>(1000, 0.75f, 1);
+
+    // not final for testing purposes.
     private SizeEstimator sizeEstimator;
 
-    private final RecordFactory<V> recordFactory;
-    // Concurrency level is 1 since at most one thread can write at a time.
-    private final ConcurrentMap<Data, V> records = new ConcurrentHashMap<Data, V>(1000, 0.75f, 1);
-
-    StorageImpl(RecordFactory<V> recordFactory, InMemoryFormat memoryFormat) {
+    StorageImpl(RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat) {
         this.recordFactory = recordFactory;
-        this.sizeEstimator = new MapSizeEstimator(memoryFormat);
+        this.sizeEstimator = createMapSizeEstimator(inMemoryFormat);
     }
 
     @Override
@@ -55,16 +57,16 @@ class StorageImpl<V extends Record> implements Storage<Data, V> {
     }
 
     @Override
-    public Collection<V> values() {
+    public Collection<R> values() {
         return records.values();
     }
 
     @Override
-    public void put(Data key, V record) {
+    public void put(Data key, R record) {
 
         ((AbstractRecord) record).setKey(key);
 
-        V previousRecord = records.put(key, record);
+        R previousRecord = records.put(key, record);
 
         if (previousRecord == null) {
             updateSizeEstimator(calculateHeapCost(key));
@@ -75,7 +77,7 @@ class StorageImpl<V extends Record> implements Storage<Data, V> {
     }
 
     @Override
-    public void updateRecordValue(Data key, V record, Object value) {
+    public void updateRecordValue(Data key, R record, Object value) {
         updateSizeEstimator(-calculateHeapCost(record));
 
         recordFactory.setValue(record, value);
@@ -84,7 +86,7 @@ class StorageImpl<V extends Record> implements Storage<Data, V> {
     }
 
     @Override
-    public V get(Data key) {
+    public R get(Data key) {
         return records.get(key);
     }
 
@@ -120,7 +122,7 @@ class StorageImpl<V extends Record> implements Storage<Data, V> {
 
     @Override
     public Object remove(Data key) {
-        V record = records.remove(key);
+        R record = records.remove(key);
 
         updateSizeEstimator(-calculateHeapCost(record));
         updateSizeEstimator(-calculateHeapCost(key));

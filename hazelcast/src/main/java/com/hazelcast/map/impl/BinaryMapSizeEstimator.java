@@ -16,19 +16,17 @@
 
 package com.hazelcast.map.impl;
 
-import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.serialization.Data;
 
 /**
- * Size estimator for map.
+ * Size estimator for maps which have {@link com.hazelcast.config.InMemoryFormat#BINARY BINARY} memory-format.
  */
-public class MapSizeEstimator implements SizeEstimator {
-    private volatile long size;
-    private final boolean objectFormatUsed;
+class BinaryMapSizeEstimator implements SizeEstimator {
 
-    public MapSizeEstimator(InMemoryFormat memoryFormat) {
-        this.objectFormatUsed = InMemoryFormat.OBJECT.equals(memoryFormat);
+    private volatile long size;
+
+    BinaryMapSizeEstimator() {
     }
 
     @Override
@@ -48,26 +46,20 @@ public class MapSizeEstimator implements SizeEstimator {
 
     @Override
     public long calculateSize(Object object) {
-        // currently we do not calculate heap cost for InMemoryFormat.OBJECT.
-        if (object == null || objectFormatUsed) {
-            return 0L;
-        }
-        final int refCost = 4;
-
         if (object instanceof Data) {
             long keyCost = ((Data) object).getHeapCost();
             // CHM ref cost of key.
-            keyCost += refCost;
+            keyCost += REFERENCE_COST_IN_BYTES;
             return keyCost;
         }
 
         if (object instanceof Record) {
             long recordCost = ((Record) object).getCost();
             // CHM ref cost of value.
-            recordCost += refCost;
+            recordCost += REFERENCE_COST_IN_BYTES;
             // CHM ref costs of other.
-            recordCost += refCost;
-            recordCost += refCost;
+            recordCost += REFERENCE_COST_IN_BYTES;
+            recordCost += REFERENCE_COST_IN_BYTES;
             return recordCost;
         }
 

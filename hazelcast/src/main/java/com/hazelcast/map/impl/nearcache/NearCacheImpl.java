@@ -40,6 +40,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.hazelcast.config.EvictionPolicy.NONE;
+
 /**
  * NearCache.
  */
@@ -93,10 +95,10 @@ public class NearCacheImpl implements NearCache<Data, Object> {
     @Override
     public void put(Data key, Object value) {
         fireTtlCleanup();
-        if (evictionPolicy == EvictionPolicy.NONE && cache.size() >= maxSize) {
+        if (evictionPolicy == NONE && cache.size() >= maxSize) {
             return;
         }
-        if (evictionPolicy != EvictionPolicy.NONE && cache.size() >= maxSize) {
+        if (evictionPolicy != NONE && cache.size() >= maxSize) {
             fireEvictCache();
         }
         if (value == null) {

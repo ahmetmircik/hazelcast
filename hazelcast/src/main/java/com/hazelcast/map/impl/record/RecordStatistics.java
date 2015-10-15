@@ -19,7 +19,7 @@ package com.hazelcast.map.impl.record;
 import com.hazelcast.nio.serialization.DataSerializable;
 
 /**
- * Contract for accessing the stats of a {@link Record}.
+ * Represents statistics of a {@link Record}.
  */
 public interface RecordStatistics extends DataSerializable {
 

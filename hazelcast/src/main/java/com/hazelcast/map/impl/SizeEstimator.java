@@ -22,8 +22,10 @@ package com.hazelcast.map.impl;
  * @param <T> the type of object which's size going to be estimated.
  */
 public interface SizeEstimator<T> {
-
-    SizeEstimator NULL_SIZE_ESTIMATOR = new NullSizeEstimator();
+    /**
+     * Assume compressed object reference is used.
+     */
+    int REFERENCE_COST_IN_BYTES = 4;
 
     long getSize();
 
@@ -32,28 +34,4 @@ public interface SizeEstimator<T> {
     long calculateSize(T object);
 
     void reset();
-
-
-    class NullSizeEstimator implements SizeEstimator {
-
-        @Override
-        public long getSize() {
-            return 0L;
-        }
-
-        @Override
-        public void add(long size) {
-
-        }
-
-        @Override
-        public long calculateSize(Object object) {
-            return 0L;
-        }
-
-        @Override
-        public void reset() {
-
-        }
-    }
 }

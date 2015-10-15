@@ -19,11 +19,11 @@ package com.hazelcast.map.impl.record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.util.Clock;
+
 import java.io.IOException;
 
 /**
- * TODO empty statistics.
- * Some statistics of a {@link com.hazelcast.map.impl.record.Record}
+ * Statistics of a {@link com.hazelcast.map.impl.record.Record Record}
  */
 public class RecordStatisticsImpl implements RecordStatistics {
 

@@ -181,18 +181,6 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         lruAccessSequenceNumber = 0L;
     }
 
-    /**
-     * <<<<<<< HEAD
-     * TODO make isEvictable fast by carrying threshold logic to partition.
-     * =======
-     * TODO make checkEvictionPossible fast by carrying threshold logic to partition.
-     * >>>>>>> master
-     * This cleanup adds some latency to write operations.
-     * But it sweeps records much better under high write loads.
-     * <p/>
-     *
-     * @param now now in time.
-     */
     @Override
     public void evictEntries(long now) {
         if (isEvictionEnabled()) {
@@ -442,7 +430,7 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     /**
      * Read only iterator. Iterates by checking whether a record expired or not.
      */
-    protected final class RecordStoreIterator implements Iterator<Record> {
+    protected final class ReadOnlyRecordIterator implements Iterator<Record> {
 
         private final long now;
         private final boolean checkExpiration;
@@ -451,15 +439,15 @@ abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         private Record nextRecord;
         private Record lastReturned;
 
-        protected RecordStoreIterator(Collection<Record> values, long now, boolean backup) {
+        protected ReadOnlyRecordIterator(Collection<Record> values, long now, boolean backup) {
             this(values, now, true, backup);
         }
 
-        protected RecordStoreIterator(Collection<Record> values) {
+        protected ReadOnlyRecordIterator(Collection<Record> values) {
             this(values, -1L, false, false);
         }
 
-        private RecordStoreIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
+        private ReadOnlyRecordIterator(Collection<Record> values, long now, boolean checkExpiration, boolean backup) {
             this.iterator = values.iterator();
             this.now = now;
             this.checkExpiration = checkExpiration;

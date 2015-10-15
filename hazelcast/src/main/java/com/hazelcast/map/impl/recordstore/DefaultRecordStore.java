@@ -42,11 +42,9 @@ import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.FutureUtil;
 
 import java.util.AbstractMap;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -58,9 +56,9 @@ import java.util.concurrent.Future;
 
 import static com.hazelcast.map.impl.ExpirationTimeSetter.updateExpiryTime;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
-import static java.util.Collections.EMPTY_LIST;
 import static java.util.Collections.EMPTY_MAP;
 import static java.util.Collections.EMPTY_SET;
+import static java.util.Collections.emptyList;
 
 /**
  * Default implementation of record-store.
@@ -135,6 +133,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     @Override
     public void destroy() {
+        dispose();
         clearPartition();
         storage.destroy();
     }
@@ -173,6 +172,21 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             if (record != null) {
                 record.onStore();
             }
+        }
+    }
+
+    /**
+     * Flushes evicted records to map store.
+     *
+     * @param keysToBeFlushed keys to be flushed to map-store.
+     * @param backup          <code>true</code> if backup, false otherwise.
+     */
+    protected void flush(Collection<Data> keysToBeFlushed, boolean backup) {
+        Iterator<Data> iterator = keysToBeFlushed.iterator();
+        while (iterator.hasNext()) {
+            Data keyData = iterator.next();
+            Record record = storage.get(keyData);
+            mapDataStore.flush(keyData, record.getValue(), backup);
         }
     }
 
@@ -215,12 +229,12 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     public Iterator<Record> iterator() {
-        return new RecordStoreIterator(storage.values());
+        return new ReadOnlyRecordIterator(storage.values());
     }
 
     @Override
     public Iterator<Record> iterator(long now, boolean backup) {
-        return new RecordStoreIterator(storage.values(), now, backup);
+        return new ReadOnlyRecordIterator(storage.values(), now, backup);
     }
 
     @Override
@@ -402,67 +416,46 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     @Override
-    public Collection<Data> valuesData() {
-        checkIfLoaded();
-        final long now = getNow();
-
-        Collection<Record> records = storage.values();
-        List<Data> dataValueList = EMPTY_LIST;
-        for (Record record : records) {
-            record = getOrNullIfExpired(record, now, false);
-            if (record == null) {
-                continue;
-            }
-            if (dataValueList == EMPTY_LIST) {
-                dataValueList = new ArrayList<Data>();
-            }
-            Data dataValue = toData(record.getValue());
-            dataValueList.add(dataValue);
-        }
-
-        return dataValueList;
-    }
-
-    @Override
     public int clear() {
         checkIfLoaded();
+
         // we don't remove locked keys.
-        Collection<Data> notLockedKeys = getNotLockedKeys();
-        if (notLockedKeys.isEmpty()) {
+        Collection<Data> clearableKeys = getNotLockedKeys();
+        mapDataStore.removeAll(clearableKeys);
+        mapDataStore.clear();
+        removeIndex(clearableKeys);
+        resetAccessSequenceNumber();
+        return removeKeys(clearableKeys);
+    }
+
+    private int removeKeys(Collection<Data> keysToRemove) {
+        if (keysToRemove.isEmpty()) {
             return 0;
         }
 
-        mapDataStore.removeAll(notLockedKeys);
-        mapDataStore.clear();
-        removeIndex(notLockedKeys);
-        resetAccessSequenceNumber();
-        return removeKeys(notLockedKeys);
-    }
-
-    private int removeKeys(Collection<Data> notLockedKeys) {
-        int notLockedKeyCount = notLockedKeys.size();
-        Iterator<Data> iterator = notLockedKeys.iterator();
+        int removalSize = keysToRemove.size();
+        Iterator<Data> iterator = keysToRemove.iterator();
         while (iterator.hasNext()) {
             Data keyData = iterator.next();
             storage.remove(keyData);
             iterator.remove();
         }
-        return notLockedKeyCount;
+        return removalSize;
     }
 
     private Collection<Data> getNotLockedKeys() {
-        Set<Data> lockedKeySet = lockStore == null ? Collections.<Data>emptySet() : lockStore.getLockedKeys();
+        Set<Data> lockedKeySet = lockStore == null ? EMPTY_SET : lockStore.getLockedKeys();
         Set<Data> keySet = storage.keySet();
         if (keySet.isEmpty()) {
-            return Collections.emptyList();
+            return emptyList();
         }
 
-        int notLockedKeyCount = calculateNotLockedKeyCount(lockedKeySet, keySet);
+        int notLockedKeyCount = keySet.size() - lockedKeySet.size();
         if (notLockedKeyCount == 0) {
-            return Collections.emptyList();
+            return emptyList();
         }
 
-        Deque notLockedKeys = new ArrayDeque(notLockedKeyCount);
+        List<Data> notLockedKeys = new ArrayList<Data>(notLockedKeyCount);
         for (Data keyData : keySet) {
             if (lockedKeySet.isEmpty()) {
                 notLockedKeys.add(keyData);
@@ -472,15 +465,6 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         }
         return notLockedKeys;
     }
-
-    private int calculateNotLockedKeyCount(Set<Data> lockedKeySet, Set<Data> keySet) {
-        int notLockedKeyCount = Math.abs(keySet.size() - lockedKeySet.size());
-        if (notLockedKeyCount < 0) {
-            notLockedKeyCount = Integer.MAX_VALUE;
-        }
-        return notLockedKeyCount;
-    }
-
 
     /**
      * Resets the record store to it's initial state.
@@ -533,24 +517,6 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         removeIndex(notLockedKeys);
         resetAccessSequenceNumber();
         return removeKeys(notLockedKeys);
-    }
-
-    /**
-     * Flushes evicted records to map store.
-     *
-     * @param keysToBeFlushed keys to be flushed to map-store.
-     * @param backup          <code>true</code> if backup, false otherwise.
-     */
-    protected void flush(Collection<Data> keysToBeFlushed, boolean backup) {
-        Storage<Data, Record> storage = this.storage;
-        MapDataStore<Data, Object> mapDataStore = this.mapDataStore;
-
-        Iterator<Data> iterator = keysToBeFlushed.iterator();
-        while (iterator.hasNext()) {
-            Data keyData = iterator.next();
-            Record record = storage.get(keyData);
-            mapDataStore.flush(keyData, record.getValue(), backup);
-        }
     }
 
     @Override
