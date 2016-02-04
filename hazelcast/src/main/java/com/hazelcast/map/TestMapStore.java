@@ -17,7 +17,10 @@
 package com.hazelcast.map;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.EvictionPolicy;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MapStoreConfig;
+import com.hazelcast.config.MaxSizeConfig;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
@@ -42,7 +45,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class TestMapStore {
 
-    private static final int KEY_COUNT = 100;
+    private static final int KEY_COUNT = 1000;
 
     public static void main(String[] args) {
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
@@ -50,7 +53,13 @@ public class TestMapStore {
         mapStoreConfig.setImplementation(mapStore).setWriteDelaySeconds(1);
 
         Config config = new Config();
-        config.getMapConfig("test").setBackupCount(1).setMapStoreConfig(mapStoreConfig);
+
+        MaxSizeConfig maxSizeConfig = new MaxSizeConfig();
+        maxSizeConfig.setMaxSizePolicy(MaxSizeConfig.MaxSizePolicy.PER_NODE).setSize(100);
+
+        MapConfig mapConfig = config.getMapConfig("test");
+        mapConfig.setEvictionPolicy(EvictionPolicy.LFU).setMaxSizeConfig(maxSizeConfig);
+        mapConfig.setBackupCount(1).setMapStoreConfig(mapStoreConfig);
 
         HazelcastInstance member1 = Hazelcast.newHazelcastInstance(config);
         HazelcastInstance member2 = Hazelcast.newHazelcastInstance(config);
