@@ -31,10 +31,14 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.util.Clock;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class TestMapStore {
 
@@ -54,6 +58,7 @@ public class TestMapStore {
         IMap<String, String> map = member1.getMap("test");
 
         new PutThread(map).start();
+        new PutTransientThread(map).start();
         new PutAllThread(map).start();
         new RemoveThread(map).start();
 
@@ -62,7 +67,7 @@ public class TestMapStore {
             int storeCount = mapStore.countStore.get();
             int deleteCount = mapStore.countDelete.get();
 
-            System.out.println("wbq size = " + (writeBehindQueueSize(member1, "test")
+            System.out.println(new Date(Clock.currentTimeMillis()) + ", wbq size = " + (writeBehindQueueSize(member1, "test")
                     + writeBehindQueueSize(member2, "test")) + ", storeCount = [" + storeCount + "], "
                     + "deleteCount = [" + deleteCount + "]");
             sleepMillis(TimeUnit.SECONDS.toMillis(10));
@@ -127,7 +132,7 @@ public class TestMapStore {
 
     protected static void sleepMillis(long millis) {
         try {
-            TimeUnit.MILLISECONDS.sleep(millis);
+            MILLISECONDS.sleep(millis);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -178,6 +183,29 @@ public class TestMapStore {
                 imap.remove(String.valueOf(key));
 
                 sleepMillis(100);
+
+            }
+        }
+    }
+
+
+    static class PutTransientThread extends Thread {
+
+        private Random random = new Random();
+        private final IMap<String, String> imap;
+
+        PutTransientThread(IMap<String, String> imap) {
+            this.imap = imap;
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                int key = random.nextInt(KEY_COUNT);
+
+                imap.putTransient(String.valueOf(key), String.valueOf(key), 100, MILLISECONDS);
+
+                sleepMillis(1);
 
             }
         }
