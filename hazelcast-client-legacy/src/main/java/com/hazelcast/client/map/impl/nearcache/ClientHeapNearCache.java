@@ -219,6 +219,16 @@ public class ClientHeapNearCache<K>
     }
 
     @Override
+    public Object mapKeyToMarker(K key) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void updateKeyIfMappedToMarker(K key, Object marker, Object newValue) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public NearCacheStatsImpl getNearCacheStats() {
         long ownedEntryCount = 0;
         long ownedEntryMemory = 0;
