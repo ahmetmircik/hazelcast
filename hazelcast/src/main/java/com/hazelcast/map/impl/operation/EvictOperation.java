@@ -16,7 +16,6 @@
 
 package com.hazelcast.map.impl.operation;
 
-import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -63,7 +62,6 @@ public class EvictOperation extends LockAwareOperation implements MutatingOperat
 
     @Override
     public int getAsyncBackupCount() {
-        MapContainer mapContainer = mapServiceContext.getMapContainer(name);
         if (asyncBackup) {
             return mapContainer.getTotalBackupCount();
         }
@@ -76,7 +74,6 @@ public class EvictOperation extends LockAwareOperation implements MutatingOperat
         if (asyncBackup) {
             return 0;
         }
-        MapContainer mapContainer = mapServiceContext.getMapContainer(name);
         return mapContainer.getBackupCount();
     }
 
@@ -89,7 +86,7 @@ public class EvictOperation extends LockAwareOperation implements MutatingOperat
         if (!evicted) {
             return;
         }
-        mapServiceContext.interceptAfterRemove(name, dataValue);
+        mapServiceContext.interceptAfterRemove(mapContainer, dataValue);
         mapEventPublisher.publishEvent(getCallerAddress(), name, EVICTED, dataKey, dataValue, null);
         invalidateNearCache(dataKey);
     }

@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.nearcache;
 
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.ManagedService;
 
@@ -33,42 +34,42 @@ public interface NearCacheInvalidator {
      * Invalidates local and remote near-caches.
      * Local near-caches are node local, remote near-caches can be exist on remote members or clients.
      *
-     * @param mapName    name of the map.
-     * @param key        key of the entry to be removed from near-cache.
-     * @param sourceUuid caller uuid
+     * @param mapContainer map container
+     * @param key          key of the entry to be removed from near-cache.
+     * @param sourceUuid   caller uuid
      */
-    void invalidate(String mapName, Data key, String sourceUuid);
+    void invalidate(MapContainer mapContainer, Data key, String sourceUuid);
 
     /**
      * Invalidates local and remote near-caches.
      * Local near-caches are node local, remote near-caches can be exist on remote members or clients.
      *
-     * @param mapName    name of the map.
-     * @param keys       keys of the entries to be removed from near-cache.
-     * @param sourceUuid caller uuid
+     * @param mapContainer mapContainer
+     * @param keys         keys of the entries to be removed from near-cache.
+     * @param sourceUuid   caller uuid
      */
-    void invalidate(String mapName, List<Data> keys, String sourceUuid);
+    void invalidate(MapContainer mapContainer, List<Data> keys, String sourceUuid);
 
 
     /**
      * Clears local and remote near-caches.
      * Local near-caches are node local, remote near-caches can be exist on remote members or clients.
      *
-     * @param mapName    name of the map.
-     * @param owner      <code>true</code> if this method is called from partition owner, otherwise <code>false</code>.
-     * @param sourceUuid caller uuid
+     * @param mapContainer mapContainer
+     * @param owner        <code>true</code> if this method is called from partition owner, otherwise <code>false</code>.
+     * @param sourceUuid   caller uuid
      */
-    void clear(String mapName, boolean owner, String sourceUuid);
+    void clear(MapContainer mapContainer, boolean owner, String sourceUuid);
 
     /**
      * Removes supplied maps invalidation queue and flushes its content.
      * This method is called when removing a near-cache with
      * {@link com.hazelcast.map.impl.MapRemoteService#destroyDistributedObject(String)}
      *
-     * @param mapName name of the map.
+     * @param mapContainer mapContainer
      * @see com.hazelcast.map.impl.MapRemoteService#destroyDistributedObject(String)
      */
-    void destroy(String mapName);
+    void destroy(MapContainer mapContainer);
 
     /**
      * Resets this invalidator back to its initial state.

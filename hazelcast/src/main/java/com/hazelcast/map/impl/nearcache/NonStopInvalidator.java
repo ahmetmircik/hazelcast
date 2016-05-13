@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.nearcache;
 
 import com.hazelcast.core.Member;
 import com.hazelcast.map.impl.EventListenerFilter;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.EventFilter;
@@ -40,27 +41,27 @@ public class NonStopInvalidator extends AbstractNearCacheInvalidator {
     }
 
     @Override
-    public void invalidate(String mapName, Data key, String sourceUuid) {
-        invalidateInternal(mapName, key, null, sourceUuid);
+    public void invalidate(MapContainer mapContainer, Data key, String sourceUuid) {
+        invalidateInternal(mapContainer, key, null, sourceUuid);
     }
 
     @Override
-    public void invalidate(String mapName, List<Data> keys, String sourceUuid) {
-        invalidateInternal(mapName, null, keys, sourceUuid);
+    public void invalidate(MapContainer mapContainer, List<Data> keys, String sourceUuid) {
+        invalidateInternal(mapContainer, null, keys, sourceUuid);
     }
 
     @Override
-    public void clear(String mapName, boolean owner, String sourceUuid) {
+    public void clear(MapContainer mapContainer, boolean owner, String sourceUuid) {
         if (owner) {
             // only send invalidation event to clients, server near-caches are cleared by ClearOperation.
-            invalidateClient(mapName, null, null, sourceUuid);
+            invalidateClient(mapContainer, null, null, sourceUuid);
         }
 
-        clearLocal(mapName);
+        clearLocal(mapContainer);
     }
 
     @Override
-    public void destroy(String mapName) {
+    public void destroy(MapContainer mapContainer) {
         // nop.
     }
 
@@ -74,16 +75,18 @@ public class NonStopInvalidator extends AbstractNearCacheInvalidator {
         // nop.
     }
 
-    private void invalidateInternal(String mapName, Data key, List<Data> keys, String sourceUuid) {
-        invalidateMember(mapName, key, keys, sourceUuid);
-        invalidateClient(mapName, key, keys, sourceUuid);
-        invalidateLocal(mapName, key, keys);
+    private void invalidateInternal(MapContainer mapContainer, Data key, List<Data> keys, String sourceUuid) {
+        invalidateMember(mapContainer, key, keys, sourceUuid);
+        invalidateClient(mapContainer, key, keys, sourceUuid);
+        invalidateLocal(mapContainer, key, keys);
     }
 
-    protected void invalidateClient(String mapName, Data key, List<Data> keys, String sourceUuid) {
-        if (!hasInvalidationListener(mapName)) {
+    protected void invalidateClient(MapContainer mapContainer, Data key, List<Data> keys, String sourceUuid) {
+        if (!hasInvalidationListener(mapContainer)) {
             return;
         }
+
+        String mapName = mapContainer.getName();
 
         Invalidation invalidation = null;
         Collection<EventRegistration> registrations = eventService.getRegistrations(SERVICE_NAME, mapName);
@@ -117,8 +120,8 @@ public class NonStopInvalidator extends AbstractNearCacheInvalidator {
         return new CleaningNearCacheInvalidation(mapName, sourceUuid);
     }
 
-    protected void invalidateMember(String mapName, Data key, List<Data> keys, String sourceUuid) {
-        if (!isMemberNearCacheInvalidationEnabled(mapName)) {
+    protected void invalidateMember(MapContainer mapContainer, Data key, List<Data> keys, String sourceUuid) {
+        if (!isMemberNearCacheInvalidationEnabled(mapContainer)) {
             return;
         }
 
@@ -130,7 +133,7 @@ public class NonStopInvalidator extends AbstractNearCacheInvalidator {
             }
 
             if (operation == null) {
-                operation = createSingleOrBatchInvalidationOperation(mapName, key, keys);
+                operation = createSingleOrBatchInvalidationOperation(mapContainer.getName(), key, keys);
             }
 
             operationService.send(operation, member.getAddress());

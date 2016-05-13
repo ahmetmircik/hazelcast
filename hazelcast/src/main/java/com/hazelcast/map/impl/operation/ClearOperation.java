@@ -71,12 +71,12 @@ public class ClearOperation extends MapOperation implements BackupAwareOperation
 
     @Override
     public int getSyncBackupCount() {
-        return mapServiceContext.getMapContainer(name).getBackupCount();
+        return mapContainer.getBackupCount();
     }
 
     @Override
     public int getAsyncBackupCount() {
-        return mapServiceContext.getMapContainer(name).getAsyncBackupCount();
+        return mapContainer.getAsyncBackupCount();
     }
 
     @Override

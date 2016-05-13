@@ -110,13 +110,13 @@ public class NearCacheProvider {
     /**
      * @see com.hazelcast.map.impl.MapRemoteService#destroyDistributedObject(String)
      */
-    public void destroyNearCache(String mapName) {
-        NearCache nearCache = nearCacheMap.remove(mapName);
+    public void destroyNearCache(MapContainer mapContainer) {
+        NearCache nearCache = nearCacheMap.remove(mapContainer.getName());
         if (nearCache != null) {
             nearCache.destroy();
         }
 
-        nearCacheInvalidator.destroy(mapName);
+        nearCacheInvalidator.destroy(mapContainer);
     }
 
     public Object getFromNearCache(String mapName, Data key) {

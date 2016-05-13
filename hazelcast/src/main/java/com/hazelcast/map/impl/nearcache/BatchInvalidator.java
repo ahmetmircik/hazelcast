@@ -22,6 +22,7 @@ import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.core.LifecycleService;
 import com.hazelcast.core.Member;
 import com.hazelcast.map.impl.EventListenerFilter;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.EventFilter;
@@ -84,35 +85,35 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
     }
 
     @Override
-    public void invalidate(String mapName, Data key, String sourceUuid) {
-        invalidateInternal(mapName, key, null, sourceUuid);
+    public void invalidate(MapContainer mapContainer, Data key, String sourceUuid) {
+        invalidateInternal(mapContainer, key, null, sourceUuid);
     }
 
     @Override
-    public void invalidate(String mapName, List<Data> keys, String sourceUuid) {
-        invalidateInternal(mapName, null, keys, sourceUuid);
+    public void invalidate(MapContainer mapContainer, List<Data> keys, String sourceUuid) {
+        invalidateInternal(mapContainer, null, keys, sourceUuid);
     }
 
     @Override
-    public void clear(String mapName, boolean owner, String sourceUuid) {
+    public void clear(MapContainer mapContainer, boolean owner, String sourceUuid) {
         if (owner) {
             // only send invalidation event to clients, server near-caches are cleared by ClearOperation.
-            invalidateClient(new CleaningNearCacheInvalidation(mapName, sourceUuid));
+            invalidateClient(mapContainer, new CleaningNearCacheInvalidation(mapContainer.getName(), sourceUuid));
         }
 
-        clearLocal(mapName);
+        clearLocal(mapContainer);
     }
 
-    private void invalidateInternal(String mapName, Data key, List<Data> keys, String sourceUuid) {
-        accumulateOrInvalidate(mapName, key, keys, sourceUuid);
-        invalidateLocal(mapName, key, keys);
+    private void invalidateInternal(MapContainer mapContainer, Data key, List<Data> keys, String sourceUuid) {
+        accumulateOrInvalidate(mapContainer, key, keys, sourceUuid);
+        invalidateLocal(mapContainer, key, keys);
     }
 
     @Override
-    public void destroy(String mapName) {
-        InvalidationQueue invalidationQueue = invalidationQueues.remove(mapName);
+    public void destroy(MapContainer mapContainer) {
+        InvalidationQueue invalidationQueue = invalidationQueues.remove(mapContainer.getName());
         if (invalidationQueue != null) {
-            invalidateClient(new CleaningNearCacheInvalidation(mapName, null));
+            invalidateClient(mapContainer, new CleaningNearCacheInvalidation(mapContainer.getName(), null));
         }
     }
 
@@ -133,11 +134,12 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         invalidationQueues.clear();
     }
 
-    public void accumulateOrInvalidate(String mapName, Data key, List<Data> keys, String sourceUuid) {
-        if (!mapServiceContext.getMapContainer(mapName).isInvalidationEnabled()) {
+    public void accumulateOrInvalidate(MapContainer mapContainer, Data key, List<Data> keys, String sourceUuid) {
+        if (!mapContainer.isInvalidationEnabled()) {
             return;
         }
 
+        String mapName = mapContainer.getName();
         InvalidationQueue invalidationQueue = getOrPutIfAbsent(invalidationQueues, mapName, invalidationQueueConstructor);
 
         if (key != null) {
@@ -151,11 +153,11 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         }
 
         if (invalidationQueue.size() >= batchSize) {
-            sendBatch(mapName, invalidationQueue);
+            sendBatch(mapContainer, invalidationQueue);
         }
     }
 
-    private void sendBatch(String mapName, InvalidationQueue invalidationQueue) {
+    private void sendBatch(MapContainer mapContainer, InvalidationQueue invalidationQueue) {
         if (invalidationQueue == null) {
             return;
         }
@@ -165,7 +167,7 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         }
 
         int size = Math.min(batchSize, invalidationQueue.size());
-        BatchNearCacheInvalidation batch = new BatchNearCacheInvalidation(mapName, size);
+        BatchNearCacheInvalidation batch = new BatchNearCacheInvalidation(mapContainer.getName(), size);
         for (int i = 0; i < size; i++) {
             SingleNearCacheInvalidation invalidation = invalidationQueue.poll();
             if (invalidation == null) {
@@ -175,18 +177,19 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         }
 
         try {
-            invalidateMember(batch);
-            invalidateClient(batch);
+            invalidateMember(mapContainer, batch);
+            invalidateClient(mapContainer, batch);
         } finally {
             invalidationQueue.release();
         }
     }
 
-    private void invalidateClient(Invalidation invalidation) {
-        String mapName = invalidation.getName();
-        if (!hasInvalidationListener(mapName)) {
+    private void invalidateClient(MapContainer mapContainer, Invalidation invalidation) {
+        if (!hasInvalidationListener(mapContainer)) {
             return;
         }
+
+        String mapName = invalidation.getName();
 
         Collection<EventRegistration> registrations = eventService.getRegistrations(SERVICE_NAME, mapName);
         for (EventRegistration registration : registrations) {
@@ -198,11 +201,12 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         }
     }
 
-    protected void invalidateMember(BatchNearCacheInvalidation batch) {
-        String mapName = batch.getName();
-        if (!isMemberNearCacheInvalidationEnabled(mapName)) {
+    protected void invalidateMember(MapContainer mapContainer, BatchNearCacheInvalidation batch) {
+        if (!isMemberNearCacheInvalidationEnabled(mapContainer)) {
             return;
         }
+
+        String mapName = batch.getName();
 
         Operation operation = null;
         Collection<Member> members = clusterService.getMembers();
@@ -249,7 +253,8 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
                 if (event.getState() == LifecycleEvent.LifecycleState.SHUTTING_DOWN) {
                     Set<Map.Entry<String, InvalidationQueue>> entries = invalidationQueues.entrySet();
                     for (Map.Entry<String, InvalidationQueue> entry : entries) {
-                        sendBatch(entry.getKey(), entry.getValue());
+                        MapContainer mapContainer = mapServiceContext.getMapContainer(entry.getKey());
+                        sendBatch(mapContainer, entry.getValue());
                     }
                 }
             }
@@ -286,7 +291,8 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
                 String mapName = entry.getKey();
                 InvalidationQueue invalidationQueue = entry.getValue();
                 if (invalidationQueue.size() > 0) {
-                    sendBatch(mapName, invalidationQueue);
+                    MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
+                    sendBatch(mapContainer, invalidationQueue);
                 }
             }
         }

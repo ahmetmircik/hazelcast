@@ -302,7 +302,7 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
         if (cached == null) {
             return null;
         }
-        mapServiceContext.interceptAfterGet(name, cached);
+        mapServiceContext.interceptAfterGet(mapContainer, cached);
         return cached;
     }
 

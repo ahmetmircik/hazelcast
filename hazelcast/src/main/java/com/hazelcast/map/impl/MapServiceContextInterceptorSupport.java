@@ -23,15 +23,17 @@ import com.hazelcast.map.MapInterceptor;
  */
 public interface MapServiceContextInterceptorSupport {
 
-    void interceptAfterGet(String mapName, Object value);
+    Object interceptGet(MapContainer mapContainer, Object value);
 
-    Object interceptPut(String mapName, Object oldValue, Object newValue);
+    void interceptAfterGet(MapContainer mapContainer, Object value);
 
-    void interceptAfterPut(String mapName, Object newValue);
+    Object interceptPut(MapContainer mapContainer, Object oldValue, Object newValue);
 
-    Object interceptRemove(String mapName, Object value);
+    void interceptAfterPut(MapContainer mapContainer, Object newValue);
 
-    void interceptAfterRemove(String mapName, Object value);
+    Object interceptRemove(MapContainer mapContainer, Object value);
+
+    void interceptAfterRemove(MapContainer mapContainer, Object value);
 
     String generateInterceptorId(String mapName, MapInterceptor interceptor);
 
@@ -39,7 +41,5 @@ public interface MapServiceContextInterceptorSupport {
 
     void removeInterceptor(String mapName, String id);
 
-    Object interceptGet(String mapName, Object value);
-
-    boolean hasInterceptor(String mapName);
+    boolean hasInterceptor(MapContainer mapContainer);
 }

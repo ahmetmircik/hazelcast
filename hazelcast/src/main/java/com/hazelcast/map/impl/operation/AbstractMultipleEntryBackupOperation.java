@@ -62,13 +62,13 @@ abstract class AbstractMultipleEntryBackupOperation extends AbstractMultipleEntr
     protected void publishWanReplicationEventBackup(Data key, Object value, EntryEventType eventType) {
         if (mapContainer.isWanReplicationEnabled()) {
             if (REMOVED.equals(eventType)) {
-                mapEventPublisher.publishWanReplicationRemoveBackup(name, key, getNow());
+                mapEventPublisher.publishWanReplicationRemoveBackup(mapContainer, key, getNow());
             } else {
                 final Record record = recordStore.getRecord(key);
                 if (record != null) {
                     final Data dataValueAsData = toData(value);
                     final EntryView entryView = createSimpleEntryView(key, dataValueAsData, record);
-                    mapEventPublisher.publishWanReplicationUpdateBackup(name, entryView);
+                    mapEventPublisher.publishWanReplicationUpdateBackup(mapContainer, entryView);
                 }
             }
         }

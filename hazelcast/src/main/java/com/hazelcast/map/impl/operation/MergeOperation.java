@@ -82,7 +82,7 @@ public class MergeOperation extends BasePutOperation {
     @Override
     public void afterRun() {
         if (merged) {
-            mapServiceContext.interceptAfterPut(name, dataValue);
+            mapServiceContext.interceptAfterPut(mapContainer, dataValue);
             mapEventPublisher.publishEvent(getCallerAddress(), name, EntryEventType.MERGED, dataKey, dataOldValue,
                     dataValue, mergingValue);
             invalidateNearCache(dataKey);

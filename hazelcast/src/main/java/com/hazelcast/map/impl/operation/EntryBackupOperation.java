@@ -87,13 +87,13 @@ public class EntryBackupOperation extends MutatingKeyBasedMapOperation implement
         final Data key = dataKey;
 
         if (EntryEventType.REMOVED == eventType) {
-            mapEventPublisher.publishWanReplicationRemoveBackup(name, key, Clock.currentTimeMillis());
+            mapEventPublisher.publishWanReplicationRemoveBackup(mapContainer, key, Clock.currentTimeMillis());
         } else {
             final Record record = recordStore.getRecord(key);
             if (record != null) {
                 dataValue = mapContainer.getMapServiceContext().toData(dataValue);
                 final EntryView entryView = createSimpleEntryView(key, dataValue, record);
-                mapEventPublisher.publishWanReplicationUpdateBackup(name, entryView);
+                mapEventPublisher.publishWanReplicationUpdateBackup(mapContainer, entryView);
             }
         }
     }

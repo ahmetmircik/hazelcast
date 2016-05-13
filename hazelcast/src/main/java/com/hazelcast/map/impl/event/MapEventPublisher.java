@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.event;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.EntryView;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
 
@@ -28,13 +29,13 @@ import com.hazelcast.nio.serialization.Data;
  */
 public interface MapEventPublisher {
 
-    void publishWanReplicationUpdate(String mapName, EntryView entryView);
+    void publishWanReplicationUpdate(MapContainer mapContainer, EntryView entryView);
 
-    void publishWanReplicationRemove(String mapName, Data key, long removeTime);
+    void publishWanReplicationRemove(MapContainer mapContainer, Data key, long removeTime);
 
-    void publishWanReplicationUpdateBackup(String mapName, EntryView entryView);
+    void publishWanReplicationUpdateBackup(MapContainer mapContainer, EntryView entryView);
 
-    void publishWanReplicationRemoveBackup(String mapName, Data key, long removeTime);
+    void publishWanReplicationRemoveBackup(MapContainer mapContainer, Data key, long removeTime);
 
     void publishMapEvent(Address caller, String mapName, EntryEventType eventType, int numberOfEntriesAffected);
 

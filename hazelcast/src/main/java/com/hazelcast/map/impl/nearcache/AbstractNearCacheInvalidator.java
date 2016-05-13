@@ -55,12 +55,12 @@ public abstract class AbstractNearCacheInvalidator implements NearCacheInvalidat
     }
 
 
-    public void invalidateLocal(String mapName, Data key, List<Data> keys) {
-        if (!isMemberNearCacheInvalidationEnabled(mapName)) {
+    public void invalidateLocal(MapContainer mapContainer, Data key, List<Data> keys) {
+        if (!isMemberNearCacheInvalidationEnabled(mapContainer)) {
             return;
         }
 
-        NearCache nearCache = nearCacheProvider.getOrNullNearCache(mapName);
+        NearCache nearCache = nearCacheProvider.getOrNullNearCache(mapContainer.getName());
         if (nearCache != null) {
             if (key != null) {
                 nearCache.remove(key);
@@ -72,24 +72,22 @@ public abstract class AbstractNearCacheInvalidator implements NearCacheInvalidat
         }
     }
 
-    public void clearLocal(String mapName) {
-        if (!isMemberNearCacheInvalidationEnabled(mapName)) {
+    public void clearLocal(MapContainer mapContainer) {
+        if (!isMemberNearCacheInvalidationEnabled(mapContainer)) {
             return;
         }
 
-        NearCache nearCache = nearCacheProvider.getOrNullNearCache(mapName);
+        NearCache nearCache = nearCacheProvider.getOrNullNearCache(mapContainer.getName());
         if (nearCache != null) {
             nearCache.clear();
         }
     }
 
-    protected boolean isMemberNearCacheInvalidationEnabled(String mapName) {
-        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
+    protected boolean isMemberNearCacheInvalidationEnabled(MapContainer mapContainer) {
         return mapContainer.isMemberNearCacheInvalidationEnabled();
     }
 
-    protected boolean hasInvalidationListener(String mapName) {
-        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
+    protected boolean hasInvalidationListener(MapContainer mapContainer) {
         return mapContainer.hasInvalidationListener();
     }
 

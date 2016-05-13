@@ -72,7 +72,7 @@ public class PutFromLoadAllBackupOperation extends MapOperation implements Backu
 
         if (mapContainer.getWanReplicationPublisher() != null && mapContainer.getWanMergePolicy() != null) {
             EntryView entryView = EntryViews.createSimpleEntryView(key, value, record);
-            mapEventPublisher.publishWanReplicationUpdateBackup(name, entryView);
+            mapEventPublisher.publishWanReplicationUpdateBackup(mapContainer, entryView);
         }
     }
 

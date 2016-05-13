@@ -102,7 +102,7 @@ public class EntryOperation extends LockAwareOperation implements BackupAwareOpe
         if (eventType == null) {
             return;
         }
-        mapServiceContext.interceptAfterPut(name, dataValue);
+        mapServiceContext.interceptAfterPut(mapContainer, dataValue);
         if (isPostProcessing(recordStore)) {
             Record record = recordStore.getRecord(dataKey);
             dataValue = record.getValue();
@@ -239,13 +239,13 @@ public class EntryOperation extends LockAwareOperation implements BackupAwareOpe
         final Data key = dataKey;
 
         if (REMOVED.equals(eventType)) {
-            mapEventPublisher.publishWanReplicationRemove(name, key, getNow());
+            mapEventPublisher.publishWanReplicationRemove(mapContainer, key, getNow());
         } else {
             final Record record = recordStore.getRecord(key);
             if (record != null) {
                 dataValue = toData(dataValue);
                 final EntryView entryView = createSimpleEntryView(key, dataValue, record);
-                mapEventPublisher.publishWanReplicationUpdate(name, entryView);
+                mapEventPublisher.publishWanReplicationUpdate(mapContainer, entryView);
             }
         }
     }

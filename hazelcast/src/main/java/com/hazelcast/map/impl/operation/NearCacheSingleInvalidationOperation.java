@@ -43,7 +43,7 @@ public class NearCacheSingleInvalidationOperation extends MapOperation implement
         if (mapContainer.hasMemberNearCache()) {
             NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
             NearCacheInvalidator nearCacheInvalidator = nearCacheProvider.getNearCacheInvalidator();
-            ((AbstractNearCacheInvalidator) nearCacheInvalidator).invalidateLocal(name, key, null);
+            ((AbstractNearCacheInvalidator) nearCacheInvalidator).invalidateLocal(mapContainer, key, null);
         } else {
             getLogger().warning("Cache clear operation has been accepted while near cache is not enabled for "
                     + name + " map. Possible configuration conflict among nodes.");

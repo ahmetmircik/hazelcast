@@ -89,7 +89,7 @@ public abstract class MapOperation extends AbstractNamedOperation {
 
     protected boolean isPostProcessing(RecordStore recordStore) {
         MapDataStore mapDataStore = recordStore.getMapDataStore();
-        return mapDataStore.isPostProcessingMapStore() || mapServiceContext.hasInterceptor(name);
+        return mapDataStore.isPostProcessingMapStore() || mapServiceContext.hasInterceptor(mapContainer);
     }
 
     public void setThreadId(long threadId) {
@@ -105,7 +105,7 @@ public abstract class MapOperation extends AbstractNamedOperation {
             return;
         }
         NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
-        nearCacheProvider.getNearCacheInvalidator().invalidate(name, keys, getCallerUuid());
+        nearCacheProvider.getNearCacheInvalidator().invalidate(mapContainer, keys, getCallerUuid());
     }
 
     protected final void invalidateNearCache(Data key) {
@@ -113,7 +113,7 @@ public abstract class MapOperation extends AbstractNamedOperation {
             return;
         }
         NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
-        nearCacheProvider.getNearCacheInvalidator().invalidate(name, key, getCallerUuid());
+        nearCacheProvider.getNearCacheInvalidator().invalidate(mapContainer, key, getCallerUuid());
     }
 
     protected final void clearNearCache(boolean owner) {
@@ -121,7 +121,7 @@ public abstract class MapOperation extends AbstractNamedOperation {
             return;
         }
         NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
-        nearCacheProvider.getNearCacheInvalidator().clear(name, owner, getCallerUuid());
+        nearCacheProvider.getNearCacheInvalidator().clear(mapContainer, owner, getCallerUuid());
     }
 
     protected void evict() {

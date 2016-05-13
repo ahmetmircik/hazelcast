@@ -147,7 +147,7 @@ abstract class AbstractMultipleEntryOperation extends MapOperation implements Mu
 
         Object newValue = entry.getValue();
         invalidateNearCache(key);
-        mapServiceContext.interceptAfterPut(name, newValue);
+        mapServiceContext.interceptAfterPut(mapContainer, newValue);
         if (isPostProcessing(recordStore)) {
             Record record = recordStore.getRecord(key);
             newValue = record.getValue();
@@ -205,14 +205,14 @@ abstract class AbstractMultipleEntryOperation extends MapOperation implements Mu
 
     protected void publishWanReplicationEvent(Data key, Data value, EntryEventType eventType) {
         if (EntryEventType.REMOVED == eventType) {
-            mapEventPublisher.publishWanReplicationRemove(name, key, getNow());
+            mapEventPublisher.publishWanReplicationRemove(mapContainer, key, getNow());
             wanEventList.add(new WanEventWrapper(key, null, EntryEventType.REMOVED));
         } else {
             final Record record = recordStore.getRecord(key);
             if (record != null) {
                 final Data dataValueAsData = toData(value);
                 final EntryView entryView = createSimpleEntryView(key, dataValueAsData, record);
-                mapEventPublisher.publishWanReplicationUpdate(name, entryView);
+                mapEventPublisher.publishWanReplicationUpdate(mapContainer, entryView);
                 wanEventList.add(new WanEventWrapper(key, value, EntryEventType.UPDATED));
             }
         }

@@ -73,9 +73,9 @@ public class EvictionChecker {
                 int partitionId = recordStore.getPartitionId();
                 return checkPerPartitionEviction(mapName, maxSizeConfig, partitionId);
             case USED_HEAP_PERCENTAGE:
-                return checkHeapPercentageEviction(mapName, maxSizeConfig);
+                return checkHeapPercentageEviction(mapContainer, maxSizeConfig);
             case USED_HEAP_SIZE:
-                return checkHeapSizeEviction(mapName, maxSizeConfig);
+                return checkHeapSizeEviction(mapContainer, maxSizeConfig);
             case FREE_HEAP_PERCENTAGE:
                 return checkFreeHeapPercentageEviction(maxSizeConfig);
             case FREE_HEAP_SIZE:
@@ -117,8 +117,8 @@ public class EvictionChecker {
         return size > maxSize;
     }
 
-    protected boolean checkHeapSizeEviction(String mapName, MaxSizeConfig maxSizeConfig) {
-        final long usedHeapSize = getUsedHeapSize(mapName);
+    protected boolean checkHeapSizeEviction(MapContainer mapContainer, MaxSizeConfig maxSizeConfig) {
+        final long usedHeapSize = getUsedHeapSize(mapContainer);
         if (usedHeapSize == -1L) {
             return false;
         }
@@ -132,8 +132,8 @@ public class EvictionChecker {
         return minFreeHeapSize > (1D * currentFreeHeapSize / ONE_MEGABYTE);
     }
 
-    protected boolean checkHeapPercentageEviction(String mapName, MaxSizeConfig maxSizeConfig) {
-        long usedHeapSize = getUsedHeapSize(mapName);
+    protected boolean checkHeapPercentageEviction(MapContainer mapContainer, MaxSizeConfig maxSizeConfig) {
+        long usedHeapSize = getUsedHeapSize(mapContainer);
         if (usedHeapSize == -1L) {
             return false;
         }
@@ -171,7 +171,7 @@ public class EvictionChecker {
         return freeMemory + (maxMemory - totalMemory);
     }
 
-    protected long getUsedHeapSize(String mapName) {
+    protected long getUsedHeapSize(MapContainer mapContainer) {
         long heapCost = 0L;
         final List<Integer> partitionIds = findPartitionIds();
         for (int partitionId : partitionIds) {
@@ -179,10 +179,9 @@ public class EvictionChecker {
             if (container == null) {
                 continue;
             }
-            heapCost += getRecordStoreHeapCost(mapName, container);
+            heapCost += getRecordStoreHeapCost(mapContainer.getName(), container);
         }
 
-        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
         heapCost += mapContainer.getNearCacheSizeEstimator().getSize();
         return heapCost;
     }

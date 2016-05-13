@@ -93,7 +93,7 @@ public class PutAllOperation extends MapOperation implements PartitionAwareOpera
 
         Object oldValue = putToRecordStore(dataKey, dataValue);
         dataValue = getValueOrPostProcessedValue(dataKey, dataValue);
-        mapServiceContext.interceptAfterPut(name, dataValue);
+        mapServiceContext.interceptAfterPut(mapContainer, dataValue);
 
         if (hasMapListener) {
             EntryEventType eventType = (oldValue == null ? ADDED : UPDATED);
@@ -103,7 +103,7 @@ public class PutAllOperation extends MapOperation implements PartitionAwareOpera
         Record record = (hasWanReplication || hasBackups) ? recordStore.getRecord(dataKey) : null;
         if (hasWanReplication) {
             EntryView entryView = createSimpleEntryView(dataKey, dataValue, record);
-            mapEventPublisher.publishWanReplicationUpdate(name, entryView);
+            mapEventPublisher.publishWanReplicationUpdate(mapContainer, entryView);
         }
         if (hasBackups) {
             RecordInfo replicationInfo = buildRecordInfo(record);

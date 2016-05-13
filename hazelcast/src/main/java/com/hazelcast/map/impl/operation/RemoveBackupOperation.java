@@ -29,8 +29,12 @@ import java.io.IOException;
 public class RemoveBackupOperation extends MutatingKeyBasedMapOperation implements BackupOperation,
         IdentifiedDataSerializable {
 
-    protected boolean unlockKey;
-    protected boolean disableWanReplicationEvent;
+    // todo unlockKey is a logic just used in transactional put operations.
+    // todo It complicates here there should be another Operation for that logic. e.g. TxnSetBackup
+    private static final int BITMASK_UNLOCK_KEY = 1;
+    private static final int BITMASK_DISABLE_WAN_REP_EVENT = 1 << 1;
+
+    private byte flagHolder;
 
     public RemoveBackupOperation() {
     }
@@ -41,19 +45,19 @@ public class RemoveBackupOperation extends MutatingKeyBasedMapOperation implemen
 
     public RemoveBackupOperation(String name, Data dataKey, boolean unlockKey) {
         super(name, dataKey);
-        this.unlockKey = unlockKey;
+        setFlag(unlockKey, BITMASK_UNLOCK_KEY);
     }
 
     public RemoveBackupOperation(String name, Data dataKey, boolean unlockKey, boolean disableWanReplicationEvent) {
         super(name, dataKey);
-        this.unlockKey = unlockKey;
-        this.disableWanReplicationEvent = disableWanReplicationEvent;
+        setFlag(unlockKey, BITMASK_UNLOCK_KEY);
+        setFlag(disableWanReplicationEvent, BITMASK_DISABLE_WAN_REP_EVENT);
     }
 
     @Override
     public void run() {
         recordStore.removeBackup(dataKey);
-        if (unlockKey) {
+        if (isFlagSet(BITMASK_UNLOCK_KEY)) {
             recordStore.forceUnlock(dataKey);
         }
     }
@@ -62,8 +66,8 @@ public class RemoveBackupOperation extends MutatingKeyBasedMapOperation implemen
     public void afterRun() throws Exception {
         evict();
 
-        if (!disableWanReplicationEvent && mapContainer.isWanReplicationEnabled()) {
-            mapEventPublisher.publishWanReplicationRemoveBackup(name, dataKey, Clock.currentTimeMillis());
+        if (!isFlagSet(BITMASK_DISABLE_WAN_REP_EVENT) && mapContainer.isWanReplicationEnabled()) {
+            mapEventPublisher.publishWanReplicationRemoveBackup(mapContainer, dataKey, Clock.currentTimeMillis());
         }
 
         super.afterRun();
@@ -87,15 +91,26 @@ public class RemoveBackupOperation extends MutatingKeyBasedMapOperation implemen
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
-        out.writeBoolean(unlockKey);
-        out.writeBoolean(disableWanReplicationEvent);
+
+        out.writeByte(flagHolder);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
-        unlockKey = in.readBoolean();
-        disableWanReplicationEvent = in.readBoolean();
+
+        flagHolder = in.readByte();
     }
 
+    private void setFlag(boolean exists, int bitmask) {
+        if (exists) {
+            flagHolder |= bitmask;
+        } else {
+            flagHolder &= ~bitmask;
+        }
+    }
+
+    private boolean isFlagSet(int bitmask) {
+        return (flagHolder & bitmask) != 0;
+    }
 }

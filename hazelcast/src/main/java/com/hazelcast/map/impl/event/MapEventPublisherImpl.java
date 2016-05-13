@@ -67,26 +67,25 @@ public class MapEventPublisherImpl implements MapEventPublisher {
     }
 
     @Override
-    public void publishWanReplicationUpdate(String mapName, EntryView entryView) {
-        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
+    public void publishWanReplicationUpdate(MapContainer mapContainer, EntryView entryView) {
         MapReplicationUpdate replicationEvent
-                = new MapReplicationUpdate(mapName, mapContainer.getWanMergePolicy(), entryView);
+                = new MapReplicationUpdate(mapContainer.getName(), mapContainer.getWanMergePolicy(), entryView);
         mapContainer.getWanReplicationPublisher().publishReplicationEvent(SERVICE_NAME, replicationEvent);
     }
 
     @Override
-    public void publishWanReplicationRemove(String mapName, Data key, long removeTime) {
-        MapReplicationRemove event = new MapReplicationRemove(mapName, key, removeTime);
-        publishWanReplicationEventInternal(mapName, event);
+    public void publishWanReplicationRemove(MapContainer mapContainer, Data key, long removeTime) {
+        MapReplicationRemove event = new MapReplicationRemove(mapContainer.getName(), key, removeTime);
+        publishWanReplicationEventInternal(mapContainer, event);
     }
 
     @Override
-    public void publishWanReplicationUpdateBackup(String mapName, EntryView entryView) {
+    public void publishWanReplicationUpdateBackup(MapContainer mapContainer, EntryView entryView) {
         // NOP
     }
 
     @Override
-    public void publishWanReplicationRemoveBackup(String mapName, Data key, long removeTime) {
+    public void publishWanReplicationRemoveBackup(MapContainer mapContainer, Data key, long removeTime) {
         // NOP
     }
 
@@ -304,8 +303,7 @@ public class MapEventPublisherImpl implements MapEventPublisher {
         return mapServiceContext.getExtractors(mapName);
     }
 
-    protected void publishWanReplicationEventInternal(String mapName, ReplicationEventObject event) {
-        MapContainer mapContainer = mapServiceContext.getMapContainer(mapName);
+    protected void publishWanReplicationEventInternal(MapContainer mapContainer, ReplicationEventObject event) {
         WanReplicationPublisher wanReplicationPublisher = mapContainer.getWanReplicationPublisher();
         wanReplicationPublisher.publishReplicationEvent(SERVICE_NAME, event);
     }

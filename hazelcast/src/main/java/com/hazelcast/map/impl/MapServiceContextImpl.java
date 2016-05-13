@@ -155,7 +155,6 @@ class MapServiceContextImpl implements MapServiceContext {
         return ConcurrencyUtil.getOrPutSynchronized(mapContainers, mapName, mapContainers, mapConstructor);
     }
 
-
     @Override
     public Map<String, MapContainer> getMapContainers() {
         return mapContainers;
@@ -254,7 +253,7 @@ class MapServiceContextImpl implements MapServiceContext {
             return;
         }
         mapContainer.getMapStoreContext().stop();
-        nearCacheProvider.destroyNearCache(mapName);
+        nearCacheProvider.destroyNearCache(mapContainer);
         nodeEngine.getEventService().deregisterAllListeners(SERVICE_NAME, mapName);
         localMapStatsProvider.destroyLocalMapStatsImpl(mapContainer.getName());
 
@@ -380,8 +379,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void interceptAfterGet(String mapName, Object value) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public void interceptAfterGet(MapContainer mapContainer, Object value) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
         if (!interceptors.isEmpty()) {
             value = toObject(value);
@@ -392,8 +390,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public Object interceptPut(String mapName, Object oldValue, Object newValue) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public Object interceptPut(MapContainer mapContainer, Object oldValue, Object newValue) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
         Object result = null;
         if (!interceptors.isEmpty()) {
@@ -410,8 +407,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void interceptAfterPut(String mapName, Object newValue) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public void interceptAfterPut(MapContainer mapContainer, Object newValue) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
         if (!interceptors.isEmpty()) {
             newValue = toObject(newValue);
@@ -422,8 +418,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public Object interceptRemove(String mapName, Object value) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public Object interceptRemove(MapContainer mapContainer, Object value) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
         Object result = null;
         if (!interceptors.isEmpty()) {
@@ -439,8 +434,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void interceptAfterRemove(String mapName, Object value) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public void interceptAfterRemove(MapContainer mapContainer, Object value) {
         InterceptorRegistry interceptorRegistry = mapContainer.getInterceptorRegistry();
         List<MapInterceptor> interceptors = interceptorRegistry.getInterceptors();
         if (!interceptors.isEmpty()) {
@@ -471,8 +465,7 @@ class MapServiceContextImpl implements MapServiceContext {
 
     // todo interceptors should get a wrapped object which includes the serialized version
     @Override
-    public Object interceptGet(String mapName, Object value) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public Object interceptGet(MapContainer mapContainer, Object value) {
         InterceptorRegistry interceptorRegistry = mapContainer.getInterceptorRegistry();
         List<MapInterceptor> interceptors = interceptorRegistry.getInterceptors();
         Object result = null;
@@ -489,8 +482,7 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public boolean hasInterceptor(String mapName) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public boolean hasInterceptor(MapContainer mapContainer) {
         return !mapContainer.getInterceptorRegistry().getInterceptors().isEmpty();
     }
 

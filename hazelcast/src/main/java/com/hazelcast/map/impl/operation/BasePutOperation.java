@@ -47,7 +47,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
 
     @Override
     public void afterRun() {
-        mapServiceContext.interceptAfterPut(name, dataValue);
+        mapServiceContext.interceptAfterPut(mapContainer, dataValue);
         Object value = isPostProcessing(recordStore) ? recordStore.getRecord(dataKey).getValue() : dataValue;
 
         mapEventPublisher.publishEvent(getCallerAddress(), name, getEventType(), dataKey, dataOldValue, value);
@@ -67,7 +67,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         }
         final Data valueConvertedData = mapServiceContext.toData(value);
         final EntryView entryView = EntryViews.createSimpleEntryView(dataKey, valueConvertedData, record);
-        mapEventPublisher.publishWanReplicationUpdate(name, entryView);
+        mapEventPublisher.publishWanReplicationUpdate(mapContainer, entryView);
     }
 
     private EntryEventType getEventType() {

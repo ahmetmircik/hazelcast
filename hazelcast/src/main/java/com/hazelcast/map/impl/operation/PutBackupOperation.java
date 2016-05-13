@@ -37,14 +37,13 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
 
     // todo unlockKey is a logic just used in transactional put operations.
     // todo It complicates here there should be another Operation for that logic. e.g. TxnSetBackup
-    private boolean unlockKey;
-    private RecordInfo recordInfo;
-    private boolean putTransient;
-    private boolean disableWanReplicationEvent;
+    private static final int BITMASK_UNLOCK_KEY = 1;
+    private static final int BITMASK_PUT_TRANSIENT = 1 << 1;
+    private static final int BITMASK_DISABLE_WAN_REP_EVENT = 1 << 2;
+    private static final int BITMASK_RECORD_INFO_EXISTS = 1 << 3;
 
-    public PutBackupOperation(String name, Data dataKey, Data dataValue, RecordInfo recordInfo) {
-        this(name, dataKey, dataValue, recordInfo, false, false);
-    }
+    private byte flagHolder;
+    private RecordInfo recordInfo;
 
     public PutBackupOperation(String name, Data dataKey, Data dataValue, RecordInfo recordInfo, boolean putTransient) {
         this(name, dataKey, dataValue, recordInfo, false, putTransient);
@@ -59,10 +58,13 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
                               RecordInfo recordInfo, boolean unlockKey, boolean putTransient,
                               boolean disableWanReplicationEvent) {
         super(name, dataKey, dataValue);
-        this.unlockKey = unlockKey;
+
         this.recordInfo = recordInfo;
-        this.putTransient = putTransient;
-        this.disableWanReplicationEvent = disableWanReplicationEvent;
+
+        setFlag(unlockKey, BITMASK_UNLOCK_KEY);
+        setFlag(putTransient, BITMASK_PUT_TRANSIENT);
+        setFlag(disableWanReplicationEvent, BITMASK_DISABLE_WAN_REP_EVENT);
+        setFlag(recordInfo != null, BITMASK_RECORD_INFO_EXISTS);
     }
 
     public PutBackupOperation() {
@@ -71,11 +73,11 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
     @Override
     public void run() {
         ttl = recordInfo != null ? recordInfo.getTtl() : ttl;
-        final Record record = recordStore.putBackup(dataKey, dataValue, ttl, putTransient);
+        final Record record = recordStore.putBackup(dataKey, dataValue, ttl, isFlagSet(BITMASK_PUT_TRANSIENT));
         if (recordInfo != null) {
             Records.applyRecordInfo(record, recordInfo);
         }
-        if (unlockKey) {
+        if (isFlagSet(BITMASK_UNLOCK_KEY)) {
             recordStore.forceUnlock(dataKey);
         }
     }
@@ -85,7 +87,7 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
         if (recordInfo != null) {
             evict();
         }
-        if (!disableWanReplicationEvent) {
+        if (!isFlagSet(BITMASK_DISABLE_WAN_REP_EVENT)) {
             publishWANReplicationEventBackup(mapServiceContext, mapEventPublisher);
         }
 
@@ -103,7 +105,7 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
 
         final Data valueConvertedData = mapServiceContext.toData(dataValue);
         final EntryView entryView = EntryViews.createSimpleEntryView(dataKey, valueConvertedData, record);
-        mapEventPublisher.publishWanReplicationUpdateBackup(name, entryView);
+        mapEventPublisher.publishWanReplicationUpdateBackup(mapContainer, entryView);
     }
 
 
@@ -125,27 +127,36 @@ public final class PutBackupOperation extends MutatingKeyBasedMapOperation
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
-        out.writeBoolean(unlockKey);
+
+        out.writeByte(flagHolder);
         if (recordInfo != null) {
-            out.writeBoolean(true);
             recordInfo.writeData(out);
-        } else {
-            out.writeBoolean(false);
         }
-        out.writeBoolean(putTransient);
-        out.writeBoolean(disableWanReplicationEvent);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
-        unlockKey = in.readBoolean();
-        boolean hasRecordInfo = in.readBoolean();
+
+        flagHolder = in.readByte();
+
+        boolean hasRecordInfo = isFlagSet(BITMASK_RECORD_INFO_EXISTS);
         if (hasRecordInfo) {
             recordInfo = new RecordInfo();
             recordInfo.readData(in);
         }
-        putTransient = in.readBoolean();
-        disableWanReplicationEvent = in.readBoolean();
+
+    }
+
+    private void setFlag(boolean exists, int bitmask) {
+        if (exists) {
+            flagHolder |= bitmask;
+        } else {
+            flagHolder &= ~bitmask;
+        }
+    }
+
+    private boolean isFlagSet(int bitmask) {
+        return (flagHolder & bitmask) != 0;
     }
 }
