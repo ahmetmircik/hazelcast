@@ -22,6 +22,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.memory.MemoryUnit;
 import com.hazelcast.nio.Address;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.partition.IPartition;
@@ -33,6 +34,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static com.hazelcast.cluster.memberselector.MemberSelectors.DATA_MEMBER_SELECTOR;
+import static java.lang.String.format;
+import static java.lang.System.out;
 
 /**
  * Checks whether a specific threshold is exceeded or not
@@ -146,10 +149,24 @@ public class EvictionChecker {
 
     protected boolean checkFreeHeapPercentageEviction(MaxSizeConfig maxSizeConfig) {
         double freeHeapPercentage = maxSizeConfig.getSize();
-        long currentFreeHeapSize = getAvailableMemory();
-        long maxMemory = getMaxMemory();
+        final long totalMemory = getTotalMemory();
+        final long freeMemory = getFreeMemory();
+        final long maxMemory = getMaxMemory();
+        long currentFreeHeapSize = freeMemory + (maxMemory - totalMemory);
+        double actualFreeHeapPercentage = (1D * ONE_HUNDRED_PERCENT * currentFreeHeapSize / maxMemory);
+        boolean result = freeHeapPercentage > actualFreeHeapPercentage;
+        if (result) {
+            String msg = "runtime.maxMemory=%d%s, runtime.totalMemory=%d%s, runtime.freeMemory=%d%s, runtime.usedMemory=%d%s, "
+                    + "runTime.availableMemory=%d%s, expectedFreeHeapPercentage=%.2f, actualFreeHeapPercentage=%.2f ";
+            out.println(format(msg, toKB(maxMemory), "K", toKB(totalMemory), "K", toKB(freeMemory), "K",
+                    toKB(totalMemory - freeMemory), "K",
+                    toKB(currentFreeHeapSize), "K", freeHeapPercentage, actualFreeHeapPercentage));
+        }
+        return result;
+    }
 
-        return freeHeapPercentage > (1D * ONE_HUNDRED_PERCENT * currentFreeHeapSize / maxMemory);
+    private static long toKB(long bytes) {
+        return MemoryUnit.BYTES.toKiloBytes(bytes);
     }
 
     protected long getTotalMemory() {
