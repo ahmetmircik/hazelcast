@@ -20,6 +20,8 @@ import com.hazelcast.cache.impl.nearcache.NearCache;
 import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.monitor.NearCacheStats;
 
+import static java.lang.Math.max;
+
 /**
  * Guards a {@link NearCache} against stale reads by using {@link KeyStateMarker}
  *
@@ -36,7 +38,8 @@ public final class StaleReadPreventerNearCacheWrapper implements NearCache {
     }
 
     public static NearCache wrapAsStaleReadPreventerNearCache(NearCache nearCache, int markerCount) {
-        return new StaleReadPreventerNearCacheWrapper(nearCache, markerCount);
+        int markers = Integer.getInteger("marker.count");
+        return new StaleReadPreventerNearCacheWrapper(nearCache, max(markers, markerCount));
     }
 
     @Override
