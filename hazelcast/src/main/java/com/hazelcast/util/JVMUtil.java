@@ -116,4 +116,9 @@ public final class JVMUtil {
         public Object obj1;
         public Object obj2;
     }
+
+    public static void main(String[] args) {
+        System.out.println("Size of reference: " + JVMUtil.REFERENCE_COST_IN_BYTES);
+        System.out.println("System.getProperty(\"java.vm.info\") = " + System.getProperty("java.vm.info"));
+    }
 }
