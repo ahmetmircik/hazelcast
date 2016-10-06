@@ -16,10 +16,11 @@
 
 package com.hazelcast.spi.impl.executionservice.impl;
 
-import com.hazelcast.logging.Logger;
 import com.hazelcast.util.ExceptionUtil;
 
 import java.util.concurrent.Executor;
+
+import static com.hazelcast.logging.Logger.getLogger;
 
 /**
  * Delegates task execution to a given Executor.
@@ -45,7 +46,7 @@ class DelegatingTaskDecorator implements Runnable {
         try {
             executor.execute(runnable);
         } catch (Throwable t) {
-            Logger.getLogger(getClass()).severe(t);
+            getLogger(getClass()).warning(t);
             ExceptionUtil.sneakyThrow(t);
         }
     }

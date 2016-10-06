@@ -24,12 +24,13 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.spi.ExecutionService;
+import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.partition.IPartition;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.util.Clock;
-import com.hazelcast.util.ExceptionUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,13 +49,14 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * <p/>
  * Only one {@link StoreWorker} task is created for a map on a member.
  */
-public class StoreWorker implements Runnable {
+public final class StoreWorker implements Runnable {
 
     private final ILogger logger;
     private final String mapName;
     private final MapServiceContext mapServiceContext;
     private final IPartitionService partitionService;
     private final WriteBehindProcessor writeBehindProcessor;
+    private final ExecutionService executionService;
     private final long backupDelayMillis;
     private final long writeDelayMillis;
     private final int partitionCount;
@@ -66,38 +68,35 @@ public class StoreWorker implements Runnable {
      * @see #calculateHighestStoreTime
      */
     private long lastHighestStoreTime;
+    private volatile boolean stopped;
 
 
     public StoreWorker(MapStoreContext mapStoreContext, WriteBehindProcessor writeBehindProcessor) {
         this.logger = mapStoreContext.getLogger(getClass());
         this.mapName = mapStoreContext.getMapName();
         this.mapServiceContext = mapStoreContext.getMapServiceContext();
-        this.partitionService = mapServiceContext.getNodeEngine().getPartitionService();
+        NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
+        this.partitionService = nodeEngine.getPartitionService();
         this.writeBehindProcessor = writeBehindProcessor;
+        this.executionService = nodeEngine.getExecutionService();
         this.backupDelayMillis = getReplicaWaitTimeMillis();
-        this.lastHighestStoreTime = Clock.currentTimeMillis();
         this.writeDelayMillis = SECONDS.toMillis(getWriteDelaySeconds(mapStoreContext));
         this.partitionCount = partitionService.getPartitionCount();
+        this.lastHighestStoreTime = Clock.currentTimeMillis();
     }
-
 
     @Override
     public void run() {
         try {
-            doRun();
-        } catch (Throwable t) {
-            logger.severe("StoreWorker will no longer be run!" + t);
-            logger.severe(t);
-
-            ExceptionUtil.rethrow(t);
+            runInternal();
+        } finally {
+            if (!stopped) {
+                executionService.schedule(this, 1, SECONDS);
+            }
         }
-
     }
 
-    private void doRun() {
-        if (logger.isFineEnabled()) {
-            logger.fine("StoreWorker is running for map " + mapName + " in thread " + Thread.currentThread());
-        }
+    private void runInternal() {
         final long now = Clock.currentTimeMillis();
         // if this node is the owner of a partition, we use this criteria time.
         final long ownerHighestStoreTime = calculateHighestStoreTime(lastHighestStoreTime, now);
@@ -167,6 +166,15 @@ public class StoreWorker implements Runnable {
         }
 
         notifyFlush();
+    }
+
+    public void start() {
+        stopped = false;
+        run();
+    }
+
+    public void stop() {
+        stopped = true;
     }
 
     private static List<DelayedEntry> initListIfNull(List<DelayedEntry> list, int capacity) {
