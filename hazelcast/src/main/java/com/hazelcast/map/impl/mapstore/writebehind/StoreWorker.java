@@ -97,6 +97,7 @@ public final class StoreWorker implements Runnable {
     }
 
     private void runInternal() {
+        logger.fine("StoreWorker is running...");
         final long now = Clock.currentTimeMillis();
         // if this node is the owner of a partition, we use this criteria time.
         final long ownerHighestStoreTime = calculateHighestStoreTime(lastHighestStoreTime, now);
