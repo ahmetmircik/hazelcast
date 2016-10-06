@@ -16,15 +16,15 @@
 
 package com.hazelcast.spi.impl.executionservice.impl;
 
+import com.hazelcast.logging.Logger;
 import com.hazelcast.util.ExceptionUtil;
 
 import java.util.concurrent.Executor;
 
 /**
  * Delegates task execution to a given Executor.
- *
+ * <p>
  * This is convenient when you want to start a task, do not want the task to block a caller thread.
- *
  */
 class DelegatingTaskDecorator implements Runnable {
 
@@ -45,6 +45,7 @@ class DelegatingTaskDecorator implements Runnable {
         try {
             executor.execute(runnable);
         } catch (Throwable t) {
+            Logger.getLogger(getClass()).severe(t);
             ExceptionUtil.sneakyThrow(t);
         }
     }

@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.mapstore.writebehind;
 
 import com.hazelcast.config.MapStoreConfig;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
@@ -28,6 +29,7 @@ import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.util.Clock;
+import com.hazelcast.util.ExceptionUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static com.hazelcast.util.CollectionUtil.isEmpty;
+import static com.hazelcast.util.MapUtil.isNullOrEmpty;
 import static java.lang.Thread.currentThread;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -47,6 +50,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class StoreWorker implements Runnable {
 
+    private final ILogger logger;
     private final String mapName;
     private final MapServiceContext mapServiceContext;
     private final IPartitionService partitionService;
@@ -63,7 +67,9 @@ public class StoreWorker implements Runnable {
      */
     private long lastHighestStoreTime;
 
+
     public StoreWorker(MapStoreContext mapStoreContext, WriteBehindProcessor writeBehindProcessor) {
+        this.logger = mapStoreContext.getLogger(getClass());
         this.mapName = mapStoreContext.getMapName();
         this.mapServiceContext = mapStoreContext.getMapServiceContext();
         this.partitionService = mapServiceContext.getNodeEngine().getPartitionService();
@@ -77,6 +83,21 @@ public class StoreWorker implements Runnable {
 
     @Override
     public void run() {
+        try {
+            doRun();
+        } catch (Throwable t) {
+            logger.severe("StoreWorker will no longer be run!" + t);
+            logger.severe(t);
+
+            ExceptionUtil.rethrow(t);
+        }
+
+    }
+
+    private void doRun() {
+        if (logger.isFineEnabled()) {
+            logger.fine("StoreWorker is running for map " + mapName + " in thread " + Thread.currentThread());
+        }
         final long now = Clock.currentTimeMillis();
         // if this node is the owner of a partition, we use this criteria time.
         final long ownerHighestStoreTime = calculateHighestStoreTime(lastHighestStoreTime, now);
@@ -110,17 +131,42 @@ public class StoreWorker implements Runnable {
         }
 
         if (!isEmpty(ownersList)) {
+            if (logger.isFineEnabled()) {
+                logger.fine(String.format("processing ownersList size=%d", ownersList.size()));
+            }
+
             Map<Integer, List<DelayedEntry>> failuresPerPartition = writeBehindProcessor.process(ownersList);
+            if (logger.isFineEnabled() && !isNullOrEmpty(failuresPerPartition)) {
+                logger.fine(String.format("failuresPerPartition size=%d", failuresPerPartition.size()));
+            }
+
             removeFinishedStoreOperationsFromQueues(mapName, ownersList);
+            if (logger.isFineEnabled() && !isEmpty(ownersList)) {
+                logger.fine("removed finished store operations from queues");
+            }
+
             reAddFailedStoreOperationsToQueues(mapName, failuresPerPartition);
+            if (logger.isFineEnabled() && !isNullOrEmpty(failuresPerPartition)) {
+                logger.fine("re-add failed store operations to queues");
+            }
+        } else {
+            if (logger.isFineEnabled()) {
+                logger.fine("ownersList is empty");
+            }
         }
 
         if (!isEmpty(backupsList)) {
+            if (logger.isFineEnabled()) {
+                logger.fine(String.format("processing backupsList size=%d", backupsList.size()));
+            }
             doInBackup(backupsList);
+        } else {
+            if (logger.isFineEnabled()) {
+                logger.fine("backupsList is empty");
+            }
         }
 
         notifyFlush();
-
     }
 
     private static List<DelayedEntry> initListIfNull(List<DelayedEntry> list, int capacity) {

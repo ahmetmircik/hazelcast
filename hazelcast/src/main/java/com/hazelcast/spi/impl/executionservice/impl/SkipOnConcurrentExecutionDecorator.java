@@ -16,18 +16,22 @@
 
 package com.hazelcast.spi.impl.executionservice.impl;
 
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
+import com.hazelcast.util.ExceptionUtil;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Decorator to prevent concurrent task execution.
- *
+ * <p>
  * If this task is running on a thread and another thread calls attempt the execute it concurrently
  * then the 2nd execution will be skipped.
- *
  */
 public class SkipOnConcurrentExecutionDecorator implements Runnable {
     private final AtomicBoolean isAlreadyRunning = new AtomicBoolean();
     private final Runnable runnable;
+    private ILogger logger = Logger.getLogger(getClass());
 
     public SkipOnConcurrentExecutionDecorator(Runnable runnable) {
         this.runnable = runnable;
@@ -38,6 +42,9 @@ public class SkipOnConcurrentExecutionDecorator implements Runnable {
         if (isAlreadyRunning.compareAndSet(false, true)) {
             try {
                 runnable.run();
+            } catch (Throwable t) {
+                logger.severe(t);
+                ExceptionUtil.rethrow(t);
             } finally {
                 isAlreadyRunning.set(false);
             }

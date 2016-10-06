@@ -40,7 +40,7 @@ public class WriteBehindManager implements MapStoreManager {
 
     private static final String EXECUTOR_NAME_PREFIX = "hz:scheduled:mapstore:";
 
-    private static final int EXECUTOR_DEFAULT_QUEUE_CAPACITY = 10000;
+    private static final int EXECUTOR_DEFAULT_QUEUE_CAPACITY = Integer.MAX_VALUE;
 
     private final TaskScheduler taskScheduler;
 

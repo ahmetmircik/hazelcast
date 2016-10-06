@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.mapstore.writebehind;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.util.StringUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -384,7 +385,8 @@ class DefaultWriteBehindProcessor extends AbstractWriteBehindProcessor<DelayedEn
                 // store them.
                 List failureList = task.failureList();
                 logger.severe("Number of entries which could not be stored is = [" + failureList.size() + "]"
-                        + ", Hazelcast will indefinitely retry to store them", exception);
+                        + ", Hazelcast will indefinitely retry to store them"
+                        + StringUtil.LINE_SEPARATOR + exception.getMessage(), null);
                 return failureList;
             }
         }
