@@ -20,10 +20,10 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.LifecycleEvent;
 import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.core.LifecycleService;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.spi.EventFilter;
 import com.hazelcast.spi.EventRegistration;
 import com.hazelcast.spi.ExecutionService;
-import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.util.ConstructorFunction;
 
 import java.util.ArrayList;
@@ -74,8 +74,8 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
     private final String nodeShutdownListenerId;
     private final ExecutionService executionService;
 
-    public BatchInvalidator(NodeEngine nodeEngine) {
-        super(nodeEngine);
+    public BatchInvalidator(MapServiceContext mapServiceContext) {
+        super(mapServiceContext);
 
         this.batchSize = getBatchSize();
         this.nodeShutdownListenerId = registerNodeShutdownListener();
@@ -239,7 +239,7 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
     public void destroy(String mapName, String sourceUuid) {
         InvalidationQueue invalidationQueue = invalidationQueues.remove(mapName);
         if (invalidationQueue != null) {
-            invalidateInternal(new ClearNearCacheInvalidation(mapName, sourceUuid), mapName.hashCode());
+            invalidateInternal(newClearInvalidation(mapName, sourceUuid), mapName.hashCode());
         }
     }
 
@@ -330,6 +330,5 @@ public class BatchInvalidator extends AbstractNearCacheInvalidator {
         public void clear() {
             throw new UnsupportedOperationException();
         }
-
     }
 }

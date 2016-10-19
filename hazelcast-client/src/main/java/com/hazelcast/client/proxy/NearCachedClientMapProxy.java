@@ -66,7 +66,6 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
 
     protected NearCache<Data, Object> nearCache;
     protected KeyStateMarker keyStateMarker;
-
     protected volatile String invalidationListenerId;
 
     private boolean invalidateOnChange;
@@ -444,7 +443,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
             invalidationListenerId = registerListener(createNearCacheEntryListenerCodec(), handler);
 
         } catch (Exception e) {
-            ILogger logger = getContext().getLoggingService().getLogger(NearCachedClientMapProxy.class);
+            ILogger logger = getContext().getLoggingService().getLogger(getClass());
             logger.severe("-----------------\n Near Cache is not initialized!!! \n-----------------", e);
         }
     }

@@ -16,13 +16,14 @@
 
 package com.hazelcast.map.impl.nearcache.invalidation;
 
-import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 
 import java.io.IOException;
 
+import static com.hazelcast.map.impl.MapDataSerializerHook.CLEAR_NEAR_CACHE_INVALIDATION;
 import static com.hazelcast.util.Preconditions.checkNotNull;
+import static com.hazelcast.util.Preconditions.checkPositive;
 
 /**
  * Represents a clear invalidation event.
@@ -30,14 +31,20 @@ import static com.hazelcast.util.Preconditions.checkNotNull;
 public class ClearNearCacheInvalidation extends Invalidation {
 
     private String sourceUuid;
+    private long sequence;
 
     public ClearNearCacheInvalidation() {
     }
 
-    public ClearNearCacheInvalidation(String mapName, String sourceUuid) {
+    public ClearNearCacheInvalidation(String mapName, String sourceUuid, long sequence) {
         super(mapName);
-
         this.sourceUuid = checkNotNull(sourceUuid, "sourceUuid cannot be null");
+        this.sequence = checkPositive(sequence, "sequence should be positive");
+    }
+
+    @Override
+    public long getSequence() {
+        return sequence;
     }
 
     @Override
@@ -55,6 +62,7 @@ public class ClearNearCacheInvalidation extends Invalidation {
         super.writeData(out);
 
         out.writeUTF(sourceUuid);
+        out.writeLong(sequence);
     }
 
     @Override
@@ -62,18 +70,19 @@ public class ClearNearCacheInvalidation extends Invalidation {
         super.readData(in);
 
         sourceUuid = in.readUTF();
+        sequence = in.readLong();
     }
 
     @Override
     public String toString() {
         return "ClearNearCacheInvalidation{"
-                + "mapName='" + mapName + '\''
-                + ", sourceUuid='" + sourceUuid + '\''
+                + "sourceUuid='" + sourceUuid + '\''
+                + ", sequence=" + sequence
                 + '}';
     }
 
     @Override
     public int getId() {
-        return MapDataSerializerHook.CLEAR_NEAR_CACHE_INVALIDATION;
+        return CLEAR_NEAR_CACHE_INVALIDATION;
     }
 }

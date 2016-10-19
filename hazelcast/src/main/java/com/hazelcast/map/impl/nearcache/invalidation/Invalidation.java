@@ -63,6 +63,10 @@ public abstract class Invalidation implements IMapEvent, IdentifiedDataSerializa
 
     public abstract void consumedBy(InvalidationHandler invalidationHandler);
 
+    public long getSequence() {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
         out.writeUTF(mapName);

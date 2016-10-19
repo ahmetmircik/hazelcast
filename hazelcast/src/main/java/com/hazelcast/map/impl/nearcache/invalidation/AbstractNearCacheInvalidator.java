@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.nearcache.invalidation;
 
 import com.hazelcast.map.impl.EventListenerFilter;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.EventFilter;
 import com.hazelcast.spi.EventService;
@@ -34,11 +35,15 @@ abstract class AbstractNearCacheInvalidator implements NearCacheInvalidator {
     protected final NodeEngine nodeEngine;
     protected final EventService eventService;
     protected final SerializationService serializationService;
+    protected final InvalidationObserver observer;
+    private final String localMemberUuid;
 
-    AbstractNearCacheInvalidator(NodeEngine nodeEngine) {
-        this.nodeEngine = nodeEngine;
+    AbstractNearCacheInvalidator(MapServiceContext mapServiceContext) {
+        this.nodeEngine = mapServiceContext.getNodeEngine();
+        this.localMemberUuid = nodeEngine.getLocalMember().getUuid();
         this.eventService = nodeEngine.getEventService();
         this.serializationService = nodeEngine.getSerializationService();
+        this.observer = new InvalidationObserver(mapServiceContext);
     }
 
     @Override
@@ -47,7 +52,8 @@ abstract class AbstractNearCacheInvalidator implements NearCacheInvalidator {
         assert mapName != null;
         assert sourceUuid != null;
 
-        invalidateInternal(new SingleNearCacheInvalidation(toHeapData(key), mapName, sourceUuid), key.hashCode());
+        invalidateInternal(newKeyInvalidation(key, mapName, sourceUuid), getPartitionId(key));
+
     }
 
     @Override
@@ -55,14 +61,31 @@ abstract class AbstractNearCacheInvalidator implements NearCacheInvalidator {
         assert mapName != null;
         assert sourceUuid != null;
 
-        invalidateInternal(new ClearNearCacheInvalidation(mapName, sourceUuid), mapName.hashCode());
+        invalidateInternal(newClearInvalidation(mapName, sourceUuid), getPartitionId(mapName));
+    }
+
+    protected final Invalidation newKeyInvalidation(Data key, String mapName, String sourceUuid) {
+        long sequence = observer.nextSequence(mapName);
+        String uuid = pickUuid(sourceUuid, localMemberUuid);
+        return new SingleNearCacheInvalidation(toHeapData(key), mapName, uuid, sequence);
+    }
+
+    protected final Invalidation newClearInvalidation(String mapName, String sourceUuid) {
+        long sequence = observer.nextSequence(mapName);
+        String uuid = pickUuid(sourceUuid, localMemberUuid);
+        return new ClearNearCacheInvalidation(mapName, uuid, sequence);
+    }
+
+    // TODO: maybe a switch required if eventual-consistency is configurable.
+    private static String pickUuid(String sourceUuid, String localMemberUuid) {
+        return localMemberUuid;
+    }
+
+    protected final int getPartitionId(Object o) {
+        return nodeEngine.getPartitionService().getPartitionId(o);
     }
 
     protected abstract void invalidateInternal(Invalidation invalidation, int orderKey);
-
-    protected final Data toHeapData(Data key) {
-        return serializationService.toData(key);
-    }
 
     protected final boolean canSendInvalidation(final EventFilter filter, final String sourceUuid) {
         if (!(filter instanceof EventListenerFilter)) {
@@ -73,12 +96,20 @@ abstract class AbstractNearCacheInvalidator implements NearCacheInvalidator {
             return false;
         }
 
-        EventFilter unwrappedEventFilter = ((EventListenerFilter) filter).getEventFilter();
-        if (unwrappedEventFilter.eval(sourceUuid)) {
-            return false;
-        }
+//        EventFilter unwrappedEventFilter = ((EventListenerFilter) filter).getEventFilter();
+//        if (unwrappedEventFilter.eval(sourceUuid)) {
+//            return false;
+//        }
 
         return true;
+    }
+
+    public InvalidationObserver getObserver() {
+        return observer;
+    }
+
+    private Data toHeapData(Data key) {
+        return serializationService.toData(key);
     }
 
     @Override

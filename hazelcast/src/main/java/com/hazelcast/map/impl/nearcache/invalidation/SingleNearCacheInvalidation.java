@@ -16,14 +16,15 @@
 
 package com.hazelcast.map.impl.nearcache.invalidation;
 
-import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.IOException;
 
+import static com.hazelcast.map.impl.MapDataSerializerHook.NEAR_CACHE_SINGLE_INVALIDATION;
 import static com.hazelcast.util.Preconditions.checkNotNull;
+import static com.hazelcast.util.Preconditions.checkPositive;
 
 /**
  * Represents a single key invalidation.
@@ -32,19 +33,25 @@ public class SingleNearCacheInvalidation extends Invalidation {
 
     private Data key;
     private String sourceUuid;
+    private long sequence;
 
     public SingleNearCacheInvalidation() {
     }
 
-    public SingleNearCacheInvalidation(Data key, String mapName, String sourceUuid) {
+    public SingleNearCacheInvalidation(Data key, String mapName, String sourceUuid, long sequence) {
         super(mapName);
-
         this.key = checkNotNull(key, "key cannot be null");
         this.sourceUuid = checkNotNull(sourceUuid, "sourceUuid cannot be null");
+        this.sequence = checkPositive(sequence, "sequence should be a positive number");
     }
 
     public Data getKey() {
         return key;
+    }
+
+    @Override
+    public long getSequence() {
+        return sequence;
     }
 
     @Override
@@ -57,12 +64,14 @@ public class SingleNearCacheInvalidation extends Invalidation {
         invalidationHandler.handle(this);
     }
 
+
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
         super.writeData(out);
 
         out.writeUTF(sourceUuid);
         out.writeData(key);
+        out.writeLong(sequence);
     }
 
     @Override
@@ -71,19 +80,20 @@ public class SingleNearCacheInvalidation extends Invalidation {
 
         sourceUuid = in.readUTF();
         key = in.readData();
+        sequence = in.readLong();
     }
 
     @Override
     public String toString() {
         return "SingleNearCacheInvalidation{"
-                + "mapName='" + mapName + '\''
+                + "key=" + key
                 + ", sourceUuid='" + sourceUuid + '\''
-                + ", key='" + key + '\''
+                + ", sequence=" + sequence
                 + '}';
     }
 
     @Override
     public int getId() {
-        return MapDataSerializerHook.NEAR_CACHE_SINGLE_INVALIDATION;
+        return NEAR_CACHE_SINGLE_INVALIDATION;
     }
 }

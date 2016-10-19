@@ -76,11 +76,9 @@ public class BatchNearCacheInvalidation extends Invalidation {
 
     @Override
     public String toString() {
-        StringBuilder str = new StringBuilder();
-        for (Invalidation invalidation : invalidations) {
-            str.append(invalidation.toString());
-        }
-        return str.toString();
+        return "BatchNearCacheInvalidation{"
+                + "invalidations=" + invalidations
+                + '}';
     }
 
     @Override
