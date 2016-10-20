@@ -25,8 +25,6 @@ import com.hazelcast.map.impl.mapstore.MapStoreManager;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
-import static com.hazelcast.map.impl.mapstore.writebehind.WriteBehindProcessors.createWriteBehindProcessor;
-
 /**
  * Write behind map store manager.
  */
@@ -59,7 +57,7 @@ public class WriteBehindManager implements MapStoreManager {
     }
 
     private WriteBehindProcessor newWriteBehindProcessor(final MapStoreContext mapStoreContext) {
-        WriteBehindProcessor writeBehindProcessor = createWriteBehindProcessor(mapStoreContext);
+        WriteBehindProcessor writeBehindProcessor = new WriteBehindProcessor(mapStoreContext);
         StoreListener<DelayedEntry> storeListener = new InternalStoreListener(mapStoreContext);
         writeBehindProcessor.addStoreListener(storeListener);
         return writeBehindProcessor;
