@@ -46,10 +46,10 @@ public class BatchNearCacheInvalidationTest extends HazelcastTestSupport {
         String sourceUuid = "sourceUuid";
 
         List<Invalidation> invalidations = new ArrayList<Invalidation>();
-        invalidations.add(new SingleNearCacheInvalidation(key, mapName, sourceUuid));
-        invalidations.add(new ClearNearCacheInvalidation(mapName, sourceUuid));
+        invalidations.add(new SingleNearCacheInvalidation(key, mapName, sourceUuid, 1, 1));
+        invalidations.add(new ClearNearCacheInvalidation(mapName, sourceUuid, 1, 1));
 
-        BatchNearCacheInvalidation batch = new BatchNearCacheInvalidation(invalidations, mapName);
+        BatchNearCacheInvalidation batch = new BatchNearCacheInvalidation(invalidations, mapName, "not-used");
 
 
         Data data = ss.toData(batch);

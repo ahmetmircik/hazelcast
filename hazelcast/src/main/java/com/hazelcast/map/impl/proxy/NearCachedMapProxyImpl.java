@@ -25,18 +25,9 @@ import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.nearcache.KeyStateMarker;
 import com.hazelcast.map.impl.nearcache.NearCacheProvider;
 import com.hazelcast.map.impl.nearcache.StaleReadPreventerNearCacheWrapper;
-import com.hazelcast.map.impl.nearcache.invalidation.BatchNearCacheInvalidation;
-import com.hazelcast.map.impl.nearcache.invalidation.ClearNearCacheInvalidation;
-import com.hazelcast.map.impl.nearcache.invalidation.Invalidation;
-import com.hazelcast.map.impl.nearcache.invalidation.InvalidationHandler;
-import com.hazelcast.map.impl.nearcache.invalidation.InvalidationListener;
-import com.hazelcast.map.impl.nearcache.invalidation.SingleNearCacheInvalidation;
-import com.hazelcast.map.impl.nearcache.invalidation.UuidFilter;
-import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.query.Predicate;
-import com.hazelcast.spi.EventFilter;
 import com.hazelcast.spi.ExecutionService;
 import com.hazelcast.spi.InternalCompletableFuture;
 import com.hazelcast.spi.NodeEngine;
@@ -64,7 +55,7 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
     protected KeyStateMarker keyStateMarker;
     protected boolean cacheLocalEntries;
     protected boolean invalidateOnChange;
-    protected volatile String invalidationListenerId;
+    protected NearCacheProvider nearCacheProvider;
 
     public NearCachedMapProxyImpl(String name, MapService mapService, NodeEngine nodeEngine, MapConfig mapConfig) {
         super(name, mapService, nodeEngine, mapConfig);
@@ -78,16 +69,17 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
     }
 
     private void initNearCache() {
-        NearCacheProvider nearCacheProvider = mapServiceContext.getNearCacheProvider();
+        nearCacheProvider = mapServiceContext.getNearCacheProvider();
         nearCache = nearCacheProvider.getOrCreateNearCache(name);
         keyStateMarker = getKeyStateMarker();
         cacheLocalEntries = getMapConfig().getNearCacheConfig().isCacheLocalEntries();
 
         invalidateOnChange = nearCache.isInvalidatedOnChange();
         if (invalidateOnChange) {
-            addNearCacheInvalidateListener();
+            nearCacheProvider.listenMapInvalidations(name, nearCache);
         }
     }
+
 
     // this operation returns the object in data format,
     // except when it is retrieved from Near Cache and Near Cache memory format is object
@@ -365,6 +357,15 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
         }
     }
 
+    @Override
+    protected boolean preDestroy() {
+        if (invalidateOnChange) {
+            nearCacheProvider.unlistenMapInvalidations(name);
+        }
+
+        return super.preDestroy();
+    }
+
     protected Object getCachedValue(Data key) {
         Object cached = nearCache.get(key);
         if (cached == null) {
@@ -420,44 +421,5 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
 
     public KeyStateMarker getKeyStateMarker() {
         return ((StaleReadPreventerNearCacheWrapper) nearCache).getKeyStateMarker();
-    }
-
-    private void addNearCacheInvalidateListener() {
-        MapListener listener = new NearCacheInvalidationListener();
-        EventFilter eventFilter = new UuidFilter(getNodeEngine().getLocalMember().getUuid());
-
-        invalidationListenerId = mapServiceContext.addEventListener(listener, eventFilter, name);
-    }
-
-    private final class NearCacheInvalidationListener implements InvalidationListener, InvalidationHandler {
-
-        private NearCacheInvalidationListener() {
-        }
-
-        @Override
-        public void onInvalidate(Invalidation invalidation) {
-            assert invalidation != null;
-
-            invalidation.consumedBy(this);
-        }
-
-        @Override
-        public void handle(BatchNearCacheInvalidation batch) {
-            List<Invalidation> invalidations = batch.getInvalidations();
-
-            for (Invalidation invalidation : invalidations) {
-                invalidation.consumedBy(this);
-            }
-        }
-
-        @Override
-        public void handle(SingleNearCacheInvalidation invalidation) {
-            nearCache.remove(invalidation.getKey());
-        }
-
-        @Override
-        public void handle(ClearNearCacheInvalidation invalidation) {
-            nearCache.clear();
-        }
     }
 }

@@ -408,7 +408,7 @@ public class ClientReplicatedMapProxy<K, V> extends ClientProxy implements Repli
             }
             NearCacheContext nearCacheContext = new NearCacheContext(
                     context.getSerializationService(),
-                    context.getExecutionService());
+                    context.getExecutionService(), null);
 
             nearCache = context.getNearCacheManager().getOrCreateNearCache(name, nearCacheConfig, nearCacheContext);
             if (nearCache.isInvalidatedOnChange()) {

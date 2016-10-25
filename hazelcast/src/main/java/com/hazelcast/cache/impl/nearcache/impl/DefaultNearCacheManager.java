@@ -20,6 +20,7 @@ import com.hazelcast.cache.impl.nearcache.NearCache;
 import com.hazelcast.cache.impl.nearcache.NearCacheContext;
 import com.hazelcast.cache.impl.nearcache.NearCacheManager;
 import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.map.impl.nearcache.invalidation.PartitionedNearCache;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -30,6 +31,9 @@ public class DefaultNearCacheManager implements NearCacheManager {
 
     private final ConcurrentMap<String, NearCache> nearCacheMap = new ConcurrentHashMap<String, NearCache>();
     private final Object mutex = new Object();
+
+    public DefaultNearCacheManager() {
+    }
 
     @Override
     public <K, V> NearCache<K, V> getNearCache(String name) {
@@ -57,7 +61,12 @@ public class DefaultNearCacheManager implements NearCacheManager {
         if (nearCacheContext.getNearCacheManager() == null) {
             nearCacheContext.setNearCacheManager(this);
         }
-        return new DefaultNearCache<K, V>(name, nearCacheConfig, nearCacheContext);
+
+        if (nearCacheConfig.isConsistent()) {
+            return new PartitionedNearCache<K, V>(name, nearCacheConfig, nearCacheContext);
+        } else {
+            return new DefaultNearCache<K, V>(name, nearCacheConfig, nearCacheContext);
+        }
     }
 
     @Override

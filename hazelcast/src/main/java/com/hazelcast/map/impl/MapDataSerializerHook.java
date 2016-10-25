@@ -47,6 +47,8 @@ import com.hazelcast.map.impl.operation.EvictOperation;
 import com.hazelcast.map.impl.operation.GetAllOperation;
 import com.hazelcast.map.impl.operation.GetEntryViewOperation;
 import com.hazelcast.map.impl.operation.GetOperation;
+import com.hazelcast.map.impl.operation.InvalidationStateOperation;
+import com.hazelcast.map.impl.operation.InvalidationStateOperationFactory;
 import com.hazelcast.map.impl.operation.IsEmptyOperationFactory;
 import com.hazelcast.map.impl.operation.LoadAllOperation;
 import com.hazelcast.map.impl.operation.LoadMapOperation;
@@ -242,8 +244,10 @@ public final class MapDataSerializerHook implements DataSerializerHook {
     public static final int UUID_FILTER = 109;
     public static final int CLEAR_NEAR_CACHE_INVALIDATION = 110;
     public static final int MAP_TRANSACTION_LOG_RECORD = 111;
+    public static final int INVALIDATION_STATE = 112;
+    public static final int INVALIDATION_STATE_FACTORY = 113;
 
-    private static final int LEN = MAP_TRANSACTION_LOG_RECORD + 1;
+    private static final int LEN = INVALIDATION_STATE_FACTORY + 1;
 
     @Override
     public int getFactoryId() {
@@ -809,7 +813,18 @@ public final class MapDataSerializerHook implements DataSerializerHook {
                 return new MapTransactionLogRecord();
             }
         };
-
+        constructors[INVALIDATION_STATE] = new ConstructorFunction<Integer, IdentifiedDataSerializable>() {
+            @Override
+            public IdentifiedDataSerializable createNew(Integer arg) {
+                return new InvalidationStateOperation();
+            }
+        };
+        constructors[INVALIDATION_STATE_FACTORY] = new ConstructorFunction<Integer, IdentifiedDataSerializable>() {
+            @Override
+            public IdentifiedDataSerializable createNew(Integer arg) {
+                return new InvalidationStateOperationFactory();
+            }
+        };
         return new ArrayDataSerializableFactory(constructors);
     }
 }

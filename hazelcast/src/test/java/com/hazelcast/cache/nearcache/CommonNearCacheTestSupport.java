@@ -6,7 +6,9 @@ import com.hazelcast.cache.impl.nearcache.impl.store.NearCacheDataRecordStore;
 import com.hazelcast.cache.impl.nearcache.impl.store.NearCacheObjectRecordStore;
 import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.ICompletableFuture;
+import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
 import com.hazelcast.spi.ExecutionService;
 import com.hazelcast.spi.TaskScheduler;
@@ -14,6 +16,7 @@ import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.util.executor.ExecutorType;
 import com.hazelcast.util.executor.ManagedExecutorService;
 import org.junit.After;
+import org.junit.Before;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +34,14 @@ public abstract class CommonNearCacheTestSupport extends HazelcastTestSupport {
 
     protected List<ScheduledExecutorService> scheduledExecutorServices = new ArrayList<ScheduledExecutorService>();
 
+    private InternalPartitionService partitionService;
+
+    @Before
+    public void setUp() throws Exception {
+        HazelcastInstance instance = createHazelcastInstance();
+        partitionService = getPartitionService(instance);
+    }
+
     @After
     public final void shutdownExecutorServices() {
         for (ScheduledExecutorService scheduledExecutorService : scheduledExecutorServices) {
@@ -46,7 +57,7 @@ public abstract class CommonNearCacheTestSupport extends HazelcastTestSupport {
     }
 
     protected NearCacheContext createNearCacheContext() {
-        return new NearCacheContext(new DefaultSerializationServiceBuilder().build(), createExecutionService());
+        return new NearCacheContext(new DefaultSerializationServiceBuilder().build(), createExecutionService(), partitionService);
     }
 
     protected ExecutionService createExecutionService() {

@@ -195,8 +195,8 @@ abstract class AbstractClientInternalCacheProxy<K, V> extends AbstractClientCach
             NearCacheContext nearCacheContext = new NearCacheContext(
                     clientContext.getSerializationService(),
                     clientContext.getExecutionService(),
-                    nearCacheManager
-            );
+                    nearCacheManager,
+                    null);
             nearCache = nearCacheManager.getOrCreateNearCache(nameWithPrefix, nearCacheConfig, nearCacheContext);
             registerInvalidationListener();
         }

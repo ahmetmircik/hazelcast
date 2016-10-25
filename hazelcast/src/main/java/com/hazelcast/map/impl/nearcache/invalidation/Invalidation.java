@@ -26,6 +26,7 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 
 import java.io.IOException;
 
+import static com.hazelcast.core.EntryEventType.INVALIDATION;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 
 /**
@@ -33,22 +34,26 @@ import static com.hazelcast.util.Preconditions.checkNotNull;
  */
 public abstract class Invalidation implements IMapEvent, IdentifiedDataSerializable {
 
-    protected String mapName;
+    private String mapName;
+    private String sourceUuid;
 
     public Invalidation() {
     }
 
-    public Invalidation(String mapName) {
+    public Invalidation(String mapName, String sourceUuid) {
         this.mapName = checkNotNull(mapName, "mapName cannot be null");
+        this.sourceUuid = checkNotNull(sourceUuid, "sourceUuid cannot be null");
+    }
+
+    public abstract void consumedBy(InvalidationHandler invalidationHandler);
+
+    public final String getSourceUuid() {
+        return sourceUuid;
     }
 
     @Override
     public String getName() {
         return mapName;
-    }
-
-    public String getSourceUuid() {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -58,23 +63,28 @@ public abstract class Invalidation implements IMapEvent, IdentifiedDataSerializa
 
     @Override
     public EntryEventType getEventType() {
-        return EntryEventType.INVALIDATION;
+        return INVALIDATION;
     }
-
-    public abstract void consumedBy(InvalidationHandler invalidationHandler);
 
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
         out.writeUTF(mapName);
+        out.writeUTF(sourceUuid);
     }
 
     @Override
     public void readData(ObjectDataInput in) throws IOException {
         mapName = in.readUTF();
+        sourceUuid = in.readUTF();
     }
 
     @Override
     public int getFactoryId() {
         return MapDataSerializerHook.F_ID;
+    }
+
+    @Override
+    public String toString() {
+        return "mapName='" + mapName + "', sourceUuid='" + sourceUuid;
     }
 }

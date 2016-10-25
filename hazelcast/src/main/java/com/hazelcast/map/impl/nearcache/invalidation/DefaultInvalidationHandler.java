@@ -16,32 +16,25 @@
 
 package com.hazelcast.map.impl.nearcache.invalidation;
 
-import static com.hazelcast.map.impl.MapDataSerializerHook.CLEAR_NEAR_CACHE_INVALIDATION;
+import com.hazelcast.cache.impl.nearcache.NearCache;
 
-/**
- * Represents a clearing invalidation event.
- */
-public class ClearNearCacheInvalidation extends SequencedInvalidation {
+import static com.hazelcast.util.Preconditions.checkNotNull;
 
-    public ClearNearCacheInvalidation() {
-    }
+class DefaultInvalidationHandler extends InvalidationHandler {
 
-    public ClearNearCacheInvalidation(String mapName, String sourceUuid, int partitionId, long sequence) {
-        super(mapName, sourceUuid, partitionId, sequence);
-    }
+    private final NearCache nearCache;
 
-    @Override
-    public void consumedBy(InvalidationHandler invalidationHandler) {
-        invalidationHandler.handle(this);
+    DefaultInvalidationHandler(NearCache nearCache) {
+        this.nearCache = checkNotNull(nearCache, "nearCache cannot be null");
     }
 
     @Override
-    public String toString() {
-        return "ClearNearCacheInvalidation{" + super.toString() + '}';
+    public void handle(SingleNearCacheInvalidation invalidation) {
+        nearCache.remove(invalidation.getKey());
     }
 
     @Override
-    public int getId() {
-        return CLEAR_NEAR_CACHE_INVALIDATION;
+    public void handle(ClearNearCacheInvalidation invalidation) {
+        nearCache.clear();
     }
 }

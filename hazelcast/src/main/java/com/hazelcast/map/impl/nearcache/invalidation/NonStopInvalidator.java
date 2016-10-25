@@ -16,8 +16,8 @@
 
 package com.hazelcast.map.impl.nearcache.invalidation;
 
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.spi.EventRegistration;
-import com.hazelcast.spi.NodeEngine;
 
 import java.util.Collection;
 
@@ -28,8 +28,8 @@ import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
  */
 public class NonStopInvalidator extends AbstractNearCacheInvalidator {
 
-    public NonStopInvalidator(NodeEngine nodeEngine) {
-        super(nodeEngine);
+    public NonStopInvalidator(MapServiceContext mapServiceContext) {
+        super(mapServiceContext);
     }
 
     @Override

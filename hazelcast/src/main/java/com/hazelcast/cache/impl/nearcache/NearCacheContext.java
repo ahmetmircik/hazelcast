@@ -16,6 +16,7 @@
 
 package com.hazelcast.cache.impl.nearcache;
 
+import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.spi.ExecutionService;
 import com.hazelcast.spi.serialization.SerializationService;
 
@@ -27,30 +28,32 @@ public class NearCacheContext {
 
     private final SerializationService serializationService;
     private final ExecutionService executionService;
+    private final InternalPartitionService partitionService;
     private final ClassLoader classLoader;
 
     private NearCacheManager nearCacheManager;
 
     public NearCacheContext(SerializationService serializationService,
-                            ExecutionService executionService) {
-        this(serializationService, executionService, null, null);
+                            ExecutionService executionService, InternalPartitionService partitionService) {
+        this(serializationService, executionService, null, partitionService);
     }
 
     public NearCacheContext(SerializationService serializationService,
                             ExecutionService executionService,
-                            NearCacheManager nearCacheManager) {
-        this(serializationService, executionService, nearCacheManager, null);
+                            NearCacheManager nearCacheManager, InternalPartitionService partitionService) {
+        this(serializationService, executionService, partitionService, nearCacheManager, null);
     }
 
     public NearCacheContext(SerializationService serializationService,
                             ExecutionService executionService,
-                            NearCacheManager nearCacheManager,
+                            InternalPartitionService partitionService, NearCacheManager nearCacheManager,
                             ClassLoader classLoader) {
+        assert partitionService != null;
         this.serializationService = serializationService;
         this.executionService = executionService;
-        this.classLoader = classLoader;
-
+        this.partitionService = partitionService;
         this.nearCacheManager = nearCacheManager;
+        this.classLoader = classLoader;
     }
 
     public NearCacheManager getNearCacheManager() {
@@ -71,5 +74,9 @@ public class NearCacheContext {
 
     public ClassLoader getClassLoader() {
         return classLoader;
+    }
+
+    public InternalPartitionService getPartitionService() {
+        return partitionService;
     }
 }

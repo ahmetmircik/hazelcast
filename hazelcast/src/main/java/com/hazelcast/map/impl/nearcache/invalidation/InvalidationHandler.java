@@ -16,29 +16,36 @@
 
 package com.hazelcast.map.impl.nearcache.invalidation;
 
+import java.util.List;
+
 /**
  * Handlers for various {@link Invalidation} implementations. An implementation of visitor pattern.
  */
-public interface InvalidationHandler {
+public abstract class InvalidationHandler {
 
     /**
      * Handles a single key invalidation
      *
      * @param invalidation invalidation event
      */
-    void handle(SingleNearCacheInvalidation invalidation);
+    public abstract void handle(SingleNearCacheInvalidation invalidation);
 
     /**
      * Handles batch invalidations
      *
-     * @param invalidation invalidation event
+     * @param batch batch of invalidation events
      */
-    void handle(BatchNearCacheInvalidation invalidation);
+    public void handle(BatchNearCacheInvalidation batch) {
+        List<Invalidation> invalidations = batch.getInvalidations();
+        for (Invalidation invalidation : invalidations) {
+            invalidation.consumedBy(this);
+        }
+    }
 
     /**
      * Handles clear near-cache invalidation
      *
      * @param invalidation invalidation event
      */
-    void handle(ClearNearCacheInvalidation invalidation);
+    public abstract void handle(ClearNearCacheInvalidation invalidation);
 }

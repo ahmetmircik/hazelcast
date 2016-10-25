@@ -28,19 +28,16 @@ import static com.hazelcast.util.Preconditions.checkNotNull;
 /**
  * Represents a single key invalidation.
  */
-public class SingleNearCacheInvalidation extends Invalidation {
+public class SingleNearCacheInvalidation extends SequencedInvalidation {
 
     private Data key;
-    private String sourceUuid;
 
     public SingleNearCacheInvalidation() {
     }
 
-    public SingleNearCacheInvalidation(Data key, String mapName, String sourceUuid) {
-        super(mapName);
-
+    public SingleNearCacheInvalidation(Data key, String mapName, String sourceUuid, int partitionId, long sequence) {
+        super(mapName, sourceUuid, partitionId, sequence);
         this.key = checkNotNull(key, "key cannot be null");
-        this.sourceUuid = checkNotNull(sourceUuid, "sourceUuid cannot be null");
     }
 
     public Data getKey() {
@@ -48,37 +45,28 @@ public class SingleNearCacheInvalidation extends Invalidation {
     }
 
     @Override
-    public String getSourceUuid() {
-        return sourceUuid;
-    }
-
-    @Override
     public void consumedBy(InvalidationHandler invalidationHandler) {
         invalidationHandler.handle(this);
     }
 
+
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
         super.writeData(out);
-
-        out.writeUTF(sourceUuid);
         out.writeData(key);
     }
 
     @Override
     public void readData(ObjectDataInput in) throws IOException {
         super.readData(in);
-
-        sourceUuid = in.readUTF();
         key = in.readData();
     }
 
     @Override
     public String toString() {
         return "SingleNearCacheInvalidation{"
-                + "mapName='" + mapName + '\''
-                + ", sourceUuid='" + sourceUuid + '\''
-                + ", key='" + key + '\''
+                + "key=" + key
+                + ", " + super.toString()
                 + '}';
     }
 

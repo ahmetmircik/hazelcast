@@ -85,7 +85,7 @@ public class MapAddNearCacheEntryListenerMessageTask
         return new EventListenerFilter(parameters.listenerFlags, new UuidFilter(endpoint.getUuid()));
     }
 
-    private final class ClientNearCacheInvalidationListenerImpl implements InvalidationListener, InvalidationHandler {
+    private final class ClientNearCacheInvalidationListenerImpl extends InvalidationHandler implements InvalidationListener {
 
         private ClientNearCacheInvalidationListenerImpl() {
         }

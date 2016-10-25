@@ -91,6 +91,8 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     private boolean invalidateOnChange = true;
     private boolean cacheLocalEntries;
+    // TODO
+    private boolean consistent = true;
 
     private NearCacheConfigReadOnly readOnly;
 
@@ -230,12 +232,12 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     /**
      * Returns the eviction policy for the Near Cache.
-     *
+     * <p>
      * Valid values are:
      * NONE (no extra eviction, time-to-live-seconds may still apply)
      * LRU  (Least Recently Used)
      * LFU  (Least Frequently Used)
-     *
+     * <p>
      * NONE is the default.
      * Regardless of the eviction policy used, time-to-live-seconds will still apply.
      *
@@ -248,12 +250,12 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     /**
      * Sets the eviction policy.
-     *
+     * <p>
      * Valid values are:
      * NONE (no extra eviction, time-to-live-seconds may still apply)
      * LRU  (Least Recently Used)
      * LFU  (Least Frequently Used)
-     *
+     * <p>
      * NONE is the default.
      * Regardless of the eviction policy used, time-to-live-seconds will still apply.
      *
@@ -298,7 +300,7 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     /**
      * True to evict the cached entries if the entries are changed (updated or removed).
-     *
+     * <p>
      * When true, the member listens for cluster-wide changes on the entries and invalidates
      * them on change. Changes done on the local member always invalidate the cache.
      *
@@ -310,7 +312,7 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     /**
      * True to evict the cached entries if the entries are changed (updated or removed).
-     *
+     * <p>
      * If set to true, the member will listen for cluster-wide changes on the entries and invalidate
      * them on change. Changes done on the local member always invalidate the cache.
      *
@@ -405,7 +407,7 @@ public class NearCacheConfig implements DataSerializable, Serializable {
 
     /**
      * Sets the eviction configuration.
-     *
+     * <p>
      * Valid values are:
      * NONE (no extra eviction, time-to-live-seconds may still apply),
      * LRU  (Least Recently Used),
@@ -418,6 +420,14 @@ public class NearCacheConfig implements DataSerializable, Serializable {
     public NearCacheConfig setEvictionConfig(EvictionConfig evictionConfig) {
         this.evictionConfig = checkNotNull(evictionConfig, "EvictionConfig cannot be null!");
         return this;
+    }
+
+    public boolean isConsistent() {
+        return consistent;
+    }
+
+    public void setConsistent(boolean consistent) {
+        this.consistent = consistent;
     }
 
     @Override

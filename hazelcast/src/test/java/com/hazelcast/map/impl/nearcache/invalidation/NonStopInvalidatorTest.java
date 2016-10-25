@@ -1,7 +1,7 @@
 package com.hazelcast.map.impl.nearcache.invalidation;
 
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.RequireAssertEnabled;
 import com.hazelcast.test.annotation.ParallelTest;
@@ -24,7 +24,7 @@ public class NonStopInvalidatorTest {
     public void setUp() {
         key = mock(Data.class);
 
-        NodeEngine nodeEngine = mock(NodeEngine.class);
+        MapServiceContext nodeEngine = mock(MapServiceContext.class);
         invalidator = new NonStopInvalidator(nodeEngine);
     }
 

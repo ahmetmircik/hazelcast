@@ -69,4 +69,7 @@ public interface NearCacheInvalidator {
      * @see ManagedService#shutdown(boolean)
      */
     void shutdown();
+
+    InvalidationObserver getObserver();
+
 }
