@@ -31,7 +31,7 @@ public class NonStopInvalidator extends Invalidator {
     }
 
     @Override
-    protected void invalidateInternal(Invalidation invalidation, int orderKey) {
-        sendImmediately(invalidation, orderKey);
+    protected void invalidateInternal(Invalidation invalidation, int partitionId) {
+        sendImmediately(invalidation, partitionId);
     }
 }

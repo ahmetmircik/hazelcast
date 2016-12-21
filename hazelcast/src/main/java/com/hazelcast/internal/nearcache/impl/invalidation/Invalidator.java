@@ -59,7 +59,7 @@ public abstract class Invalidator {
         this.metaDataGenerator = new MetaDataGenerator(partitionCount);
     }
 
-    protected abstract void invalidateInternal(Invalidation invalidation, int orderKey);
+    protected abstract void invalidateInternal(Invalidation invalidation, int partitionId);
 
     /**
      * Invalidates supplied key from near-caches of supplied map name.
