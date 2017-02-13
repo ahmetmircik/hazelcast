@@ -16,26 +16,23 @@
 
 package com.hazelcast.client.impl.protocol.task.cache;
 
-import com.hazelcast.cache.impl.CacheOperationProvider;
 import com.hazelcast.cache.impl.CacheService;
+import com.hazelcast.cache.impl.operation.CacheGetAllOperation;
 import com.hazelcast.cache.impl.operation.CacheGetAllOperationFactory;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.codec.CacheGetAllCodec;
+import com.hazelcast.client.impl.protocol.task.AbstractPartitionMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.CachePermission;
-import com.hazelcast.spi.OperationFactory;
+import com.hazelcast.spi.Operation;
+import com.hazelcast.util.collection.InflatableSet;
 
 import javax.cache.expiry.ExpiryPolicy;
 import java.security.Permission;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * This client request  specifically calls {@link CacheGetAllOperationFactory} on the server side.
@@ -43,10 +40,18 @@ import java.util.Set;
  * @see CacheGetAllOperationFactory
  */
 public class CacheGetAllMessageTask
-        extends AbstractCacheAllPartitionsTask<CacheGetAllCodec.RequestParameters> {
+        extends AbstractPartitionMessageTask<CacheGetAllCodec.RequestParameters> {
 
     public CacheGetAllMessageTask(ClientMessage clientMessage, Node node, Connection connection) {
         super(clientMessage, node, connection);
+    }
+
+    @Override
+    protected Operation prepareOperation() {
+        CacheService service = getService(getServiceName());
+        ExpiryPolicy expiryPolicy = (ExpiryPolicy) service.toObject(parameters.expiryPolicy);
+        InflatableSet<Data> set = InflatableSet.newBuilder(parameters.keys).build();
+        return new CacheGetAllOperation(parameters.name, set, expiryPolicy);
     }
 
     @Override
@@ -56,26 +61,12 @@ public class CacheGetAllMessageTask
 
     @Override
     protected ClientMessage encodeResponse(Object response) {
-        return CacheGetAllCodec.encodeResponse((List<Map.Entry<Data, Data>>) response);
+        return CacheGetAllCodec.encodeResponse(((MapEntries) response).entries());
     }
 
     @Override
-    protected OperationFactory createOperationFactory() {
-        CacheOperationProvider operationProvider = getOperationProvider(parameters.name);
-        CacheService service = getService(getServiceName());
-        ExpiryPolicy expiryPolicy = (ExpiryPolicy) service.toObject(parameters.expiryPolicy);
-        Set<Data> keys = new HashSet<Data>(parameters.keys);
-        return operationProvider.createGetAllOperationFactory(keys, expiryPolicy);
-    }
-
-    @Override
-    protected Object reduce(Map<Integer, Object> map) {
-        List<Map.Entry<Data, Data>> reducedMap = new ArrayList<Map.Entry<Data, Data>>(map.size());
-        for (Map.Entry<Integer, Object> entry : map.entrySet()) {
-            MapEntries mapEntries = (MapEntries) nodeEngine.toObject(entry.getValue());
-            mapEntries.putAllToList(reducedMap);
-        }
-        return reducedMap;
+    public String getServiceName() {
+        return CacheService.SERVICE_NAME;
     }
 
     @Override

@@ -35,14 +35,13 @@ import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.ExceptionUtil;
+import com.hazelcast.util.collection.Int2ObjectHashMap;
 import com.hazelcast.util.executor.CompletedFuture;
 
 import javax.cache.CacheException;
 import javax.cache.expiry.ExpiryPolicy;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -281,45 +280,50 @@ abstract class AbstractClientCacheProxy<K, V> extends AbstractClientInternalCach
             return emptyMap();
         }
 
-        final Set<Data> keySet = new HashSet<Data>(keys.size());
-        for (K key : keys) {
-            final Data k = toData(key);
-            keySet.add(k);
-        }
-
         Map<K, V> result = createHashMap(keys.size());
-        populateResultFromNearCache(keySet, result);
+        Map<Data, Long> reservations = createHashMap(keys.size());
 
-        if (keySet.isEmpty()) {
+        Map<Integer, List<Data>> partitionToKeys = partitionKeys(keys, result, reservations);
+
+        if (partitionToKeys.isEmpty()) {
             return result;
         }
 
-        List<Map.Entry<Data, Data>> entries;
-        Map<Data, Long> reservations = createHashMap(keySet.size());
+        List<Future<ClientMessage>> futures = new ArrayList<Future<ClientMessage>>(partitionToKeys.size());
+        List<CacheGetAllCodec.ResponseParameters> responses
+                = new ArrayList<CacheGetAllCodec.ResponseParameters>(partitionToKeys.size());
+
+        Data expiryPolicyData = toData(expiryPolicy);
+        for (Map.Entry<Integer, List<Data>> entry : partitionToKeys.entrySet()) {
+            int partitionId = entry.getKey();
+            List<Data> keyList = entry.getValue();
+            ClientMessage request = CacheGetAllCodec.encodeRequest(nameWithPrefix, keyList, expiryPolicyData);
+            futures.add(new ClientInvocation(getClient(), request, partitionId).invoke());
+        }
+
         try {
+            for (Future<ClientMessage> future : futures) {
+                try {
+                    ClientMessage response = future.get();
+                    CacheGetAllCodec.ResponseParameters resultParameters = CacheGetAllCodec.decodeResponse(response);
 
-            for (Data key : keySet) {
-                long reservationId = tryReserveForUpdate(key);
-                if (reservationId != NOT_RESERVED) {
-                    reservations.put(key, reservationId);
-                }
-            }
+                    for (Map.Entry<Data, Data> entry : resultParameters.response) {
+                        Data valueData = entry.getValue();
+                        final V value = toObject(valueData);
+                        Data keyData = entry.getKey();
+                        final K key = toObject(keyData);
+                        result.put(key, value);
 
-            Data expiryPolicyData = toData(expiryPolicy);
-            ClientMessage request = CacheGetAllCodec.encodeRequest(nameWithPrefix, keySet, expiryPolicyData);
-            ClientMessage responseMessage = invoke(request);
-            entries = CacheGetAllCodec.decodeResponse(responseMessage).response;
-            for (Map.Entry<Data, Data> dataEntry : entries) {
-                Data keyData = dataEntry.getKey();
-                Data valueData = dataEntry.getValue();
-                K key = toObject(keyData);
-                V value = toObject(valueData);
-                result.put(key, value);
+                        Long reservationId = reservations.get(keyData);
+                        if (reservationId != null) {
+                            storeInNearCache(keyData, valueData, value, reservationId, false);
+                            reservations.remove(keyData);
+                        }
+                    }
 
-                Long reservationId = reservations.get(keyData);
-                if (reservationId != null) {
-                    storeInNearCache(keyData, valueData, value, reservationId, false);
-                    reservations.remove(keyData);
+                    responses.add(resultParameters);
+                } catch (Exception e) {
+                    throw rethrow(e);
                 }
             }
         } finally {
@@ -327,28 +331,37 @@ abstract class AbstractClientCacheProxy<K, V> extends AbstractClientInternalCach
         }
 
         if (statisticsEnabled) {
-            statistics.increaseCacheHits(entries.size());
+            statistics.increaseCacheHits(result.size());
             statistics.addGetTimeNanos(System.nanoTime() - start);
         }
 
         return result;
     }
 
-    private void populateResultFromNearCache(Set<Data> keySet, Map<K, V> result) {
-        if (nearCache == null) {
-            return;
+    protected Map<Integer, List<Data>> partitionKeys(Set<? extends K> keys, Map<K, V> result, Map<Data, Long> reservations) {
+        Map<Integer, List<Data>> partitionToKeys = new Int2ObjectHashMap<List<Data>>();
+        ClientPartitionService partitionService = getContext().getPartitionService();
+        for (K key : keys) {
+            Data keyData = toData(key);
+            Object cachedValue = getCachedValue(keyData, true);
+            if (cachedValue != NOT_CACHED) {
+                result.put(key, (V) cachedValue);
+            } else {
+                int partitionId = partitionService.getPartitionId(keyData);
+                List<Data> keyList = partitionToKeys.get(partitionId);
+                if (keyList == null) {
+                    keyList = new ArrayList<Data>();
+                    partitionToKeys.put(partitionId, keyList);
+                }
+                keyList.add(keyData);
 
-        }
-
-        Iterator<Data> iterator = keySet.iterator();
-        while (iterator.hasNext()) {
-            Data key = iterator.next();
-            Object cached = getCachedValue(key, true);
-            if (cached != NOT_CACHED) {
-                result.put((K) toObject(key), (V) cached);
-                iterator.remove();
+                long reservationId = tryReserveForUpdate(keyData);
+                if (reservationId != NOT_RESERVED) {
+                    reservations.put(keyData, reservationId);
+                }
             }
         }
+        return partitionToKeys;
     }
 
     @Override
