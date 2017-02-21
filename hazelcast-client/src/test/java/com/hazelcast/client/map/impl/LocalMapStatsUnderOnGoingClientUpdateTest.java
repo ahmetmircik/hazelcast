@@ -26,7 +26,9 @@ import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -41,10 +43,17 @@ import static org.junit.Assert.assertNotNull;
 @Category({QuickTest.class, ParallelTest.class})
 public class LocalMapStatsUnderOnGoingClientUpdateTest extends HazelcastTestSupport {
 
-    private TestHazelcastFactory factory = new TestHazelcastFactory();
-    private HazelcastInstance member = factory.newHazelcastInstance();
-    private HazelcastInstance client = factory.newHazelcastClient();
+    private TestHazelcastFactory factory;
+    private HazelcastInstance member;
+    private HazelcastInstance client;
     private String mapName = "test";
+
+    @Before
+    public void setUp() throws Exception {
+        factory = new TestHazelcastFactory();
+        member = factory.newHazelcastInstance();
+        client = factory.newHazelcastClient();
+    }
 
     @After
     public void tearDown() throws Exception {
@@ -52,6 +61,7 @@ public class LocalMapStatsUnderOnGoingClientUpdateTest extends HazelcastTestSupp
     }
 
     @Test
+    @Repeat(100)
     public void stats_generated_when_member_restarted_under_ongoing_client_update() throws Exception {
         IMap map = client.getMap(mapName);
 
