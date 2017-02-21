@@ -41,6 +41,7 @@ import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParametersRunnerFactory;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -966,7 +967,7 @@ public class ClientMapNearCacheTest extends NearCacheTestSupport {
         });
     }
 
-    @Test
+    @Test @Repeat(100)
     public void receives_one_clearEvent_after_mapClear_call_from_member() {
         // populate Near Cache
         IMap<Integer, Integer> clientMap = getNearCachedMapFromClient(newNearCacheConfig());
