@@ -62,7 +62,7 @@ public class ChangeClusterStateOperation extends Operation implements AllowedDur
     public void run() throws Exception {
         ClusterServiceImpl service = getService();
         ClusterStateManager clusterStateManager = service.getClusterStateManager();
-        getLogger().info("Changing cluster state state to " + stateChange + ", Initiator: " + initiator
+        getLogger().info("Changing cluster state to " + stateChange + ", Initiator: " + initiator
                 + " transient: " + isTransient);
         clusterStateManager.commitClusterState(stateChange, initiator, txnId, isTransient);
     }
