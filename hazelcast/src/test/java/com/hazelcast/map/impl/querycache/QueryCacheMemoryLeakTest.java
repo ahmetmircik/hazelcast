@@ -65,7 +65,7 @@ public class QueryCacheMemoryLeakTest extends HazelcastTestSupport {
             pool.submit(runnable);
         }
 
-        pool.awaitTermination(60, TimeUnit.SECONDS);
+        pool.awaitTermination(120, TimeUnit.SECONDS);
 
         SubscriberContext subscriberContext = getSubscriberContext(node);
         QueryCacheEndToEndProvider provider = subscriberContext.getEndToEndQueryCacheProvider();
