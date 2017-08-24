@@ -1463,7 +1463,7 @@ public class ClientMapProxy<K, V> extends ClientProxy implements IMap<K, V>, Eve
                                                    IMap map) {
         QueryCacheRequest request = newQueryCacheRequest()
                 .withUserGivenCacheName(name)
-                .withCacheName(UuidUtil.newUnsecureUuidString())
+                .withCacheUuid(UuidUtil.newUnsecureUuidString())
                 .withListener(listener)
                 .withPredicate(predicate)
                 .withIncludeValue(includeValue)

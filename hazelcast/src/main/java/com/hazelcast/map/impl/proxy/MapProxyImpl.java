@@ -985,7 +985,7 @@ public class MapProxyImpl<K, V> extends MapProxySupport<K, V> implements EventJo
 
         QueryCacheRequest request = newQueryCacheRequest()
                 .forMap(map)
-                .withCacheName(UuidUtil.newUnsecureUuidString())
+                .withCacheUuid(UuidUtil.newUnsecureUuidString())
                 .withUserGivenCacheName(name)
                 .withListener(listener)
                 .withPredicate(predicate)

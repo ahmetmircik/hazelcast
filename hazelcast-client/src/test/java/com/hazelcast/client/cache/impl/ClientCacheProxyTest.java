@@ -44,7 +44,7 @@ public class ClientCacheProxyTest extends HazelcastTestSupport {
     @SuppressWarnings("deprecation")
     public void isCacheOnUpdate_prints_warning_message_for_deprecated_policy_CACHE() {
         NearCacheConfig nearCacheConfig = new NearCacheConfig().setLocalUpdatePolicy(CACHE);
-        NearCachedClientCacheProxy.isCacheOnUpdate(nearCacheConfig, "cacheName", logger);
+        NearCachedClientCacheProxy.isCacheOnUpdate(nearCacheConfig, "cacheUuid", logger);
 
         assertNotNull(logger.message);
     }
@@ -52,7 +52,7 @@ public class ClientCacheProxyTest extends HazelcastTestSupport {
     @Test
     public void isCacheOnUpdate_not_prints_warning_message_for_policy_CACHE_ON_UPDATE() {
         NearCacheConfig nearCacheConfig = new NearCacheConfig().setLocalUpdatePolicy(CACHE_ON_UPDATE);
-        NearCachedClientCacheProxy.isCacheOnUpdate(nearCacheConfig, "cacheName", logger);
+        NearCachedClientCacheProxy.isCacheOnUpdate(nearCacheConfig, "cacheUuid", logger);
 
         assertNull(logger.message);
     }

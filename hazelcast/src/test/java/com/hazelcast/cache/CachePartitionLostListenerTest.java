@@ -180,11 +180,11 @@ public class CachePartitionLostListenerTest extends AbstractPartitionLostListene
 
     @Test
     public void test_cachePartitionEventData_serialization() throws IOException {
-        CachePartitionEventData cachePartitionEventData = new CachePartitionEventData("cacheName", 1, null);
+        CachePartitionEventData cachePartitionEventData = new CachePartitionEventData("cacheUuid", 1, null);
         ObjectDataOutput output = mock(ObjectDataOutput.class);
         cachePartitionEventData.writeData(output);
 
-        verify(output).writeUTF("cacheName");
+        verify(output).writeUTF("cacheUuid");
         verify(output).writeInt(1);
     }
 
@@ -193,12 +193,12 @@ public class CachePartitionLostListenerTest extends AbstractPartitionLostListene
         CachePartitionEventData cachePartitionEventData = new CachePartitionEventData("", 0, null);
 
         ObjectDataInput input = mock(ObjectDataInput.class);
-        when(input.readUTF()).thenReturn("cacheName");
+        when(input.readUTF()).thenReturn("cacheUuid");
         when(input.readInt()).thenReturn(1);
 
         cachePartitionEventData.readData(input);
 
-        assertEquals("cacheName", cachePartitionEventData.getName());
+        assertEquals("cacheUuid", cachePartitionEventData.getName());
         assertEquals(1, cachePartitionEventData.getPartitionId());
     }
 

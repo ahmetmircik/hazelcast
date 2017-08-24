@@ -84,7 +84,7 @@ public class GetCacheEntryRequest implements ConsoleRequest {
 
     @Override
     public void fromJson(JsonObject json) {
-        cacheName = getString(json, "cacheName");
+        cacheName = getString(json, "cacheUuid");
         type = getString(json, "type");
         key = getString(json, "key");
     }

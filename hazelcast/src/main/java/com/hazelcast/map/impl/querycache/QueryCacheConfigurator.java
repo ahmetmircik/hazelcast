@@ -25,28 +25,28 @@ import com.hazelcast.config.QueryCacheConfig;
 public interface QueryCacheConfigurator {
 
     /**
-     * Returns {@link QueryCacheConfig} for the requested query cache with cacheName.
+     * Returns {@link QueryCacheConfig} for the requested query cache with cacheUuid.
      *
      * @param mapName   underlying IMap name for query cache.
-     * @param cacheName query cache name.
-     * @return {@link QueryCacheConfig} for the requested #cacheName.
+     * @param userGivenCacheName query cache name.
+     * @return {@link QueryCacheConfig} for the requested #cacheUuid.
      */
-    QueryCacheConfig getOrCreateConfiguration(String mapName, String cacheName);
+    QueryCacheConfig getOrCreateConfiguration(String mapName, String userGivenCacheName);
 
     /**
-     * Returns {@link QueryCacheConfig} for the requested query cache with cacheName or null.
+     * Returns {@link QueryCacheConfig} for the requested query cache with cacheUuid or null.
      *
      * @param mapName   underlying IMap name for query cache.
-     * @param cacheName query cache name.
-     * @return {@link QueryCacheConfig} for the requested #cacheName.
+     * @param userGivenCacheName query cache name.
+     * @return {@link QueryCacheConfig} for the requested #cacheUuid.
      */
-    QueryCacheConfig getOrNull(String mapName, String cacheName);
+    QueryCacheConfig getOrNull(String mapName, String userGivenCacheName);
 
     /**
      * Removes corresponding configuration for the supplied cache name.
      *
      * @param mapName   underlying IMap name for query cache.
-     * @param cacheName query cache name.
+     * @param userGivenCacheName query cache name.
      */
-    void removeConfiguration(String mapName, String cacheName);
+    void removeConfiguration(String mapName, String userGivenCacheName);
 }

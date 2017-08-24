@@ -49,7 +49,7 @@ abstract class AbstractInternalQueryCache<K, V> implements InternalQueryCache<K,
 
     protected final boolean includeValue;
     protected final String mapName;
-    protected final String cacheName;
+    protected final String cacheUuid;
     protected final String userGivenCacheName;
     protected final IMap delegate;
     protected final QueryCacheContext context;
@@ -63,8 +63,8 @@ abstract class AbstractInternalQueryCache<K, V> implements InternalQueryCache<K,
      */
     protected String publisherListenerId;
 
-    public AbstractInternalQueryCache(String cacheName, String userGivenCacheName, IMap delegate, QueryCacheContext context) {
-        this.cacheName = cacheName;
+    public AbstractInternalQueryCache(String cacheUuid, String userGivenCacheName, IMap delegate, QueryCacheContext context) {
+        this.cacheUuid = cacheUuid;
         this.userGivenCacheName = userGivenCacheName;
         this.mapName = delegate.getName();
         this.delegate = delegate;
@@ -86,8 +86,8 @@ abstract class AbstractInternalQueryCache<K, V> implements InternalQueryCache<K,
     }
 
     @Override
-    public String getCacheName() {
-        return cacheName;
+    public String getCacheUuid() {
+        return cacheUuid;
     }
 
     protected Predicate getPredicate() {
@@ -103,7 +103,7 @@ abstract class AbstractInternalQueryCache<K, V> implements InternalQueryCache<K,
         return new EvictionListener<Data, QueryCacheRecord>() {
             @Override
             public void onEvict(Data dataKey, QueryCacheRecord record, boolean wasExpired) {
-                EventPublisherHelper.publishEntryEvent(context, mapName, cacheName, dataKey, null, record, EVICTED);
+                EventPublisherHelper.publishEntryEvent(context, mapName, cacheUuid, dataKey, null, record, EVICTED);
             }
         };
     }

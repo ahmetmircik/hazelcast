@@ -207,7 +207,7 @@ public class ConfigXmlGenerator {
         }
         for (EventJournalConfig c : cacheJournalConfigs) {
             gen.open("event-journal", "enabled", c.isEnabled())
-               .node("cacheName", c.getCacheName())
+               .node("cacheUuid", c.getCacheName())
                .node("capacity", c.getCapacity())
                .node("time-to-live-seconds", c.getTimeToLiveSeconds())
                .close();

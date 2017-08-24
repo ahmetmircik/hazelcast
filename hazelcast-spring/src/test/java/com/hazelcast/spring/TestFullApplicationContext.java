@@ -1065,7 +1065,7 @@ public class TestFullApplicationContext extends HazelcastTestSupport {
 
     @Test
     public void testCacheEventJournalConfigIsWellParsed() {
-        final EventJournalConfig journalConfig = config.getCacheEventJournalConfig("cacheName");
+        final EventJournalConfig journalConfig = config.getCacheEventJournalConfig("cacheUuid");
 
         assertTrue(journalConfig.isEnabled());
         assertEquals(123, journalConfig.getCapacity());

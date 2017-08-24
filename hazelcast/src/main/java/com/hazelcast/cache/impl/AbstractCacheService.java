@@ -682,7 +682,7 @@ public abstract class AbstractCacheService implements ICacheService, PreJoinAwar
     }
 
     /**
-     * Registers and {@link com.hazelcast.cache.impl.CacheEventListener} for specified <code>cacheName</code>.
+     * Registers and {@link com.hazelcast.cache.impl.CacheEventListener} for specified <code>cacheUuid</code>.
      *
      * @param name      the name of the cache that {@link com.hazelcast.cache.impl.CacheEventListener} will be registered for
      * @param listener  the {@link com.hazelcast.cache.impl.CacheEventListener} to be registered for specified <code>cache</code>
@@ -703,7 +703,7 @@ public abstract class AbstractCacheService implements ICacheService, PreJoinAwar
     }
 
     /**
-     * Sends an invalidation event for given <code>cacheName</code> with specified <code>key</code>
+     * Sends an invalidation event for given <code>cacheUuid</code> with specified <code>key</code>
      * from mentioned source with <code>sourceUuid</code>.
      *
      * @param name       the name of the cache that invalidation event is sent for

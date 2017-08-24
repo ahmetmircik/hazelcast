@@ -47,23 +47,23 @@ public class DefaultAccumulatorInfoSupplier implements AccumulatorInfoSupplier {
     }
 
     @Override
-    public AccumulatorInfo getAccumulatorInfoOrNull(String mapName, String cacheName) {
+    public AccumulatorInfo getAccumulatorInfoOrNull(String mapName, String cacheUuid) {
         ConcurrentMap<String, AccumulatorInfo> cacheToInfoMap = cacheInfoPerMap.get(mapName);
-        return cacheToInfoMap.get(cacheName);
+        return cacheToInfoMap.get(cacheUuid);
     }
 
     @Override
-    public void putIfAbsent(String mapName, String cacheName, AccumulatorInfo info) {
+    public void putIfAbsent(String mapName, String cacheUuid, AccumulatorInfo info) {
         ConcurrentMap<String, AccumulatorInfo> cacheToInfoMap = getOrPutIfAbsent(cacheInfoPerMap, mapName, INFO_CTOR);
-        cacheToInfoMap.putIfAbsent(cacheName, info);
+        cacheToInfoMap.putIfAbsent(cacheUuid, info);
     }
 
     @Override
-    public void remove(String mapName, String cacheName) {
+    public void remove(String mapName, String cacheUuid) {
         ConcurrentMap<String, AccumulatorInfo> cacheToInfoMap = cacheInfoPerMap.get(mapName);
         if (cacheToInfoMap == null) {
             return;
         }
-        cacheToInfoMap.remove(cacheName);
+        cacheToInfoMap.remove(cacheUuid);
     }
 }

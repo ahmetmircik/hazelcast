@@ -128,7 +128,7 @@ public class EventJournalConfig implements IdentifiedDataSerializable {
     public String toString() {
         return "EventJournalConfig{"
                 + "mapName='" + mapName + '\''
-                + ", cacheName='" + cacheName + '\''
+                + ", cacheUuid='" + cacheName + '\''
                 + ", enabled=" + enabled
                 + ", capacity=" + capacity
                 + ", timeToLiveSeconds=" + timeToLiveSeconds

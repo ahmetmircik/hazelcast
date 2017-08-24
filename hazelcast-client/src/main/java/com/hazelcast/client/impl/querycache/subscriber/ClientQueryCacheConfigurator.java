@@ -40,28 +40,28 @@ public class ClientQueryCacheConfigurator extends AbstractQueryCacheConfigurator
     }
 
     @Override
-    public QueryCacheConfig getOrCreateConfiguration(String mapName, String cacheName) {
-        QueryCacheConfig config = clientConfig.getOrCreateQueryCacheConfig(mapName, cacheName);
+    public QueryCacheConfig getOrCreateConfiguration(String mapName, String userGivenCacheName) {
+        QueryCacheConfig config = clientConfig.getOrCreateQueryCacheConfig(mapName, userGivenCacheName);
 
         setPredicateImpl(config);
-        setEntryListener(mapName, cacheName, config);
+        setEntryListener(mapName, userGivenCacheName, config);
 
         return config;
     }
 
     @Override
-    public QueryCacheConfig getOrNull(String mapName, String cacheName) {
-        return clientConfig.getOrNullQueryCacheConfig(mapName, cacheName);
+    public QueryCacheConfig getOrNull(String mapName, String userGivenCacheName) {
+        return clientConfig.getOrNullQueryCacheConfig(mapName, userGivenCacheName);
     }
 
     @Override
-    public void removeConfiguration(String mapName, String cacheName) {
+    public void removeConfiguration(String mapName, String userGivenCacheName) {
         Map<String, Map<String, QueryCacheConfig>> allQueryCacheConfig = clientConfig.getQueryCacheConfigs();
         Map<String, QueryCacheConfig> mapQueryCacheConfig = allQueryCacheConfig.get(mapName);
         if (mapQueryCacheConfig == null || mapQueryCacheConfig.isEmpty()) {
             return;
         }
-        mapQueryCacheConfig.remove(cacheName);
+        mapQueryCacheConfig.remove(userGivenCacheName);
     }
 
 }

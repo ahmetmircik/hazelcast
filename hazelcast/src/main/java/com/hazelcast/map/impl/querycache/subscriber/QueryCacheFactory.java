@@ -42,12 +42,12 @@ public class QueryCacheFactory {
 
         @Override
         public InternalQueryCache createNew(String ignored) {
-            String cacheName = request.getCacheName();
+            String cacheUuid = request.getCacheUuid();
             String userGivenCacheName = request.getUserGivenCacheName();
             IMap delegate = request.getMap();
             QueryCacheContext context = request.getContext();
 
-            return new DefaultQueryCache(cacheName, userGivenCacheName, delegate, context);
+            return new DefaultQueryCache(cacheUuid, userGivenCacheName, delegate, context);
         }
     }
 
@@ -59,15 +59,15 @@ public class QueryCacheFactory {
 
     public InternalQueryCache create(QueryCacheRequest request) {
         return ConcurrencyUtil.getOrPutIfAbsent(internalQueryCaches,
-                request.getCacheName(), new InternalQueryCacheConstructor(request));
+                request.getCacheUuid(), new InternalQueryCacheConstructor(request));
     }
 
     public boolean remove(InternalQueryCache queryCache) {
-        return internalQueryCaches.remove(queryCache.getCacheName(), queryCache);
+        return internalQueryCaches.remove(queryCache.getCacheUuid(), queryCache);
     }
 
-    public InternalQueryCache getOrNull(String cacheName) {
-        return internalQueryCaches.get(cacheName);
+    public InternalQueryCache getOrNull(String cacheUuid) {
+        return internalQueryCaches.get(cacheUuid);
     }
 
     // only used for testing

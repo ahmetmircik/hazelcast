@@ -67,25 +67,25 @@ public class QueryCacheEndToEndProvider<K, V> {
         return mutexes[hashCode & MASK];
     }
 
-    public InternalQueryCache<K, V> getOrCreateQueryCache(String mapName, String cacheName,
+    public InternalQueryCache<K, V> getOrCreateQueryCache(String mapName, String userGivenCacheName,
                                                           ConstructorFunction<String, InternalQueryCache<K, V>> constructor) {
         ConcurrentMap<String, InternalQueryCache<K, V>> queryCachesOfMap
                 = getOrPutIfAbsent(queryCaches, mapName, constructorFunction);
-        Object mutex = getMutex(cacheName);
+        Object mutex = getMutex(userGivenCacheName);
         synchronized (mutex) {
-            InternalQueryCache<K, V> cache = getOrPutSynchronized(queryCachesOfMap, cacheName, mutex, constructor);
+            InternalQueryCache<K, V> cache = getOrPutSynchronized(queryCachesOfMap, userGivenCacheName, mutex, constructor);
             if (cache == NULL_QUERY_CACHE) {
-                remove(mapName, cacheName);
+                remove(mapName, userGivenCacheName);
                 return null;
             }
             return cache;
         }
     }
 
-    public void remove(String mapName, String cacheName) {
+    public void remove(String mapName, String userGivenCacheName) {
         ConcurrentMap<String, InternalQueryCache<K, V>> queryCachesOfMap = queryCaches.get(mapName);
         if (queryCachesOfMap != null) {
-            queryCachesOfMap.remove(cacheName);
+            queryCachesOfMap.remove(userGivenCacheName);
         }
     }
 

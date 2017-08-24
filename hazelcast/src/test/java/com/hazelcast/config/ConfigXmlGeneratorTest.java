@@ -259,7 +259,7 @@ public class ConfigXmlGeneratorTest {
 
     @Test
     public void testCacheEventJournal() {
-        final String cacheName = "cacheName";
+        final String cacheName = "cacheUuid";
         final EventJournalConfig journalConfig = new EventJournalConfig()
                 .setCacheName(cacheName)
                 .setEnabled(true)

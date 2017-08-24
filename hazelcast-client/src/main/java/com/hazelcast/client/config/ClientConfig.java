@@ -764,10 +764,10 @@ public class ClientConfig {
     /**
      *
      * @param mapName The name of the map for which the query cache config is to be returned.
-     * @param queryCacheName The name of the query cache config.
+     * @param userGivenCacheName The name of the query cache config.
      * @return The query cache config. If the config does not exist, it is created.
      */
-    public QueryCacheConfig getOrCreateQueryCacheConfig(String mapName, String queryCacheName) {
+    public QueryCacheConfig getOrCreateQueryCacheConfig(String mapName, String userGivenCacheName) {
         Map<String, Map<String, QueryCacheConfig>> allQueryCacheConfig = getQueryCacheConfigs();
 
         Map<String, QueryCacheConfig> queryCacheConfigsForMap = lookupByPattern(allQueryCacheConfig, mapName);
@@ -776,10 +776,10 @@ public class ClientConfig {
             allQueryCacheConfig.put(mapName, queryCacheConfigsForMap);
         }
 
-        QueryCacheConfig queryCacheConfig = lookupByPattern(queryCacheConfigsForMap, queryCacheName);
+        QueryCacheConfig queryCacheConfig = lookupByPattern(queryCacheConfigsForMap, userGivenCacheName);
         if (queryCacheConfig == null) {
-            queryCacheConfig = new QueryCacheConfig(queryCacheName);
-            queryCacheConfigsForMap.put(queryCacheName, queryCacheConfig);
+            queryCacheConfig = new QueryCacheConfig(userGivenCacheName);
+            queryCacheConfigsForMap.put(userGivenCacheName, queryCacheConfig);
         }
 
         return queryCacheConfig;

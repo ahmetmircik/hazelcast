@@ -85,7 +85,7 @@ public class HazelcastServerCacheManager
     @Override
     public void enableManagement(String cacheName, boolean enabled) {
         checkIfManagerNotClosed();
-        checkNotNull(cacheName, "cacheName cannot be null");
+        checkNotNull(cacheName, "cacheUuid cannot be null");
         String cacheNameWithPrefix = getCacheNameWithPrefix(cacheName);
         cacheService.setManagementEnabled(null, cacheNameWithPrefix, enabled);
         enableStatisticManagementOnOtherNodes(cacheName, false, enabled);
@@ -94,7 +94,7 @@ public class HazelcastServerCacheManager
     @Override
     public void enableStatistics(String cacheName, boolean enabled) {
         checkIfManagerNotClosed();
-        checkNotNull(cacheName, "cacheName cannot be null");
+        checkNotNull(cacheName, "cacheUuid cannot be null");
         String cacheNameWithPrefix = getCacheNameWithPrefix(cacheName);
         cacheService.setStatisticsEnabled(null, cacheNameWithPrefix, enabled);
         enableStatisticManagementOnOtherNodes(cacheName, true, enabled);

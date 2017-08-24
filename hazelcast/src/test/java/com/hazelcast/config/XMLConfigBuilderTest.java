@@ -966,10 +966,10 @@ public class XMLConfigBuilderTest extends HazelcastTestSupport {
 
     @Test
     public void testCacheEventJournalConfig() {
-        final String journalName = "cacheName";
+        final String journalName = "cacheUuid";
         final String xml = HAZELCAST_START_TAG
                 + "  <event-journal enabled=\"true\">\n" +
-                "        <cacheName>" + journalName + "</cacheName>\n" +
+                "        <cacheUuid>" + journalName + "</cacheUuid>\n" +
                 "        <capacity>120</capacity>\n" +
                 "        <time-to-live-seconds>20</time-to-live-seconds>\n" +
                 "    </event-journal>"

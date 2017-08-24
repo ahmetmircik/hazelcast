@@ -63,7 +63,7 @@ public abstract class AbstractQueryCacheEndToEndConstructor implements QueryCach
     public final void createSubscriberAccumulator(AccumulatorInfo info) {
         QueryCacheEventService eventService = context.getQueryCacheEventService();
         ListenerAdapter listener = new SubscriberListener(context, info);
-        publisherListenerId = eventService.listenPublisher(info.getMapName(), info.getCacheName(), listener);
+        publisherListenerId = eventService.listenPublisher(info.getMapName(), info.getCacheUuid(), listener);
     }
 
     /**
@@ -81,7 +81,7 @@ public abstract class AbstractQueryCacheEndToEndConstructor implements QueryCach
             // when calling `IMap.getQueryCache` method
             addListener(request);
 
-            AccumulatorInfo info = createAccumulatorInfo(queryCacheConfig, mapName, request.getCacheName(), predicate);
+            AccumulatorInfo info = createAccumulatorInfo(queryCacheConfig, mapName, request.getCacheUuid(), predicate);
             addInfoToSubscriberContext(info);
 
             info.setPublishable(true);
@@ -111,7 +111,7 @@ public abstract class AbstractQueryCacheEndToEndConstructor implements QueryCach
     private void addInfoToSubscriberContext(AccumulatorInfo info) {
         SubscriberContext subscriberContext = context.getSubscriberContext();
         AccumulatorInfoSupplier accumulatorInfoSupplier = subscriberContext.getAccumulatorInfoSupplier();
-        accumulatorInfoSupplier.putIfAbsent(info.getMapName(), info.getCacheName(), info);
+        accumulatorInfoSupplier.putIfAbsent(info.getMapName(), info.getCacheUuid(), info);
     }
 
     private String addListener(QueryCacheRequest request) {
@@ -120,11 +120,11 @@ public abstract class AbstractQueryCacheEndToEndConstructor implements QueryCach
             return null;
         }
         QueryCacheEventService eventService = subscriberContext.getEventService();
-        return eventService.addListener(request.getMapName(), request.getCacheName(), listener);
+        return eventService.addListener(request.getMapName(), request.getCacheUuid(), listener);
     }
 
     public String getCacheName() {
-        return request.getCacheName();
+        return request.getCacheUuid();
     }
 
     protected Object toObject(Object data) {
@@ -155,18 +155,18 @@ public abstract class AbstractQueryCacheEndToEndConstructor implements QueryCach
         return queryCacheConfig;
     }
 
-    private QueryCacheConfig getOrCreateQueryCacheConfig(String mapName, String cacheName) {
+    private QueryCacheConfig getOrCreateQueryCacheConfig(String mapName, String userGivenCacheName) {
         QueryCacheConfigurator queryCacheConfigurator = subscriberContext.geQueryCacheConfigurator();
-        return queryCacheConfigurator.getOrCreateConfiguration(mapName, cacheName);
+        return queryCacheConfigurator.getOrCreateConfiguration(mapName, userGivenCacheName);
     }
 
-    private QueryCacheConfig getOrNullQueryCacheConfig(String mapName, String cacheName) {
+    private QueryCacheConfig getOrNullQueryCacheConfig(String mapName, String userGivenCacheName) {
         QueryCacheConfigurator queryCacheConfigurator = subscriberContext.geQueryCacheConfigurator();
-        return queryCacheConfigurator.getOrNull(mapName, cacheName);
+        return queryCacheConfigurator.getOrNull(mapName, userGivenCacheName);
     }
 
-    private void removeQueryCacheConfig(String mapName, String cacheName) {
+    private void removeQueryCacheConfig(String mapName, String userGivenCacheName) {
         QueryCacheConfigurator queryCacheConfigurator = subscriberContext.geQueryCacheConfigurator();
-        queryCacheConfigurator.removeConfiguration(mapName, cacheName);
+        queryCacheConfigurator.removeConfiguration(mapName, userGivenCacheName);
     }
 }

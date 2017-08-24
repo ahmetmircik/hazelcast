@@ -117,28 +117,28 @@ public class PublisherCreateOperation extends MapOperation {
 
     private void registerLocalIMapListener() {
         String mapName = info.getMapName();
-        String cacheName = info.getCacheName();
+        String cacheUuid = info.getCacheUuid();
         PublisherContext publisherContext = getPublisherContext();
         MapListenerRegistry registry = publisherContext.getMapListenerRegistry();
         QueryCacheListenerRegistry listenerRegistry = registry.getOrCreate(mapName);
-        listenerRegistry.getOrCreate(cacheName);
+        listenerRegistry.getOrCreate(cacheUuid);
     }
 
     private void registerAccumulatorInfo() {
         String mapName = info.getMapName();
-        String cacheName = info.getCacheName();
+        String cacheUuid = info.getCacheUuid();
         PublisherContext publisherContext = getPublisherContext();
         AccumulatorInfoSupplier infoSupplier = publisherContext.getAccumulatorInfoSupplier();
-        infoSupplier.putIfAbsent(mapName, cacheName, info);
+        infoSupplier.putIfAbsent(mapName, cacheUuid, info);
     }
 
     private void registerPublisherAccumulator() {
         String mapName = info.getMapName();
-        String cacheName = info.getCacheName();
+        String cacheUuid = info.getCacheUuid();
         PublisherContext publisherContext = getPublisherContext();
         MapPublisherRegistry mapPublisherRegistry = publisherContext.getMapPublisherRegistry();
         PublisherRegistry publisherRegistry = mapPublisherRegistry.getOrCreate(mapName);
-        PartitionAccumulatorRegistry partitionAccumulatorRegistry = publisherRegistry.getOrCreate(cacheName);
+        PartitionAccumulatorRegistry partitionAccumulatorRegistry = publisherRegistry.getOrCreate(cacheUuid);
         partitionAccumulatorRegistry.setUuid(getCallerUuid());
     }
 
@@ -184,7 +184,7 @@ public class PublisherCreateOperation extends MapOperation {
 
     private Collection<Object> readAccumulators() {
         String mapName = info.getMapName();
-        String cacheName = info.getCacheName();
+        String cacheUuid = info.getCacheUuid();
 
         Collection<Integer> partitionIds = getPartitionIdsOfAccumulators();
         if (partitionIds.isEmpty()) {
@@ -195,7 +195,7 @@ public class PublisherCreateOperation extends MapOperation {
         NodeEngine nodeEngine = getNodeEngine();
         ExecutorService executor = nodeEngine.getExecutionService().getExecutor(ExecutionService.QUERY_EXECUTOR);
         for (Integer partitionId : partitionIds) {
-            PartitionCallable task = new PartitionCallable(mapName, cacheName, partitionId);
+            PartitionCallable task = new PartitionCallable(mapName, cacheUuid, partitionId);
             Future<Object> future = executor.submit(task);
             lsFutures.add(future);
         }
@@ -223,9 +223,9 @@ public class PublisherCreateOperation extends MapOperation {
 
     private Collection<Integer> getPartitionIdsOfAccumulators() {
         String mapName = info.getMapName();
-        String cacheName = info.getCacheName();
+        String cacheUuid = info.getCacheUuid();
         QueryCacheContext context = getContext();
-        return QueryCacheUtil.getAccumulators(context, mapName, cacheName).keySet();
+        return QueryCacheUtil.getAccumulators(context, mapName, cacheUuid).keySet();
     }
 
     /**
@@ -235,17 +235,17 @@ public class PublisherCreateOperation extends MapOperation {
 
         private final int partitionId;
         private final String mapName;
-        private final String cacheName;
+        private final String cacheUuid;
 
-        PartitionCallable(String mapName, String cacheName, int partitionId) {
+        PartitionCallable(String mapName, String cacheUuid, int partitionId) {
             this.mapName = mapName;
-            this.cacheName = cacheName;
+            this.cacheUuid = cacheUuid;
             this.partitionId = partitionId;
         }
 
         @Override
         public Object call() throws Exception {
-            Operation operation = new ReadAndResetAccumulatorOperation(mapName, cacheName);
+            Operation operation = new ReadAndResetAccumulatorOperation(mapName, cacheUuid);
             OperationService operationService = getNodeEngine().getOperationService();
             InternalCompletableFuture<Object> future
                     = operationService.invokeOnPartition(MapService.SERVICE_NAME, operation, partitionId);

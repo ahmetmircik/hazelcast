@@ -1233,7 +1233,7 @@ It has the following sub-elements:
     	configuration for a specific named map. In another words, if you specify the default
     	event journal config as enabled then all maps which don't have specific event journal
     	will be also enabled.
-    * <cacheName>:
+    * <cacheUuid>:
     	Cache name to which this configuration applies. This attribute's default value is "default".
     	Configuration for the event journal with name "default" applies to all caches without
     	configuration for a specific named cache. In another words, if you specify the default
@@ -1259,7 +1259,7 @@ It has the following sub-elements:
     </event-journal>
 
     <event-journal enabled="false">
-        <cacheName>default</cacheName>
+        <cacheUuid>default</cacheUuid>
         <capacity>10000</capacity>
         <time-to-live-seconds>0</time-to-live-seconds>
     </event-journal>

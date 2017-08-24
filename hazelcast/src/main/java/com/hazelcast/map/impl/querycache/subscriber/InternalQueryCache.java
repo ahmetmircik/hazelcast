@@ -46,5 +46,5 @@ public interface InternalQueryCache<K, V> extends QueryCache<K, V> {
     /**
      * @return internally used uuid for this query cache.
      */
-    String getCacheName();
+    String getCacheUuid();
 }

@@ -108,7 +108,7 @@ public abstract class AbstractHazelcastCacheManager
     private <K, V, C extends Configuration<K, V>> ICacheInternal<K, V> createCacheInternal(String cacheName,
             C configuration) throws IllegalArgumentException {
         checkIfManagerNotClosed();
-        checkNotNull(cacheName, "cacheName must not be null");
+        checkNotNull(cacheName, "cacheUuid must not be null");
         checkNotNull(configuration, "configuration must not be null");
 
         CacheConfig<K, V> newCacheConfig = createCacheConfig(cacheName, configuration);
@@ -284,7 +284,7 @@ public abstract class AbstractHazelcastCacheManager
     @Override
     public void removeCache(String cacheName, boolean destroy) {
         checkIfManagerNotClosed();
-        checkNotNull(cacheName, "cacheName cannot be null");
+        checkNotNull(cacheName, "cacheUuid cannot be null");
         String cacheNameWithPrefix = getCacheNameWithPrefix(cacheName);
         ICacheInternal<?, ?> cache = caches.remove(cacheNameWithPrefix);
         if (cache != null && destroy) {

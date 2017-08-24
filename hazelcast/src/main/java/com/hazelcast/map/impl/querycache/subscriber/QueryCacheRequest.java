@@ -37,10 +37,10 @@ public interface QueryCacheRequest {
     /**
      * Setter for name of the {@link com.hazelcast.map.QueryCache QueryCache}.
      *
-     * @param cacheName name of {@link com.hazelcast.map.QueryCache QueryCache}
+     * @param cacheUuid name of {@link com.hazelcast.map.QueryCache QueryCache}
      * @return this request object.
      */
-    QueryCacheRequest withCacheName(String cacheName);
+    QueryCacheRequest withCacheUuid(String cacheUuid);
 
 
     /**
@@ -105,7 +105,7 @@ public interface QueryCacheRequest {
      *
      * @return name of the {@link com.hazelcast.map.QueryCache QueryCache} to be created.
      */
-    String getCacheName();
+    String getCacheUuid();
 
     /**
      * Returns the name which is given by the user.

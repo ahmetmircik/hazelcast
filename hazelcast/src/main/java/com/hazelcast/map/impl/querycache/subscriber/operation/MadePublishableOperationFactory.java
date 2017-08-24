@@ -34,34 +34,34 @@ import static com.hazelcast.util.Preconditions.checkHasText;
 public class MadePublishableOperationFactory implements OperationFactory {
 
     private String mapName;
-    private String cacheName;
+    private String cacheUuid;
 
     public MadePublishableOperationFactory() {
     }
 
-    public MadePublishableOperationFactory(String mapName, String cacheName) {
+    public MadePublishableOperationFactory(String mapName, String cacheUuid) {
         checkHasText(mapName, "mapName");
-        checkHasText(cacheName, "cacheName");
+        checkHasText(cacheUuid, "cacheUuid");
 
-        this.cacheName = cacheName;
+        this.cacheUuid = cacheUuid;
         this.mapName = mapName;
     }
 
     @Override
     public Operation createOperation() {
-        return new MadePublishableOperation(mapName, cacheName);
+        return new MadePublishableOperation(mapName, cacheUuid);
     }
 
     @Override
     public void writeData(ObjectDataOutput out) throws IOException {
         out.writeUTF(mapName);
-        out.writeUTF(cacheName);
+        out.writeUTF(cacheUuid);
     }
 
     @Override
     public void readData(ObjectDataInput in) throws IOException {
         mapName = in.readUTF();
-        cacheName = in.readUTF();
+        cacheUuid = in.readUTF();
     }
 
     @Override

@@ -190,7 +190,7 @@ public class PostJoinMapOperation extends Operation implements IdentifiedDataSer
             addAccumulatorInfo(queryCacheContext, info);
 
             PublisherRegistry publisherRegistry = mapPublisherRegistry.getOrCreate(info.getMapName());
-            publisherRegistry.getOrCreate(info.getCacheName());
+            publisherRegistry.getOrCreate(info.getCacheUuid());
             // marker listener.
             mapServiceContext.addLocalListenerAdapter(new ListenerAdapter<IMapEvent>() {
                 @Override
@@ -204,7 +204,7 @@ public class PostJoinMapOperation extends Operation implements IdentifiedDataSer
     private void addAccumulatorInfo(QueryCacheContext context, AccumulatorInfo info) {
         PublisherContext publisherContext = context.getPublisherContext();
         AccumulatorInfoSupplier infoSupplier = publisherContext.getAccumulatorInfoSupplier();
-        infoSupplier.putIfAbsent(info.getMapName(), info.getCacheName(), info);
+        infoSupplier.putIfAbsent(info.getMapName(), info.getCacheUuid(), info);
     }
 
     public void setInfoList(List<AccumulatorInfo> infoList) {

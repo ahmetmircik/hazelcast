@@ -101,7 +101,7 @@ public final class MXBeanUtil {
 
     /**
      * Creates an object name using the scheme.
-     * "javax.cache:type=Cache&lt;Statistics|Configuration&gt;,name=&lt;cacheName&gt;"
+     * "javax.cache:type=Cache&lt;Statistics|Configuration&gt;,name=&lt;cacheUuid&gt;"
      */
     public static ObjectName calculateObjectName(String cacheManagerName, String name, boolean stats) {
         String cacheManagerNameSafe = mbeanSafe(cacheManagerName);

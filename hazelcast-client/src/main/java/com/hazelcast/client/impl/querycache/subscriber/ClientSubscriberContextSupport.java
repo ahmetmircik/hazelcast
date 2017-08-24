@@ -32,8 +32,8 @@ public class ClientSubscriberContextSupport implements SubscriberContextSupport 
     }
 
     @Override
-    public Object createRecoveryOperation(String mapName, String cacheName, long sequence, int partitionId) {
-        return ContinuousQuerySetReadCursorCodec.encodeRequest(mapName, cacheName, sequence);
+    public Object createRecoveryOperation(String mapName, String cacheUuid, long sequence, int partitionId) {
+        return ContinuousQuerySetReadCursorCodec.encodeRequest(mapName, cacheUuid, sequence);
     }
 
     @Override
@@ -42,7 +42,7 @@ public class ClientSubscriberContextSupport implements SubscriberContextSupport 
     }
 
     @Override
-    public Object createDestroyQueryCacheOperation(String mapName, String cacheName) {
-        return ContinuousQueryDestroyCacheCodec.encodeRequest(mapName, cacheName);
+    public Object createDestroyQueryCacheOperation(String mapName, String cacheUuid) {
+        return ContinuousQueryDestroyCacheCodec.encodeRequest(mapName, cacheUuid);
     }
 }

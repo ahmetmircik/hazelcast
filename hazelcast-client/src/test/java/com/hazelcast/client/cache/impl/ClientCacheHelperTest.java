@@ -55,7 +55,7 @@ import static org.mockito.Mockito.when;
 public class ClientCacheHelperTest extends HazelcastTestSupport {
 
     private static final String CACHE_NAME = "fullCacheName";
-    private static final String SIMPLE_CACHE_NAME = "cacheName";
+    private static final String SIMPLE_CACHE_NAME = "cacheUuid";
 
     private TestHazelcastFactory hazelcastFactory = new TestHazelcastFactory();
 

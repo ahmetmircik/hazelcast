@@ -422,7 +422,7 @@
                 <hz:hot-restart enabled="true" fsync="true" />
             </hz:cache>
 
-            <hz:event-journal map-name="mapName" cache-name="cacheName" enabled="true"
+            <hz:event-journal map-name="mapName" cache-name="cacheUuid" enabled="true"
                               capacity="123" time-to-live-seconds="321"/>
 
             <hz:multimap name="testMultimap"

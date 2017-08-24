@@ -81,12 +81,12 @@ public final class CacheUtil {
 
     /**
      * Convenience method to obtain the name of Hazelcast distributed object corresponding to the cache identified
-     * by the given {@code cacheName}, assuming {@code null URI} and {@code ClassLoader} prefixes. This is equivalent to
+     * by the given {@code cacheUuid}, assuming {@code null URI} and {@code ClassLoader} prefixes. This is equivalent to
      * invoking {@link #getDistributedObjectName(String, URI, ClassLoader)} with {@code null} passed as {@code URI} and
      * {@code ClassLoader} arguments.
      *
      * @param cacheName   the simple name of the cache without any prefix
-     * @return            the name of the {@link ICache} distributed object corresponding to given cacheName, assuming
+     * @return            the name of the {@link ICache} distributed object corresponding to given cacheUuid, assuming
      *                    null URI & class loader prefixes.
      * @see #getDistributedObjectName(String, URI, ClassLoader)
      */

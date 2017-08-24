@@ -44,44 +44,44 @@ public class NodeQueryCacheConfigurator extends AbstractQueryCacheConfigurator {
     }
 
     @Override
-    public QueryCacheConfig getOrCreateConfiguration(String mapName, String cacheName) {
+    public QueryCacheConfig getOrCreateConfiguration(String mapName, String userGivenCacheName) {
         MapConfig mapConfig = config.getMapConfig(mapName);
 
-        QueryCacheConfig queryCacheConfig = findQueryCacheConfigFromMapConfig(mapConfig, cacheName);
+        QueryCacheConfig queryCacheConfig = findQueryCacheConfigFromMapConfig(mapConfig, userGivenCacheName);
 
         if (null != queryCacheConfig) {
             setPredicateImpl(queryCacheConfig);
-            setEntryListener(mapName, cacheName, queryCacheConfig);
+            setEntryListener(mapName, userGivenCacheName, queryCacheConfig);
             return queryCacheConfig;
         }
 
-        QueryCacheConfig newConfig = new QueryCacheConfig(cacheName);
+        QueryCacheConfig newConfig = new QueryCacheConfig(userGivenCacheName);
         mapConfig.getQueryCacheConfigs().add(newConfig);
         return newConfig;
     }
 
     @Override
-    public QueryCacheConfig getOrNull(String mapName, String cacheName) {
+    public QueryCacheConfig getOrNull(String mapName, String userGivenCacheName) {
         MapConfig mapConfig = config.getMapConfigOrNull(mapName);
         if (null == mapConfig) {
             return null;
         }
 
-        return findQueryCacheConfigFromMapConfig(mapConfig, cacheName);
+        return findQueryCacheConfigFromMapConfig(mapConfig, userGivenCacheName);
     }
 
-    private QueryCacheConfig findQueryCacheConfigFromMapConfig(MapConfig mapConfig, String cacheName) {
+    private QueryCacheConfig findQueryCacheConfigFromMapConfig(MapConfig mapConfig, String userGivenCacheName) {
         List<QueryCacheConfig> queryCacheConfigs = mapConfig.getQueryCacheConfigs();
         Map<String, QueryCacheConfig> allQueryCacheConfigs = new HashMap<String, QueryCacheConfig>(queryCacheConfigs.size());
         for (QueryCacheConfig queryCacheConfig : queryCacheConfigs) {
             allQueryCacheConfigs.put(queryCacheConfig.getName(), queryCacheConfig);
         }
 
-        return ConfigUtils.lookupByPattern(config.getConfigPatternMatcher(), allQueryCacheConfigs, cacheName);
+        return ConfigUtils.lookupByPattern(config.getConfigPatternMatcher(), allQueryCacheConfigs, userGivenCacheName);
     }
 
     @Override
-    public void removeConfiguration(String mapName, String cacheName) {
+    public void removeConfiguration(String mapName, String userGivenCacheName) {
         MapConfig mapConfig = config.getMapConfig(mapName);
         List<QueryCacheConfig> queryCacheConfigs = mapConfig.getQueryCacheConfigs();
         if (queryCacheConfigs == null || queryCacheConfigs.isEmpty()) {
@@ -90,7 +90,7 @@ public class NodeQueryCacheConfigurator extends AbstractQueryCacheConfigurator {
         Iterator<QueryCacheConfig> iterator = queryCacheConfigs.iterator();
         while (iterator.hasNext()) {
             QueryCacheConfig config = iterator.next();
-            if (config.getName().equals(cacheName)) {
+            if (config.getName().equals(userGivenCacheName)) {
                 iterator.remove();
             }
         }

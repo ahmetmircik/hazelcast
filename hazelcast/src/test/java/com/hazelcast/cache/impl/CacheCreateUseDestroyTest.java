@@ -198,7 +198,7 @@ public class CacheCreateUseDestroyTest extends HazelcastTestSupport {
     private void assertMXBeanRegistrationStatus(boolean expectedStatus, String cacheName, boolean forStats) {
         CacheConfig cacheConfig = cacheService.findCacheConfig(cacheName);
         String cacheManagerName = cacheConfig.getUriString();
-        assertEquals(format("Unexpected MXBean registration status for cacheManager %s and cacheName %s", cacheManagerName,
+        assertEquals(format("Unexpected MXBean registration status for cacheManager %s and cacheUuid %s", cacheManagerName,
                 cacheName), expectedStatus, MXBeanUtil.isRegistered(cacheManagerName, cacheName, forStats));
     }
 
