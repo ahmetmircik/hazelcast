@@ -49,7 +49,7 @@ public class QueryCacheMemoryLeakTest extends HazelcastTestSupport {
 
         ExecutorService pool = Executors.newFixedThreadPool(10);
 
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             Runnable runnable = new Runnable() {
                 public void run() {
                     String mapName = "test" ;
@@ -65,7 +65,7 @@ public class QueryCacheMemoryLeakTest extends HazelcastTestSupport {
             pool.submit(runnable);
         }
 
-        pool.awaitTermination(120, TimeUnit.SECONDS);
+        pool.awaitTermination(30, TimeUnit.SECONDS);
 
         SubscriberContext subscriberContext = getSubscriberContext(node);
         QueryCacheEndToEndProvider provider = subscriberContext.getEndToEndQueryCacheProvider();
