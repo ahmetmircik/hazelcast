@@ -28,9 +28,14 @@ import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 
@@ -38,24 +43,35 @@ import static org.junit.Assert.assertEquals;
 @Category({QuickTest.class, ParallelTest.class})
 public class QueryCacheMemoryLeakTest extends HazelcastTestSupport {
 
-    @Test
+    @Test @Repeat(20)
     public void removes_internal_query_caches_upon_map_destroy() throws Exception {
-        HazelcastInstance node = createHazelcastInstance();
+        final HazelcastInstance node = createHazelcastInstance();
 
-        String mapName = "test";
-        IMap<Integer, Integer> map = node.getMap(mapName);
+        ExecutorService pool = Executors.newFixedThreadPool(10);
 
-        for (int j = 0; j < 10; j++) {
-            map.getQueryCache(j + "-test-QC", TruePredicate.INSTANCE, true);
+        for (int i = 0; i < 2000; i++) {
+            Runnable runnable = new Runnable() {
+                public void run() {
+                    String mapName = "test" ;
+                    IMap<Integer, Integer> map = node.getMap(mapName);
+
+                    for (int j = 0; j < 10; j++) {
+                        map.getQueryCache(j + "-test-QC", TruePredicate.INSTANCE, true);
+                    }
+
+                    map.destroy();
+                }
+            };
+            pool.submit(runnable);
         }
 
-        map.destroy();
+        pool.awaitTermination(60, TimeUnit.SECONDS);
 
         SubscriberContext subscriberContext = getSubscriberContext(node);
         QueryCacheEndToEndProvider provider = subscriberContext.getEndToEndQueryCacheProvider();
         QueryCacheFactory queryCacheFactory = subscriberContext.getQueryCacheFactory();
 
-        assertEquals(0, provider.getQueryCacheCount(mapName));
+        assertEquals(0, provider.getQueryCacheCount("test"));
         assertEquals(0, queryCacheFactory.getQueryCacheCount());
     }
 

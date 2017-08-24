@@ -1000,7 +1000,7 @@ public class MapProxyImpl<K, V> extends MapProxySupport<K, V> implements EventJo
         QueryCacheContext queryCacheContext = request.getContext();
         SubscriberContext subscriberContext = queryCacheContext.getSubscriberContext();
         QueryCacheEndToEndProvider queryCacheEndToEndProvider = subscriberContext.getEndToEndQueryCacheProvider();
-        return queryCacheEndToEndProvider.getOrCreateQueryCache(request.getMapName(), request.getUserGivenCacheName(),
+        return queryCacheEndToEndProvider.getOrCreateQueryCache(request.getMapName(), request.getCacheUuid(),
                 constructorFunction);
     }
 }
