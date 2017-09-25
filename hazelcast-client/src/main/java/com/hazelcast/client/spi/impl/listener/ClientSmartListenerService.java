@@ -24,10 +24,12 @@ import com.hazelcast.client.spi.ClientClusterService;
 import com.hazelcast.client.spi.EventHandler;
 import com.hazelcast.client.spi.impl.ClientInvocation;
 import com.hazelcast.client.spi.impl.ClientInvocationFuture;
+import com.hazelcast.client.spi.impl.ClientInvocationServiceImpl;
 import com.hazelcast.client.spi.impl.ConnectionHeartbeatListener;
 import com.hazelcast.client.spi.impl.ListenerMessageCodec;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.core.Member;
+import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionListener;
 import com.hazelcast.util.ExceptionUtil;
@@ -43,6 +45,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
+import static com.hazelcast.util.StringUtil.timeToString;
 
 public class ClientSmartListenerService extends ClientListenerServiceImpl
         implements ConnectionListener, ConnectionHeartbeatListener {
@@ -63,7 +67,7 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
     public String registerListener(final ListenerMessageCodec codec, final EventHandler handler) {
         //This method should not be called from registrationExecutor
         assert (!Thread.currentThread().getName().contains("eventRegistration"));
-
+        openConnectionsToMembers();
         Future<String> future = registrationExecutor.submit(new Callable<String>() {
             @Override
             public String call() {
@@ -198,6 +202,55 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
                 }
             }
         }, 1, 1, TimeUnit.SECONDS);
+    }
+
+    private void openConnectionsToMembers() {
+        ClientClusterService clientClusterService = client.getClientClusterService();
+        long startTimeMillis = System.currentTimeMillis();
+        while (true) {
+            boolean isException = false;
+            Collection<Member> memberList = clientClusterService.getMemberList();
+            for (Member member : memberList) {
+                try {
+                    clientConnectionManager.getOrConnect(member.getAddress());
+                } catch (Exception e) {
+                    isException = true;
+                    if (!clientClusterService.getMemberList().contains(member)) {
+                        //member left the cluster no need to connect
+                        continue;
+                    }
+                    throwExceptionIfTimedOut(startTimeMillis, member, e);
+                }
+            }
+            if (!isException) {
+                return;
+            }
+
+            ClientInvocationServiceImpl invocationService = (ClientInvocationServiceImpl) client.getInvocationService();
+            try {
+                Thread.sleep(invocationService.getInvocationRetryPauseMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw ExceptionUtil.rethrow(e);
+            }
+
+        }
+
+    }
+
+    private void throwExceptionIfTimedOut(long startTimeMillis, Member member, Exception e) {
+        ClientInvocationServiceImpl invocationService = (ClientInvocationServiceImpl) client.getInvocationService();
+        long invocationTimeoutMillis = invocationService.getInvocationTimeoutMillis();
+
+        long currentTimeMillis = System.currentTimeMillis();
+        long elapsedTime = currentTimeMillis - startTimeMillis;
+        if (elapsedTime > invocationTimeoutMillis) {
+            throw new OperationTimeoutException("Registering listeners is timed out for member : " + member + ", "
+                    + " Current Time: " + timeToString(currentTimeMillis) + " ms, "
+                    + " Start Time : " + timeToString(startTimeMillis) + " ms, "
+                    + " Client Invocation Timeout Millis : " + invocationTimeoutMillis + " ms, "
+                    + " Elapsed time : " + elapsedTime + " ms. ", e);
+        }
     }
 
     @Override
