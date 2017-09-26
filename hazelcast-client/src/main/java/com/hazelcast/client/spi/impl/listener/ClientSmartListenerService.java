@@ -56,18 +56,25 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
     private final ClientConnectionManager clientConnectionManager;
     private final Map<Connection, Collection<ClientRegistrationKey>> failedRegistrations
             = new ConcurrentHashMap<Connection, Collection<ClientRegistrationKey>>();
+    private final long invocationTimeoutMillis;
+    private final long invocationRetryPauseMillis;
 
     public ClientSmartListenerService(HazelcastClientInstanceImpl client,
                                       int eventThreadCount, int eventQueueCapacity) {
         super(client, eventThreadCount, eventQueueCapacity);
         clientConnectionManager = client.getConnectionManager();
+        ClientInvocationServiceImpl invocationService = (ClientInvocationServiceImpl) client.getInvocationService();
+        invocationTimeoutMillis = invocationService.getInvocationTimeoutMillis();
+        invocationRetryPauseMillis = invocationService.getInvocationRetryPauseMillis();
     }
 
     @Override
     public String registerListener(final ListenerMessageCodec codec, final EventHandler handler) {
         //This method should not be called from registrationExecutor
         assert (!Thread.currentThread().getName().contains("eventRegistration"));
-        openConnectionsToMembers();
+
+        trySyncConnectToAllMembers();
+
         Future<String> future = registrationExecutor.submit(new Callable<String>() {
             @Override
             public String call() {
@@ -204,53 +211,62 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
         }, 1, 1, TimeUnit.SECONDS);
     }
 
-    private void openConnectionsToMembers() {
+    private void trySyncConnectToAllMembers() {
         ClientClusterService clientClusterService = client.getClientClusterService();
-        long startTimeMillis = System.currentTimeMillis();
-        while (true) {
-            boolean isException = false;
-            Collection<Member> memberList = clientClusterService.getMemberList();
-            for (Member member : memberList) {
+        long startMillis = System.currentTimeMillis();
+
+        long nowInMillis;
+        Member lastTriedMember = null;
+        Exception lastGotException = null;
+
+        do {
+            nowInMillis = System.currentTimeMillis();
+            for (Member member : clientClusterService.getMemberList()) {
                 try {
                     clientConnectionManager.getOrConnect(member.getAddress());
                 } catch (Exception e) {
-                    isException = true;
-                    if (!clientClusterService.getMemberList().contains(member)) {
-                        //member left the cluster no need to connect
-                        continue;
-                    }
-                    throwExceptionIfTimedOut(startTimeMillis, member, e);
+                    lastTriedMember = member;
+                    lastGotException = e;
                 }
             }
-            if (!isException) {
-                return;
+
+            if (lastGotException == null) {
+                // successfully connected to all members, break loop.
+                break;
             }
 
-            ClientInvocationServiceImpl invocationService = (ClientInvocationServiceImpl) client.getInvocationService();
-            try {
-                Thread.sleep(invocationService.getInvocationRetryPauseMillis());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw ExceptionUtil.rethrow(e);
-            }
+            timeOutOrSleepBeforeNextTry(startMillis, nowInMillis, lastTriedMember, lastGotException);
 
-        }
-
+        } while (true);
     }
 
-    private void throwExceptionIfTimedOut(long startTimeMillis, Member member, Exception e) {
-        ClientInvocationServiceImpl invocationService = (ClientInvocationServiceImpl) client.getInvocationService();
-        long invocationTimeoutMillis = invocationService.getInvocationTimeoutMillis();
-
-        long currentTimeMillis = System.currentTimeMillis();
-        long elapsedTime = currentTimeMillis - startTimeMillis;
-        if (elapsedTime > invocationTimeoutMillis) {
-            throw new OperationTimeoutException("Registering listeners is timed out for member : " + member + ", "
-                    + " Current Time: " + timeToString(currentTimeMillis) + " ms, "
-                    + " Start Time : " + timeToString(startTimeMillis) + " ms, "
-                    + " Client Invocation Timeout Millis : " + invocationTimeoutMillis + " ms, "
-                    + " Elapsed time : " + elapsedTime + " ms. ", e);
+    private void sleepBeforeNextTry() {
+        try {
+            Thread.sleep(invocationRetryPauseMillis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw ExceptionUtil.rethrow(e);
         }
+    }
+
+    private void timeOutOrSleepBeforeNextTry(long startMillis, long nowInMillis, Member lastMember, Exception lastException) {
+        long elapsedMillis = nowInMillis - startMillis;
+        boolean timedOut = elapsedMillis > invocationTimeoutMillis;
+
+        if (timedOut) {
+            throwOperationTimeoutException(startMillis, nowInMillis, elapsedMillis, lastMember, lastException);
+        } else {
+            sleepBeforeNextTry();
+        }
+    }
+
+    private void throwOperationTimeoutException(long startMillis, long nowInMillis,
+                                                long elapsedTime, Member member, Exception e) {
+        throw new OperationTimeoutException("Registering listeners is timed out for member : " + member + ", "
+                + " Current Time: " + timeToString(nowInMillis) + ", "
+                + " Start Time : " + timeToString(startMillis) + ", "
+                + " Client Invocation Timeout Millis : " + invocationTimeoutMillis + " ms, "
+                + " Elapsed time : " + elapsedTime + " ms. ", e);
     }
 
     @Override
