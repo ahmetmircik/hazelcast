@@ -215,12 +215,10 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
         ClientClusterService clientClusterService = client.getClientClusterService();
         long startMillis = System.currentTimeMillis();
 
-        long nowInMillis;
-        Member lastTriedMember = null;
-        Exception lastGotException = null;
-
         do {
-            nowInMillis = System.currentTimeMillis();
+            Member lastTriedMember = null;
+            Exception lastGotException = null;
+
             for (Member member : clientClusterService.getMemberList()) {
                 try {
                     clientConnectionManager.getOrConnect(member.getAddress());
@@ -235,7 +233,7 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
                 break;
             }
 
-            timeOutOrSleepBeforeNextTry(startMillis, nowInMillis, lastTriedMember, lastGotException);
+            timeOutOrSleepBeforeNextTry(startMillis, lastTriedMember, lastGotException);
 
         } while (true);
     }
@@ -249,7 +247,8 @@ public class ClientSmartListenerService extends ClientListenerServiceImpl
         }
     }
 
-    private void timeOutOrSleepBeforeNextTry(long startMillis, long nowInMillis, Member lastMember, Exception lastException) {
+    private void timeOutOrSleepBeforeNextTry(long startMillis, Member lastMember, Exception lastException) {
+        long nowInMillis = System.currentTimeMillis();
         long elapsedMillis = nowInMillis - startMillis;
         boolean timedOut = elapsedMillis > invocationTimeoutMillis;
 
