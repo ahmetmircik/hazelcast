@@ -43,6 +43,7 @@ import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
@@ -78,6 +79,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
+@Repeat(20)
 public class MapLoaderTest extends HazelcastTestSupport {
 
     @Rule
@@ -362,7 +364,7 @@ public class MapLoaderTest extends HazelcastTestSupport {
         HazelcastInstance instance = createHazelcastInstance(config);
         IMap<String, String> map = instance.getMap(name);
 
-        map.addInterceptor(new TestInterceptor());
+        map.addInterceptor(new NullReturningInterceptor());
 
         try {
             map.size();
@@ -622,7 +624,7 @@ public class MapLoaderTest extends HazelcastTestSupport {
 
         HazelcastInstance instance = createHazelcastInstance(config);
         IMap imap = instance.getMap(mapName);
-        imap.addInterceptor(new TestInterceptor());
+        imap.addInterceptor(new NullReturningInterceptor());
 
         assertEquals(sizePerPartition * partitionCount, imap.size());
     }
@@ -729,7 +731,7 @@ public class MapLoaderTest extends HazelcastTestSupport {
         throw new IllegalArgumentException();
     }
 
-    private static class TestInterceptor implements MapInterceptor, Serializable {
+    private static class NullReturningInterceptor implements MapInterceptor, Serializable {
 
         @Override
         public Object interceptGet(Object value) {
