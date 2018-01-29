@@ -22,6 +22,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import com.hazelcast.query.Predicate;
 import com.hazelcast.query.QueryException;
 import com.hazelcast.query.impl.getters.Extractors;
 import com.hazelcast.query.impl.predicates.PredicateDataSerializerHook;
@@ -37,17 +38,17 @@ public class IndexImpl implements Index {
 
     public static final NullObject NULL = new NullObject();
 
-    protected final InternalSerializationService ss;
-    protected final IndexStore indexStore;
-    private final IndexCopyBehavior copyQueryResultOn;
+    final boolean ordered;
+    final Predicate predicate;
+    final String attributeName;
+    final Extractors extractors;
+    final IndexStore indexStore;
+    final InternalSerializationService ss;
+    final IndexCopyBehavior copyQueryResultOn;
 
-    private volatile TypeConverter converter;
+    volatile TypeConverter converter;
 
-    private final String attributeName;
-    private final boolean ordered;
-    private final Extractors extractors;
-
-    public IndexImpl(String attributeName, boolean ordered, InternalSerializationService ss, Extractors extractors,
+    public IndexImpl(Predicate predicate, String attributeName, boolean ordered, InternalSerializationService ss, Extractors extractors,
                      IndexCopyBehavior copyQueryResultOn) {
         this.attributeName = attributeName;
         this.ordered = ordered;
@@ -55,6 +56,11 @@ public class IndexImpl implements Index {
         this.copyQueryResultOn = copyQueryResultOn;
         this.indexStore = createIndexStore(ordered);
         this.extractors = extractors;
+        this.predicate = predicate;
+    }
+
+    boolean isPartial() {
+        return predicate != null;
     }
 
     public IndexStore createIndexStore(boolean ordered) {
@@ -73,6 +79,7 @@ public class IndexImpl implements Index {
         if (converter == null || converter == NULL_CONVERTER) {
             converter = entry.getConverter(attributeName);
         }
+
 
         Object newAttributeValue = extractAttributeValue(entry.getKeyData(), entry.getTargetObject(false));
         if (oldRecordValue == null) {

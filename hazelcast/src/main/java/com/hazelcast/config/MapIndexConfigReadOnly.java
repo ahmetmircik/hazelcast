@@ -36,4 +36,9 @@ public class MapIndexConfigReadOnly extends MapIndexConfig {
     public MapIndexConfig setOrdered(boolean ordered) {
         throw new UnsupportedOperationException("This config is read-only");
     }
+
+    @Override
+    public void setPredicateConfig(PredicateConfig predicateConfig) {
+        throw new UnsupportedOperationException("This config is read-only");
+    }
 }

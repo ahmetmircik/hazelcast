@@ -23,6 +23,7 @@ import com.hazelcast.map.impl.record.Records;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.Index;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
@@ -38,14 +39,17 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
 
     private String attributeName;
     private boolean ordered;
+    Predicate predicate;
 
     public AddIndexOperation() {
+
     }
 
-    public AddIndexOperation(String name, String attributeName, boolean ordered) {
+    public AddIndexOperation(String name, Predicate predicate, String attributeName, boolean ordered) {
         super(name);
         this.attributeName = attributeName;
         this.ordered = ordered;
+        this.predicate = predicate;
     }
 
     @Override
@@ -56,7 +60,7 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
     @Override
     public void run() throws Exception {
         Indexes indexes = mapContainer.getIndexes(getPartitionId());
-        Index index = indexes.addOrGetIndex(attributeName, ordered);
+        Index index = indexes.addOrGetIndex(predicate, attributeName, ordered);
 
         final long now = getNow();
         final Iterator<Record> iterator = recordStore.iterator(now, false);
@@ -84,6 +88,7 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
         super.writeInternal(out);
         out.writeUTF(attributeName);
         out.writeBoolean(ordered);
+        out.writeObject(predicate);
     }
 
     @Override
@@ -91,6 +96,7 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
         super.readInternal(in);
         attributeName = in.readUTF();
         ordered = in.readBoolean();
+        predicate = in.readObject();
     }
 
     @Override

@@ -39,11 +39,17 @@ public class MapIndexConfig implements IdentifiedDataSerializable {
     private String attribute;
     private boolean ordered;
     private transient MapIndexConfigReadOnly readOnly;
+    private PredicateConfig predicateConfig;
 
     /**
      * Creates a MapIndexConfig without an attribute and with ordered set to {@code false}.
      */
     public MapIndexConfig() {
+    }
+
+    public MapIndexConfig(PredicateConfig predicateConfig, boolean ordered) {
+        this.ordered = ordered;
+        this.predicateConfig = predicateConfig;
     }
 
     /**
@@ -62,6 +68,7 @@ public class MapIndexConfig implements IdentifiedDataSerializable {
     public MapIndexConfig(MapIndexConfig config) {
         attribute = config.getAttribute();
         ordered = config.isOrdered();
+        predicateConfig = config.getPredicateConfig();
     }
 
     /**
@@ -120,6 +127,14 @@ public class MapIndexConfig implements IdentifiedDataSerializable {
     public MapIndexConfig setOrdered(boolean ordered) {
         this.ordered = ordered;
         return this;
+    }
+
+    public PredicateConfig getPredicateConfig() {
+        return predicateConfig;
+    }
+
+    public void setPredicateConfig(PredicateConfig predicateConfig) {
+        this.predicateConfig = predicateConfig;
     }
 
     @Override

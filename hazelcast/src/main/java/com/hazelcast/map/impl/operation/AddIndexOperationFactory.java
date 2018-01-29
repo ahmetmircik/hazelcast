@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
+import com.hazelcast.query.Predicate;
 import com.hazelcast.spi.Operation;
 
 import java.io.IOException;
@@ -28,19 +29,21 @@ public class AddIndexOperationFactory extends AbstractMapOperationFactory {
     private String name;
     private String attributeName;
     private boolean ordered;
+    private Predicate predicate;
 
     public AddIndexOperationFactory() {
     }
 
-    public AddIndexOperationFactory(String name, String attributeName, boolean ordered) {
+    public AddIndexOperationFactory(String name, Predicate predicate, String attributeName, boolean ordered) {
         this.name = name;
         this.attributeName = attributeName;
         this.ordered = ordered;
+        this.predicate = predicate;
     }
 
     @Override
     public Operation createOperation() {
-        return new AddIndexOperation(name, attributeName, ordered);
+        return new AddIndexOperation(name, predicate, attributeName, ordered);
     }
 
     @Override
@@ -48,6 +51,7 @@ public class AddIndexOperationFactory extends AbstractMapOperationFactory {
         out.writeUTF(name);
         out.writeUTF(attributeName);
         out.writeBoolean(ordered);
+        out.writeObject(predicate);
     }
 
     @Override
@@ -55,6 +59,7 @@ public class AddIndexOperationFactory extends AbstractMapOperationFactory {
         name = in.readUTF();
         attributeName = in.readUTF();
         ordered = in.readBoolean();
+        predicate = in.readObject();
     }
 
     @Override

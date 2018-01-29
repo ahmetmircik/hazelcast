@@ -21,7 +21,6 @@ import com.hazelcast.client.impl.protocol.codec.MapAddIndexCodec;
 import com.hazelcast.client.impl.protocol.task.AbstractAllPartitionsMessageTask;
 import com.hazelcast.instance.Node;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.map.impl.operation.AddIndexOperationFactory;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.security.permission.ActionConstants;
 import com.hazelcast.security.permission.MapPermission;
@@ -39,7 +38,8 @@ public class MapAddIndexMessageTask
 
     @Override
     protected OperationFactory createOperationFactory() {
-        return new AddIndexOperationFactory(parameters.name, parameters.attribute, parameters.ordered);
+        throw new UnsupportedOperationException();
+        //return new AddIndexOperationFactory(parameters.name, parameters.attribute, parameters.ordered);
     }
 
     @Override

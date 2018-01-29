@@ -58,11 +58,15 @@ public class Indexes {
     }
 
     public synchronized Index addOrGetIndex(String attribute, boolean ordered) {
+        return addOrGetIndex(null, attribute, ordered);
+    }
+
+    public synchronized Index addOrGetIndex(Predicate predicate, String attribute, boolean ordered) {
         Index index = mapIndexes.get(attribute);
         if (index != null) {
             return index;
         }
-        index = indexProvider.createIndex(attribute, ordered, extractors, serializationService, copyBehavior);
+        index = indexProvider.createIndex(predicate, attribute, ordered, extractors, serializationService, copyBehavior);
         mapIndexes.put(attribute, index);
         Object[] indexObjects = mapIndexes.values().toArray();
         Index[] newIndexes = new Index[indexObjects.length];

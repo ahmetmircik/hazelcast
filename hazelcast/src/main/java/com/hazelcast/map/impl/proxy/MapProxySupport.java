@@ -25,6 +25,7 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MapIndexConfig;
 import com.hazelcast.config.MapPartitionLostListenerConfig;
 import com.hazelcast.config.MapStoreConfig;
+import com.hazelcast.config.PredicateConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.core.ExecutionCallback;
@@ -293,7 +294,12 @@ abstract class MapProxySupport<K, V>
     private void initializeIndexes() {
         for (MapIndexConfig index : mapConfig.getMapIndexConfigs()) {
             if (index.getAttribute() != null) {
-                addIndex(index.getAttribute(), index.isOrdered());
+                PredicateConfig predicateConfig = index.getPredicateConfig();
+                Predicate predicate = null;
+                if (predicateConfig != null) {
+                    predicate = predicateConfig.getImplementation();
+                }
+                addIndexInternal(predicate, index.getAttribute(), index.isOrdered());
             }
         }
     }
@@ -1179,9 +1185,13 @@ abstract class MapProxySupport<K, V>
 
     @Override
     public void addIndex(String attribute, boolean ordered) {
+        addIndexInternal(null, attribute, ordered);
+    }
+
+    protected void addIndexInternal(Predicate predicate, String attribute, boolean ordered) {
         validateIndexAttribute(attribute);
         try {
-            AddIndexOperation addIndexOperation = new AddIndexOperation(name, attribute, ordered);
+            AddIndexOperation addIndexOperation = new AddIndexOperation(name, predicate, attribute, ordered);
             operationService.invokeOnAllPartitions(SERVICE_NAME, new BinaryOperationFactory(addIndexOperation, getNodeEngine()));
         } catch (Throwable t) {
             throw rethrow(t);
