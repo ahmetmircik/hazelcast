@@ -24,6 +24,7 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.QueryException;
 import com.hazelcast.query.impl.getters.Extractors;
 
+import javax.annotation.Nullable;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -75,7 +76,12 @@ public class Indexes {
         return index;
     }
 
+    @Nullable
     public synchronized Index addOrGetPartialIndex(Predicate predicate) {
+        if (predicate == null) {
+            return null;
+        }
+
         Index index = partialIndexes.get(predicate);
         if (index != null) {
             return index;

@@ -33,6 +33,7 @@ import com.hazelcast.query.impl.QueryableEntry;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -239,5 +240,21 @@ public final class AndPredicate
         } else {
             throw new IllegalStateException("Cannot reset predicates in an AndPredicate after they have been already set.");
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AndPredicate that = (AndPredicate) o;
+
+        // Probably incorrect - comparing Object[] arrays with Arrays.equals
+        return Arrays.equals(predicates, that.predicates);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(predicates);
     }
 }
