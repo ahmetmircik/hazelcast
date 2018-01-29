@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.instance.TestUtil.toData;
 import static org.junit.Assert.assertEquals;
@@ -54,8 +55,6 @@ public class IndexesTest {
     @Parameterized.Parameters(name = "copyBehavior: {0}")
     public static Collection<Object[]> parameters() {
         return Arrays.asList(new Object[][]{
-                {IndexCopyBehavior.COPY_ON_READ},
-                {IndexCopyBehavior.COPY_ON_WRITE},
                 {IndexCopyBehavior.NEVER}
         });
     }
@@ -66,19 +65,32 @@ public class IndexesTest {
         indexes.addOrGetIndex("name", false);
         indexes.addOrGetIndex("age", true);
         indexes.addOrGetIndex("salary", true);
-        for (int i = 0; i < 100; i++) {
-            Employee employee = new Employee(i + "Name", i % 80, (i % 2 == 0), 100 + (i % 1000));
-            indexes.saveEntryIndex(new QueryEntry(serializationService, toData(i), employee, Extractors.empty()), null);
-        }
+
         int count = 10;
         Set<String> ages = new HashSet<String>(count);
         for (int i = 0; i < count; i++) {
             ages.add(String.valueOf(i));
         }
+
         EntryObject entryObject = new PredicateBuilder().getEntryObject();
         PredicateBuilder predicate = entryObject.get("name").equal("0Name")
                 .and(entryObject.get("age").in(ages.toArray(new String[count])));
-        Set<QueryableEntry> results = indexes.query(predicate);
+        indexes.addOrGetPartialIndex(predicate.getPredicate());
+
+        for (int i = 0; i < 100000; i++) {
+            Employee employee = new Employee(i + "Name", i % 80, (i % 2 == 0), 100 + (i % 1000));
+            indexes.saveEntryIndex(new QueryEntry(serializationService, toData(i), employee, Extractors.empty()), null);
+        }
+
+        Set<QueryableEntry> results = null;
+        long start = System.nanoTime();
+        for (int i = 0; i < 200000; i++) {
+            results = indexes.query(predicate);
+        }
+        long elapsed = System.nanoTime() - start;
+
+        System.err.println(TimeUnit.NANOSECONDS.toMillis(elapsed));
+
         assertEquals(1, results.size());
     }
 

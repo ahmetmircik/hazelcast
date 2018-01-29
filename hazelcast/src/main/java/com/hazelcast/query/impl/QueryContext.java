@@ -16,11 +16,17 @@
 
 package com.hazelcast.query.impl;
 
+import com.hazelcast.query.Predicate;
+import com.hazelcast.query.impl.predicates.AndPredicate;
+
 /**
  * Provides the context of Query.
  */
 public class QueryContext {
+
     private final Indexes indexes;
+
+    private Predicate mainPredicate;
 
     public QueryContext(Indexes indexes) {
         this.indexes = indexes;
@@ -29,8 +35,27 @@ public class QueryContext {
     public Index getIndex(String attributeName) {
         if (indexes == null) {
             return null;
-        } else {
-            return indexes.getIndex(attributeName);
         }
+
+        return indexes.getIndex(attributeName);
+    }
+
+    public Index getPartialIndex(Predicate predicate) {
+        assert predicate instanceof AndPredicate;
+
+        if (indexes == null) {
+            return null;
+        }
+
+        return indexes.getPartialIndex(predicate);
+    }
+
+
+    public void setMainPredicate(Predicate mainPredicate) {
+        this.mainPredicate = mainPredicate;
+    }
+
+    public Predicate getMainPredicate() {
+        return mainPredicate;
     }
 }

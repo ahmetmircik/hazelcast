@@ -21,12 +21,16 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.Index;
 import com.hazelcast.query.impl.IndexCopyBehavior;
 import com.hazelcast.query.impl.IndexImpl;
+import com.hazelcast.query.impl.PartialIndex;
 import com.hazelcast.query.impl.getters.Extractors;
 
 public class DefaultIndexProvider implements IndexProvider {
     @Override
     public Index createIndex(Predicate predicate, String attributeName, boolean ordered, Extractors extractors,
                              InternalSerializationService ss, IndexCopyBehavior copyBehavior) {
+        if (predicate != null) {
+            return new PartialIndex(predicate);
+        }
         return new IndexImpl(predicate, attributeName, ordered, ss, extractors, copyBehavior);
     }
 }

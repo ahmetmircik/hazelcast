@@ -48,8 +48,8 @@ public class IndexImpl implements Index {
 
     volatile TypeConverter converter;
 
-    public IndexImpl(Predicate predicate, String attributeName, boolean ordered, InternalSerializationService ss, Extractors extractors,
-                     IndexCopyBehavior copyQueryResultOn) {
+    public IndexImpl(Predicate predicate, String attributeName, boolean ordered,
+                     InternalSerializationService ss, Extractors extractors, IndexCopyBehavior copyQueryResultOn) {
         this.attributeName = attributeName;
         this.ordered = ordered;
         this.ss = ss;
@@ -68,7 +68,7 @@ public class IndexImpl implements Index {
     }
 
     @Override
-    public void saveEntryIndex(QueryableEntry entry, Object oldRecordValue) throws QueryException {
+    public void addToIndex(QueryableEntry entry, Object oldRecordValue) throws QueryException {
         /*
          * At first, check if converter is not initialized, initialize it before saving an entry index
          * Because, if entity index is saved before,
@@ -91,7 +91,7 @@ public class IndexImpl implements Index {
     }
 
     @Override
-    public void removeEntryIndex(Data key, Object value) {
+    public void removeFromIndex(Data key, Object value) {
         Object attributeValue = extractAttributeValue(key, value);
         indexStore.removeIndex(attributeValue, key);
     }

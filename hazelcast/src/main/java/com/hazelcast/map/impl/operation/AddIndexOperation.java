@@ -37,9 +37,9 @@ import java.util.Iterator;
 
 public class AddIndexOperation extends MapOperation implements PartitionAwareOperation, MutatingOperation {
 
-    private String attributeName;
     private boolean ordered;
-    Predicate predicate;
+    private String attributeName;
+    private Predicate predicate;
 
     public AddIndexOperation() {
 
@@ -60,7 +60,8 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
     @Override
     public void run() throws Exception {
         Indexes indexes = mapContainer.getIndexes(getPartitionId());
-        Index index = indexes.addOrGetIndex(predicate, attributeName, ordered);
+        Index index = indexes.addOrGetIndex(attributeName, ordered);
+        Index partial = indexes.addOrGetPartialIndex(predicate);
 
         final long now = getNow();
         final Iterator<Record> iterator = recordStore.iterator(now, false);
@@ -70,7 +71,8 @@ public class AddIndexOperation extends MapOperation implements PartitionAwareOpe
             Data key = record.getKey();
             Object value = Records.getValueOrCachedValue(record, serializationService);
             QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
-            index.saveEntryIndex(queryEntry, null);
+            index.addToIndex(queryEntry, null);
+            partial.addToIndex(queryEntry, null);
         }
     }
 

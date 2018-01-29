@@ -21,6 +21,7 @@ import com.hazelcast.query.impl.QueryContext;
 import com.hazelcast.query.impl.QueryableEntry;
 
 import java.util.Set;
+
 /**
  * This interface is used for create filterable Predicates.
  *

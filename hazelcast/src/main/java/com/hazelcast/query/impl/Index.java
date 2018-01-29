@@ -20,12 +20,24 @@ import com.hazelcast.core.TypeConverter;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.query.QueryException;
 
+import javax.annotation.Nullable;
 import java.util.Set;
 
 /**
  * This interface contains the methods related to index of Query.
  */
 public interface Index {
+
+    /**
+     * Add entry to this index.
+     *
+     * @param e        entry
+     * @param oldValue or null if there is no old value
+     * @throws QueryException
+     */
+    void addToIndex(QueryableEntry e, Object oldValue) throws QueryException;
+
+    void removeFromIndex(Data key, Object value);
 
     /**
      * Clear out entries from the index
@@ -37,13 +49,7 @@ public interface Index {
      */
     void destroy();
 
-    /**
-     * Add entry to this index.
-     * @param e entry
-     * @param oldValue or null if there is no old value
-     * @throws QueryException
-     */
-    void saveEntryIndex(QueryableEntry e, Object oldValue) throws QueryException;
+    String getAttributeName();
 
     /**
      * Return converter associated with this Index.
@@ -51,19 +57,16 @@ public interface Index {
      *
      * @return
      */
+    @Nullable
     TypeConverter getConverter();
 
-    void removeEntryIndex(Data key, Object value);
+    Set<QueryableEntry> getRecords(Comparable value);
 
     Set<QueryableEntry> getRecords(Comparable[] values);
-
-    Set<QueryableEntry> getRecords(Comparable value);
 
     Set<QueryableEntry> getSubRecordsBetween(Comparable from, Comparable to);
 
     Set<QueryableEntry> getSubRecords(ComparisonType comparisonType, Comparable searchedValue);
-
-    String getAttributeName();
 
     boolean isOrdered();
 }

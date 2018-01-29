@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Indexes {
     private static final Index[] EMPTY_INDEX = {};
     private final ConcurrentMap<String, Index> mapIndexes = new ConcurrentHashMap<String, Index>(3);
+    private final ConcurrentMap<Predicate, Index> partialIndexes = new ConcurrentHashMap<Predicate, Index>(3);
     private final AtomicReference<Index[]> indexes = new AtomicReference<Index[]>(EMPTY_INDEX);
     private final IndexCopyBehavior copyBehavior;
     private volatile boolean hasIndex;
@@ -58,15 +59,11 @@ public class Indexes {
     }
 
     public synchronized Index addOrGetIndex(String attribute, boolean ordered) {
-        return addOrGetIndex(null, attribute, ordered);
-    }
-
-    public synchronized Index addOrGetIndex(Predicate predicate, String attribute, boolean ordered) {
         Index index = mapIndexes.get(attribute);
         if (index != null) {
             return index;
         }
-        index = indexProvider.createIndex(predicate, attribute, ordered, extractors, serializationService, copyBehavior);
+        index = indexProvider.createIndex(null, attribute, ordered, extractors, serializationService, copyBehavior);
         mapIndexes.put(attribute, index);
         Object[] indexObjects = mapIndexes.values().toArray();
         Index[] newIndexes = new Index[indexObjects.length];
@@ -74,6 +71,17 @@ public class Indexes {
             newIndexes[i] = (Index) indexObjects[i];
         }
         indexes.set(newIndexes);
+        hasIndex = true;
+        return index;
+    }
+
+    public synchronized Index addOrGetPartialIndex(Predicate predicate) {
+        Index index = partialIndexes.get(predicate);
+        if (index != null) {
+            return index;
+        }
+        index = indexProvider.createIndex(predicate, null, false, extractors, serializationService, copyBehavior);
+        partialIndexes.put(predicate, index);
         hasIndex = true;
         return index;
     }
@@ -95,7 +103,7 @@ public class Indexes {
     public void removeEntryIndex(Data key, Object value) throws QueryException {
         Index[] indexes = getIndexes();
         for (Index index : indexes) {
-            index.removeEntryIndex(key, value);
+            index.removeFromIndex(key, value);
         }
     }
 
@@ -106,8 +114,13 @@ public class Indexes {
     public void saveEntryIndex(QueryableEntry queryableEntry, Object oldValue) throws QueryException {
         Index[] indexes = getIndexes();
         for (Index index : indexes) {
-            index.saveEntryIndex(queryableEntry, oldValue);
+            index.addToIndex(queryableEntry, oldValue);
         }
+
+        for (Index index : partialIndexes.values()) {
+            index.addToIndex(queryableEntry, oldValue);
+        }
+
     }
 
     /**
@@ -131,9 +144,14 @@ public class Indexes {
         return mapIndexes.get(attribute);
     }
 
+    public Index getPartialIndex(Predicate predicate) {
+        return partialIndexes.get(predicate);
+    }
+
     public Set<QueryableEntry> query(Predicate predicate) {
         if (hasIndex) {
             QueryContext queryContext = new QueryContext(this);
+            queryContext.setMainPredicate(predicate);
             if (predicate instanceof IndexAwarePredicate) {
                 IndexAwarePredicate iap = (IndexAwarePredicate) predicate;
                 if (iap.isIndexed(queryContext)) {
