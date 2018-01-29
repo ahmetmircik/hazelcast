@@ -31,6 +31,6 @@ public class DefaultIndexProvider implements IndexProvider {
         if (predicate != null) {
             return new PartialIndex(predicate);
         }
-        return new IndexImpl(predicate, attributeName, ordered, ss, extractors, copyBehavior);
+        return new IndexImpl(attributeName, ordered, ss, extractors, copyBehavior);
     }
 }
