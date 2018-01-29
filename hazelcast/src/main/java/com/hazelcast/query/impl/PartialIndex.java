@@ -28,9 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PartialIndex implements Index {
 
-    // a = 1 and b = 4 and c = 5
-    private final Predicate mainPredicate;
-    private final Set<QueryableEntry> filteredResultSet
+    final Predicate mainPredicate;
+    final Set<QueryableEntry> filteredResultSet
             = Collections.newSetFromMap(new ConcurrentHashMap<QueryableEntry, Boolean>());
 
     public PartialIndex(Predicate mainPredicate) {
