@@ -37,13 +37,13 @@ class CollectionContainerCollector extends AbstractNamedContainerCollector<Colle
     @Override
     protected void destroy(CollectionContainer container) {
         // owned data is stored in the collection
-        container.getCollection().clear();
+       // container.getCollection().clear();
     }
 
     @Override
     protected void destroyBackup(CollectionContainer container) {
         // backup data is stored in the map
-        container.getMap().clear();
+        //container.getMap().clear();
     }
 
     @Override
