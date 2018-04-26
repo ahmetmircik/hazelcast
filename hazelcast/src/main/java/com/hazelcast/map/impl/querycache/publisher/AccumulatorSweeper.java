@@ -109,9 +109,10 @@ public final class AccumulatorSweeper {
         ConcurrentMap<String, ConcurrentMap<String, AccumulatorInfo>> all = infoSupplier.getAll();
         for (ConcurrentMap<String, AccumulatorInfo> oneMapsAccumulators : all.values()) {
             for (AccumulatorInfo accumulatorInfo : oneMapsAccumulators.values()) {
-                processor.setInfo(accumulatorInfo);
-
-                processor.process(endOfSequenceEvent);
+                if(accumulatorInfo.getDelaySeconds() == 0) {
+                    processor.setInfo(accumulatorInfo);
+                    processor.process(endOfSequenceEvent);
+                }
             }
         }
     }
