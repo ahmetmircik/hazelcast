@@ -42,6 +42,7 @@ import com.hazelcast.util.Clock;
 import java.util.Collection;
 
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setTTLAndUpdateExpiryTime;
+import static com.hazelcast.map.impl.eviction.EvictorImpl.hasOnHeapMaxSizePolicy;
 
 
 /**
@@ -103,7 +104,8 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
 
     @Override
     public Storage createStorage(RecordFactory recordFactory, InMemoryFormat memoryFormat) {
-        return new StorageImpl(recordFactory, memoryFormat, serializationService);
+        return new StorageImpl(serializationService, recordFactory,
+                memoryFormat, hasOnHeapMaxSizePolicy(this));
     }
 
     @Override

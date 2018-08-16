@@ -45,6 +45,12 @@ public class SampleableConcurrentHashMap<K, V> extends ConcurrentReferenceHashMa
         this(initialCapacity, LOAD_FACTOR, 1, ReferenceType.STRONG, ReferenceType.STRONG, null);
     }
 
+    public SampleableConcurrentHashMap(int initialCapacity, ReferenceType keyReferenceType, ReferenceType valueReferenceType) {
+        // Concurrency level 1 is important for fetch-method to function properly.
+        // Moreover partitions are single threaded and higher concurrency has not much gain
+        this(initialCapacity, LOAD_FACTOR, 1, keyReferenceType, valueReferenceType, null);
+    }
+
     public SampleableConcurrentHashMap(int initialCapacity, float loadFactor, int concurrencyLevel,
                                        ReferenceType keyType, ReferenceType valueType, EnumSet<Option> options) {
         super(initialCapacity, loadFactor, concurrencyLevel, keyType, valueType, options);

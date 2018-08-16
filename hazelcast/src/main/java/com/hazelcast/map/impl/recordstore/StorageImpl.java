@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 
 import static com.hazelcast.map.impl.OwnedEntryCostEstimatorFactory.createMapSizeEstimator;
+import static com.hazelcast.util.ConcurrentReferenceHashMap.ReferenceType.SOFT;
 
 /**
  * Default implementation of {@link Storage} layer used by a {@link RecordStore}
@@ -48,10 +49,13 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
     // not final for testing purposes.
     private EntryCostEstimator<Data, Record> entryCostEstimator;
 
-    StorageImpl(RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat, SerializationService serializationService) {
+    StorageImpl(SerializationService serializationService,
+                RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat,
+                boolean hasOnHeapEvictionPolicy) {
         this.recordFactory = recordFactory;
         this.entryCostEstimator = createMapSizeEstimator(inMemoryFormat);
-        this.records = new StorageSCHM<R>(serializationService);
+        this.records = hasOnHeapEvictionPolicy
+                ? new StorageSCHM<R>(serializationService, SOFT) : new StorageSCHM<R>(serializationService);
     }
 
     @Override

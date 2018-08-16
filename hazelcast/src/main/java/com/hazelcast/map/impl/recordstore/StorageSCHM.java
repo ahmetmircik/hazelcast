@@ -40,6 +40,12 @@ public class StorageSCHM<R extends Record> extends SampleableConcurrentHashMap<D
         this.serializationService = serializationService;
     }
 
+    public StorageSCHM(SerializationService serializationService, ReferenceType referenceType) {
+        super(DEFAULT_INITIAL_CAPACITY, referenceType, referenceType);
+
+        this.serializationService = serializationService;
+    }
+
     @Override
     protected <E extends SamplingEntry> E createSamplingEntry(Data key, R record) {
         return (E) new LazyEntryViewFromRecord<R>(record, serializationService);

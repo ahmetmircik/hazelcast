@@ -16,8 +16,11 @@
 
 package com.hazelcast.map.impl.eviction;
 
+import com.hazelcast.config.MapConfig;
+import com.hazelcast.config.MaxSizeConfig;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.map.eviction.MapEvictionPolicy;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.LazyEntryViewFromRecord;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -27,6 +30,8 @@ import com.hazelcast.spi.partition.IPartition;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.util.Clock;
 
+import java.util.EnumSet;
+
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static com.hazelcast.util.ThreadUtil.assertRunningOnPartitionThread;
 
@@ -35,9 +40,18 @@ import static com.hazelcast.util.ThreadUtil.assertRunningOnPartitionThread;
  */
 public class EvictorImpl implements Evictor {
 
+    private static final int HEAP_BASED_EVICTION_RETRY_COUNT = 5;
+
+    private static final EnumSet<MaxSizeConfig.MaxSizePolicy> ON_HEAP_MAX_SIZE_POLICIES
+            = EnumSet.of(MaxSizeConfig.MaxSizePolicy.FREE_HEAP_PERCENTAGE,
+            MaxSizeConfig.MaxSizePolicy.FREE_HEAP_SIZE,
+            MaxSizeConfig.MaxSizePolicy.USED_HEAP_PERCENTAGE,
+            MaxSizeConfig.MaxSizePolicy.USED_HEAP_SIZE);
+
     protected final EvictionChecker evictionChecker;
     protected final IPartitionService partitionService;
     protected final MapEvictionPolicy mapEvictionPolicy;
+
 
     public EvictorImpl(MapEvictionPolicy mapEvictionPolicy,
                        EvictionChecker evictionChecker, IPartitionService partitionService) {
@@ -50,12 +64,25 @@ public class EvictorImpl implements Evictor {
     public void evict(RecordStore recordStore, Data excludedKey) {
         assertRunningOnPartitionThread();
 
-        EntryView evictableEntry = selectEvictableEntry(recordStore, excludedKey);
-        if (evictableEntry == null) {
-            return;
-        }
+        int maxRetryCount = hasOnHeapMaxSizePolicy(recordStore) ? HEAP_BASED_EVICTION_RETRY_COUNT : 0;
+        int retriesSoFar = 0;
+        do {
+            EntryView evictableEntry = selectEvictableEntry(recordStore, excludedKey);
+            if (evictableEntry == null) {
+                return;
+            }
 
-        evictEntry(recordStore, evictableEntry);
+            evictEntry(recordStore, evictableEntry);
+            retriesSoFar++;
+        }
+        while (retriesSoFar < maxRetryCount && evictionChecker.checkEvictable(recordStore));
+    }
+
+    public static boolean hasOnHeapMaxSizePolicy(RecordStore recordStore) {
+        MapContainer mapContainer = recordStore.getMapContainer();
+        MapConfig mapConfig = mapContainer.getMapConfig();
+
+        return ON_HEAP_MAX_SIZE_POLICIES.contains(mapConfig.getMaxSizeConfig().getMaxSizePolicy());
     }
 
     private EntryView selectEvictableEntry(RecordStore recordStore, Data excludedKey) {
