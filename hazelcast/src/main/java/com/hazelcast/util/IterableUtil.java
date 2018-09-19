@@ -37,7 +37,9 @@ public final class IterableUtil {
         return iterator.hasNext() ? iterator.next() : defaultValue;
     }
 
-    /** Transform the Iterable by applying a function to each element  **/
+    /**
+     * Transform the Iterable by applying a function to each element
+     **/
     public static <T, R> Iterable<R> map(final Iterable<T> iterable, final IFunction<T, R> mapper) {
         return new Iterable<R>() {
             @Override
@@ -47,7 +49,9 @@ public final class IterableUtil {
         };
     }
 
-    /** Transform the Iterator by applying a function to each element  **/
+    /**
+     * Transform the Iterator by applying a function to each element
+     **/
     public static <T, R> Iterator<R> map(final Iterator<T> iterator, final IFunction<T, R> mapper) {
         return new Iterator<R>() {
             @Override
@@ -89,10 +93,30 @@ public final class IterableUtil {
         };
     }
 
-    /** Return empty Iterable if argument is null **/
+    /**
+     * Return empty Iterable if argument is null
+     **/
     public static <T> Iterable<T> nullToEmpty(Iterable<T> iterable) {
         return iterable == null ? Collections.<T>emptyList() : iterable;
     }
 
+    public static <T> Iterator<T> toUnmodifiableIterator(final Iterator<? extends T> iterator) {
+        return new Iterator<T>() {
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public T next() {
+                return iterator.next();
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
 
 }

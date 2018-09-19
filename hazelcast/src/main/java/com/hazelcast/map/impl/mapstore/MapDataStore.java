@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.mapstore;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -60,9 +61,9 @@ public interface MapDataStore<K, V> {
      * Removes keys from map store.
      * It also handles {@link com.hazelcast.nio.serialization.Data} to object conversions of keys.
      *
-     * @param keys to be removed
+     * @param keyIterator iterator tfor keys
      */
-    void removeAll(Collection keys);
+    void removeAll(Iterator keyIterator);
 
     /**
      * Used in {@link com.hazelcast.core.IMap#loadAll} calls.

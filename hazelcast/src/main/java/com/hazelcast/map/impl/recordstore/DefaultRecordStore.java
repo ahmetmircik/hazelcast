@@ -21,6 +21,7 @@ import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.config.NativeMemoryConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.EntryView;
+import com.hazelcast.core.IFunction;
 import com.hazelcast.internal.cluster.ClusterService;
 import com.hazelcast.internal.cluster.Versions;
 import com.hazelcast.logging.ILogger;
@@ -78,6 +79,8 @@ import static com.hazelcast.map.impl.EntryViews.toLazyEntryView;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTimes;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
+import static com.hazelcast.util.IterableUtil.map;
+import static com.hazelcast.util.IterableUtil.toUnmodifiableIterator;
 import static com.hazelcast.util.MapUtil.createHashMap;
 import static java.util.Collections.emptyList;
 
@@ -1181,14 +1184,29 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     @Override
     public int clear() {
         checkIfLoaded();
-        // we don't remove locked keys. These are clearable records.
-        Collection<Record> clearableRecords = getNotLockedRecords();
-        // This conversion is required by mapDataStore#removeAll call.
-        List<Data> keys = getKeysFromRecords(clearableRecords);
-        mapDataStore.removeAll(keys);
+
+        Collection<Record> records = storage.values();
+
+        mapDataStore.removeAll(toUnmodifiableIterator(records.iterator()));
         clearMapStore();
-        removeIndex(clearableRecords);
-        return removeRecords(clearableRecords);
+
+        Iterator<Record> lockedKeyAwareIterator = map(records.iterator(), new IFunction<Record, Record>() {
+            @Override
+            public Record apply(Record record) {
+                return isLocked(record.getKey()) ? null : record;
+            }
+        });
+
+        int numOfCleared = 0;
+        while (lockedKeyAwareIterator.hasNext()) {
+            Record record = lockedKeyAwareIterator.next();
+            if (record != null) {
+                removeIndex(record);
+                lockedKeyAwareIterator.remove();
+                numOfCleared++;
+            }
+        }
+        return numOfCleared;
     }
 
     @Override

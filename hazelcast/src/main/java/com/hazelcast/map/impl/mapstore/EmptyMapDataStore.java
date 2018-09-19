@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.mapstore;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -62,7 +63,7 @@ class EmptyMapDataStore implements MapDataStore {
     }
 
     @Override
-    public void removeAll(Collection keys) {
+    public void removeAll(Iterator keyIterator) {
     }
 
     @Override
