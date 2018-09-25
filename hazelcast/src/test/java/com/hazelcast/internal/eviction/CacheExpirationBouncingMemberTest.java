@@ -66,7 +66,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
     public BounceMemberRule bounceMemberRule = BounceMemberRule.with(getConfig())
             .clusterSize(4)
             .driverCount(1)
-            .useTerminate()
+//            .useTerminate()
             .build();
 
     protected CacheConfig getCacheConfig() {
