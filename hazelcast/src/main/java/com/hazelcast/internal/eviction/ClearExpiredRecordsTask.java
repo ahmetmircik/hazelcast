@@ -108,20 +108,20 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
 
             if (partition.isOwnerOrBackup(thisAddress)) {
 
-                if (isContainerEmpty(container) && !hasExpiredKeyToSendBackup(container)) {
-                    continue;
-                }
-
-                if (hasRunningCleanup(container)) {
-                    inFlightCleanupOperationsCount++;
-                    continue;
-                }
-
-                if (inFlightCleanupOperationsCount > cleanupOperationCount
-                        || notInProcessableTimeWindow(container, now)
-                        || notHaveAnyExpirableRecord(container)) {
-                    continue;
-                }
+//                if (isContainerEmpty(container) && !hasExpiredKeyToSendBackup(container)) {
+//                    continue;
+//                }
+//
+//                if (hasRunningCleanup(container)) {
+//                    inFlightCleanupOperationsCount++;
+//                    continue;
+//                }
+//
+//                if (inFlightCleanupOperationsCount > cleanupOperationCount
+//                        || notInProcessableTimeWindow(container, now)
+//                        || notHaveAnyExpirableRecord(container)) {
+//                    continue;
+//                }
 
                 containersToProcess = addContainerTo(container, containersToProcess);
 
