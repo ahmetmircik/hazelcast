@@ -39,6 +39,7 @@ import com.hazelcast.spi.properties.HazelcastProperties;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
@@ -350,16 +351,16 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
             return;
         }
 
-        Collection<ExpiredKey> expiredKeys;
+        Collection<ExpiredKey> expiredKeys = Collections.emptyList();
         try {
             expiredKeys = pollExpiredKeys(invalidationQueue);
         } finally {
             invalidationQueue.release();
         }
 
-        if (expiredKeys.size() == 0) {
-            return;
-        }
+//        if (expiredKeys.size() == 0) {
+//            return;
+//        }
 
         // send expired keys to all backups
         OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
