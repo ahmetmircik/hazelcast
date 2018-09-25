@@ -89,7 +89,6 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
 
             // 2. Populate non-global partitioned indexes.
             populateIndexes(event, TargetIndexes.NON_GLOBAL);
-            test(event);
         }
 
         flushAndRemoveQueryCaches(event);
@@ -164,6 +163,7 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
     public void commitMigration(PartitionMigrationEvent event) {
         if (event.getMigrationEndpoint() == DESTINATION) {
             populateIndexes(event, TargetIndexes.GLOBAL);
+            test(event);
         } else {
             depopulateIndexes(event);
         }
