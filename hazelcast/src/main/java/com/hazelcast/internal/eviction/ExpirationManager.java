@@ -30,8 +30,10 @@ import static com.hazelcast.util.Preconditions.checkPositive;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * This class is responsible for gradual cleanup of expired entries from IMap and ICache. For this purpose it uses a background
- * task. Gradual cleanup is in place for IMap since {@code 3.3} and ICache since {@code 3.11}
+ * This class is responsible for gradual cleanup of expired entries from
+ * IMap and ICache. For this purpose it uses a background task. Gradual
+ * cleanup is in place for IMap since {@code 3.3} and ICache since
+ * {@code 3.11}
  */
 @SuppressWarnings("checkstyle:linelength")
 public final class ExpirationManager implements LifecycleListener {

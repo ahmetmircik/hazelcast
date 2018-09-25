@@ -25,6 +25,7 @@ import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.test.bounce.BounceMemberRule;
 import com.hazelcast.util.StringUtil;
@@ -40,6 +41,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
+@Repeat(10)
 public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     String mapName = "test";
@@ -51,6 +53,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
     public BounceMemberRule bounceMemberRule = BounceMemberRule.with(getConfig())
             .clusterSize(4)
             .driverCount(1)
+            .useTerminate()
             .build();
 
     @Override
