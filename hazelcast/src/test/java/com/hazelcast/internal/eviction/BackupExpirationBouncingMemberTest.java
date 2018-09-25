@@ -46,7 +46,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     String mapName = "test";
     int maxIdleSeconds = 2;
-    int backupCount = 3;
+    int backupCount = 1;
     int keySpace = 1000;
 
     @Rule
@@ -115,7 +115,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                     }
                 }
             }
-        }, 240);
+        }, 120);
     }
 
     private class Get implements Runnable {
