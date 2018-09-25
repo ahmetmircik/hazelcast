@@ -34,6 +34,7 @@ import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.test.bounce.BounceMemberRule;
 import com.hazelcast.util.StringUtil;
@@ -53,6 +54,7 @@ import static junit.framework.TestCase.assertTrue;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
+@Repeat(10)
 public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     private String cacheName = "test";
@@ -64,6 +66,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
     public BounceMemberRule bounceMemberRule = BounceMemberRule.with(getConfig())
             .clusterSize(4)
             .driverCount(1)
+            .useTerminate()
             .build();
 
     protected CacheConfig getCacheConfig() {
