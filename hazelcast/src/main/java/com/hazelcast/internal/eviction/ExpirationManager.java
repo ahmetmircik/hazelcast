@@ -20,9 +20,6 @@ import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.LifecycleEvent;
 import com.hazelcast.core.LifecycleListener;
-import com.hazelcast.core.MemberAttributeEvent;
-import com.hazelcast.core.MembershipEvent;
-import com.hazelcast.core.MembershipListener;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.TaskScheduler;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -40,7 +37,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * {@code 3.11}
  */
 @SuppressWarnings("checkstyle:linelength")
-public final class ExpirationManager implements LifecycleListener, MembershipListener {
+public final class ExpirationManager implements LifecycleListener {
 
     final AbstractClearExpiredRecordsTask task;
 
@@ -150,20 +147,5 @@ public final class ExpirationManager implements LifecycleListener, MembershipLis
     // only used for testing purposes
     boolean isScheduled() {
         return scheduled.get();
-    }
-
-    @Override
-    public void memberAdded(MembershipEvent membershipEvent) {
-
-    }
-
-    @Override
-    public void memberRemoved(MembershipEvent membershipEvent) {
-        task.onMemberRemoved();
-    }
-
-    @Override
-    public void memberAttributeChanged(MemberAttributeEvent memberAttributeEvent) {
-
     }
 }

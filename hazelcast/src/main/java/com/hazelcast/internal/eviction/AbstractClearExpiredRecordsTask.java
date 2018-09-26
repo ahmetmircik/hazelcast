@@ -108,9 +108,9 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
             IPartition partition = partitionService.getPartition(partitionId, false);
             T container = this.containers[partitionId];
 
-            if (partition.isLocal()) {
-                sendBackupEqualizer(container);
-            }
+//            if (partition.isLocal()) {
+//                sendBackupEqualizer(container);
+//            }
 
             if (partition.isOwnerOrBackup(thisAddress)) {
 
