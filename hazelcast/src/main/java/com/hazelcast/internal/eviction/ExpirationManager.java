@@ -39,7 +39,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @SuppressWarnings("checkstyle:linelength")
 public final class ExpirationManager implements LifecycleListener {
 
-    final ClearExpiredRecordsTask task;
+    final AbstractClearExpiredRecordsTask task;
 
     private final int taskPeriodSeconds;
     private final NodeEngine nodeEngine;
@@ -55,7 +55,7 @@ public final class ExpirationManager implements LifecycleListener {
 
     @SuppressWarnings("checkstyle:magicnumber")
     @SuppressFBWarnings({"EI_EXPOSE_REP2"})
-    public ExpirationManager(ClearExpiredRecordsTask task, NodeEngine nodeEngine) {
+    public ExpirationManager(AbstractClearExpiredRecordsTask task, NodeEngine nodeEngine) {
         this.task = task;
         this.nodeEngine = nodeEngine;
         this.taskPeriodSeconds = checkPositive(task.getTaskPeriodSeconds(), "taskPeriodSeconds should be a positive number");
@@ -115,10 +115,10 @@ public final class ExpirationManager implements LifecycleListener {
     }
 
     /**
-     * Re-schedules {@link ClearExpiredRecordsTask}, if it has been scheduled at least one time before.
+     * Re-schedules {@link AbstractClearExpiredRecordsTask}, if it has been scheduled at least one time before.
      * This info is important for the methods: {@link #stateChanged(LifecycleEvent)}
      * and {@link #onClusterStateChange(ClusterState)}. Because even if we call these methods, it is still
-     * possible that the {@link ClearExpiredRecordsTask} has not been scheduled before and in this method we
+     * possible that the {@link AbstractClearExpiredRecordsTask} has not been scheduled before and in this method we
      * prevent unnecessary scheduling of it.
      */
     private void rescheduleIfScheduledBefore() {

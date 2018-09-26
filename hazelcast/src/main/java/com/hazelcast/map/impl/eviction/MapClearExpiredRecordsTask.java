@@ -16,7 +16,7 @@
 
 package com.hazelcast.map.impl.eviction;
 
-import com.hazelcast.internal.eviction.ClearExpiredRecordsTask;
+import com.hazelcast.internal.eviction.AbstractClearExpiredRecordsTask;
 import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.operation.ClearExpiredOperation;
@@ -76,7 +76,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  *    </pre>
  * </p>
  */
-public class MapClearExpiredRecordsTask extends ClearExpiredRecordsTask<PartitionContainer>
+public class MapClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<PartitionContainer>
         implements OperationResponseHandler {
 
     public static final String PROP_PRIMARY_DRIVES_BACKUP = "hazelcast.internal.map.expiration.primary.drives_backup";

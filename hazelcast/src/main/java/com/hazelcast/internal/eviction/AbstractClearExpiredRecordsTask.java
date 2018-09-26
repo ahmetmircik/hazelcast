@@ -39,7 +39,7 @@ import static java.lang.Math.min;
 
 @SuppressWarnings("checkstyle:magicnumber")
 @SuppressFBWarnings({"URF_UNREAD_FIELD"})
-public abstract class ClearExpiredRecordsTask<T> implements Runnable {
+public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 
     public static final int DIFFERENCE_BETWEEN_TWO_SUBSEQUENT_PARTITION_CLEANUP_MILLIS = 1000;
     protected final int cleanupOperationCount;
@@ -60,8 +60,8 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
     private HazelcastProperties properties;
 
     @SuppressFBWarnings({"EI_EXPOSE_REP2"})
-    public ClearExpiredRecordsTask(NodeEngine nodeEngine, T[] containers, HazelcastProperty cleanupOpProperty,
-                                   HazelcastProperty cleanupPercentageProperty, HazelcastProperty taskPeriodProperty) {
+    public AbstractClearExpiredRecordsTask(NodeEngine nodeEngine, T[] containers, HazelcastProperty cleanupOpProperty,
+                                           HazelcastProperty cleanupPercentageProperty, HazelcastProperty taskPeriodProperty) {
         this.properties = nodeEngine.getProperties();
         this.containers = containers;
         this.nodeEngine = nodeEngine;

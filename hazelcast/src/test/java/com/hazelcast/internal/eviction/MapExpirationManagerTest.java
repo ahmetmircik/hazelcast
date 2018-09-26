@@ -98,7 +98,7 @@ public class MapExpirationManagerTest extends AbstractExpirationManagerTest {
         assertTrueAllTheTime(new AssertTask() {
             @Override
             public void run() {
-                assertFalse("There should be zero ClearExpiredRecordsTask",
+                assertFalse("There should be zero AbstractClearExpiredRecordsTask",
                         hasClearExpiredRecordsTaskStarted(node));
             }
         }, 3);
@@ -136,7 +136,7 @@ public class MapExpirationManagerTest extends AbstractExpirationManagerTest {
         assertTrueAllTheTime(new AssertTask() {
             @Override
             public void run() {
-                assertFalse("There should be zero ClearExpiredRecordsTask",
+                assertFalse("There should be zero AbstractClearExpiredRecordsTask",
                         hasClearExpiredRecordsTaskStarted(liteMember));
             }
         }, 3);
@@ -154,7 +154,7 @@ public class MapExpirationManagerTest extends AbstractExpirationManagerTest {
         IMap<Integer, Integer> map = node.getMap(mapName);
         map.put(1, 1);
 
-        assertTrue("There should be one ClearExpiredRecordsTask",
+        assertTrue("There should be one AbstractClearExpiredRecordsTask",
                 hasClearExpiredRecordsTaskStarted(node));
     }
 
@@ -170,7 +170,7 @@ public class MapExpirationManagerTest extends AbstractExpirationManagerTest {
         IMap<Integer, Integer> map = node.getMap(mapName);
         map.put(1, 1);
 
-        assertTrue("There should be one ClearExpiredRecordsTask",
+        assertTrue("There should be one AbstractClearExpiredRecordsTask",
                 hasClearExpiredRecordsTaskStarted(node));
     }
 

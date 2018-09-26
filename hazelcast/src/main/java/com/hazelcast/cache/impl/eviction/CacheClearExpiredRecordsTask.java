@@ -20,7 +20,7 @@ import com.hazelcast.cache.impl.AbstractCacheRecordStore;
 import com.hazelcast.cache.impl.CachePartitionSegment;
 import com.hazelcast.cache.impl.ICacheRecordStore;
 import com.hazelcast.cache.impl.operation.CacheClearExpiredOperation;
-import com.hazelcast.internal.eviction.ClearExpiredRecordsTask;
+import com.hazelcast.internal.eviction.AbstractClearExpiredRecordsTask;
 import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
@@ -71,7 +71,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  *    </pre>
  * </p>
  */
-public class CacheClearExpiredRecordsTask extends ClearExpiredRecordsTask<CachePartitionSegment>
+public class CacheClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<CachePartitionSegment>
         implements OperationResponseHandler {
 
     public static final String PROP_CLEANUP_PERCENTAGE = "hazelcast.internal.cache.expiration.cleanup.percentage";
