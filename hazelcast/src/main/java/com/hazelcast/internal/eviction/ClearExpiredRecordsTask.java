@@ -198,6 +198,7 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
     int getCleanupPercentage() {
         return cleanupPercentage;
     }
+
     int getTaskPeriodSeconds() {
         return taskPeriodSeconds;
     }
