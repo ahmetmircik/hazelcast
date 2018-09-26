@@ -45,7 +45,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
-@Repeat(10)
+@Repeat(20)
 public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     String mapName = "test";
