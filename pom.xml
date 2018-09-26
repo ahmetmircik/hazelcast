@@ -879,7 +879,7 @@
                                 ${vmHeapSettings}
                                 -Dhazelcast.phone.home.enabled=false
                                 -Dhazelcast.mancenter.enabled=false
-                                -Dhazelcast.logging.type=none
+                                -Dhazelcast.logging.type=jdk
                                 -Dhazelcast.test.use.network=false
                                 -Dlog4j.skipJansi=true
                                 ${extraVmArgs}
