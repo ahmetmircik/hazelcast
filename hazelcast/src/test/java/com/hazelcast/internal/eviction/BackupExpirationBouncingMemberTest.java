@@ -38,7 +38,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
-import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import static com.hazelcast.map.BackupExpirationTest.getTotalEntryCount;
@@ -120,20 +119,18 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                         long lastStartMillis = getLastStartMillis(mapServiceContext.getExpirationManager());
                         long lastEndMillis = getLastEndMillis(mapServiceContext.getExpirationManager());
 
-                        String partitionsOn = "";
+                        String backupPartitionsOnThisMember = "";
                         InternalPartition[] internalPartitions = ((InternalPartitionServiceImpl) nodeEngineImpl.getPartitionService()).getInternalPartitions();
                         for (InternalPartition partition : internalPartitions) {
-                            if (partition.isOwnerOrBackup(nodeEngineImpl.getThisAddress())) {
-                                partitionsOn += partition.getPartitionId() + ", ";
+                            if (!partition.isLocal()) {
+                                backupPartitionsOnThisMember += partition.getPartitionId() + ", ";
                             }
                         }
-
-                        Collection<Integer> ownedPartitions = mapServiceContext.getOwnedPartitions();
 
                         LocalMapStats localMapStats = map.getLocalMapStats();
                         String msg = "Failed on node: %s, current cluster state is: %s, "
                                 + "members: %s, "
-                                + "partitionsOnThisMember: %s, "
+                                + "backupPartitionsOnThisMember: %s, "
                                 + "ownedEntryCount: %d, backupEntryCount: %d, "
                                 + "expiredRecordsCleanerTask=[now: %s, lastStart: %s, lastEnd: %s]";
 
@@ -141,7 +138,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                                 node,
                                 clusterState.toString(),
                                 memberCountMsg(members),
-                                partitionsOn,
+                                backupPartitionsOnThisMember,
                                 localMapStats.getOwnedEntryCount(),
                                 localMapStats.getBackupEntryCount(),
                                 StringUtil.timeToStringFriendly(System.currentTimeMillis()),
