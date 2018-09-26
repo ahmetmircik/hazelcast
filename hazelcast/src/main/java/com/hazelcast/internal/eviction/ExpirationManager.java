@@ -20,8 +20,6 @@ import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.LifecycleEvent;
 import com.hazelcast.core.LifecycleListener;
-import com.hazelcast.partition.PartitionLostEvent;
-import com.hazelcast.partition.PartitionLostListener;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.TaskScheduler;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -39,7 +37,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * {@code 3.11}
  */
 @SuppressWarnings("checkstyle:linelength")
-public final class ExpirationManager implements LifecycleListener, PartitionLostListener {
+public final class ExpirationManager implements LifecycleListener {
 
     final ClearExpiredRecordsTask task;
 
@@ -65,7 +63,6 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
 
         HazelcastInstance hazelcastInstance = this.nodeEngine.getHazelcastInstance();
         hazelcastInstance.getLifecycleService().addLifecycleListener(this);
-        hazelcastInstance.getPartitionService().addPartitionLostListener(this);
     }
 
     /**
@@ -150,10 +147,5 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
     // only used for testing purposes
     boolean isScheduled() {
         return scheduled.get();
-    }
-
-    @Override
-    public void partitionLost(PartitionLostEvent event) {
-        task.onPartitionLost(event);
     }
 }
