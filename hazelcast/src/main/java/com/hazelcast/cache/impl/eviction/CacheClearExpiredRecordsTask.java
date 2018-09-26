@@ -200,6 +200,5 @@ public class CacheClearExpiredRecordsTask extends ClearExpiredRecordsTask<CacheP
 
     @Override
     public void onPartitionLost(PartitionLostEvent event) {
-        throw new UnsupportedOperationException();
     }
 }
