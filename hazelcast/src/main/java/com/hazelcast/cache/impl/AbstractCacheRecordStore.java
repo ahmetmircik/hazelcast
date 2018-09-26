@@ -493,7 +493,7 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
             this.expiredKeys.offer(new ExpiredKey(toHeapData(key), record.getCreationTime()));
         }
 
-        sendBackupExpirations(true);
+        sendBackupExpirations(true, false);
     }
 
     @Override
@@ -502,11 +502,11 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
     }
 
     @SuppressWarnings({"checkstyle:npathcomplexity"})
-    public void sendBackupExpirations(boolean checkIfReachedBatch) {
+    public void sendBackupExpirations(boolean checkIfReachedBatch, boolean omitChecks) {
         InvalidationQueue<ExpiredKey> invalidationQueue = this.expiredKeys;
 
         int size = invalidationQueue.size();
-        if (size == 0 || checkIfReachedBatch && size < MAX_EXPIRED_KEY_COUNT_IN_BATCH) {
+        if (!omitChecks && (size == 0 || checkIfReachedBatch && size < MAX_EXPIRED_KEY_COUNT_IN_BATCH)) {
             return;
         }
 
@@ -515,9 +515,9 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
         }
 
         Collection<ExpiredKey> expiredKeys = collectExpiredKeys(invalidationQueue);
-        if (expiredKeys.size() == 0) {
-            return;
-        }
+//        if (expiredKeys.size() == 0) {
+//            return;
+//        }
 
         // send expired keys to all backups
         OperationService operationService = nodeEngine.getOperationService();

@@ -108,6 +108,10 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
             IPartition partition = partitionService.getPartition(partitionId, false);
             T container = this.containers[partitionId];
 
+            if (partition.isLocal()) {
+                sendBackupEqualizer(container);
+            }
+
             if (partition.isOwnerOrBackup(thisAddress)) {
 
                 if (isContainerEmpty(container) && !hasExpiredKeyToSendBackup(container)) {
@@ -194,14 +198,14 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
     }
 
     public void onMemberRemoved() {
-        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-            IPartition partition = partitionService.getPartition(partitionId, false);
-            T container = this.containers[partitionId];
-
-            if (partition.isLocal()) {
-                sendBackupEqualizer(container);
-            }
-        }
+//        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+//            IPartition partition = partitionService.getPartition(partitionId, false);
+//            T container = this.containers[partitionId];
+//
+//            if (partition.isLocal()) {
+//                sendBackupEqualizer(container);
+//            }
+//        }
     }
 
     // only used for testing purposes

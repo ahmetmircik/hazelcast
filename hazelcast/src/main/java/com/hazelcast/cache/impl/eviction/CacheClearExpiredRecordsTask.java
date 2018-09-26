@@ -105,7 +105,7 @@ public class CacheClearExpiredRecordsTask extends AbstractClearExpiredRecordsTas
 
     @Override
     protected void sendBackupEqualizer(CachePartitionSegment container) {
-
+        doBackupExpiration(container,true);
     }
 
     @Override
@@ -171,7 +171,7 @@ public class CacheClearExpiredRecordsTask extends AbstractClearExpiredRecordsTas
 
     @Override
     protected void sortPartitionContainers(List<CachePartitionSegment> containers) {
-        for (CachePartitionSegment segment: containers) {
+        for (CachePartitionSegment segment : containers) {
             segment.storeLastCleanupTime();
         }
         sort(containers, partitionSegmentComparator);
@@ -180,14 +180,14 @@ public class CacheClearExpiredRecordsTask extends AbstractClearExpiredRecordsTas
     @Override
     public void sendResponse(Operation op, Object response) {
         CachePartitionSegment container = containers[op.getPartitionId()];
-        doBackupExpiration(container);
+        doBackupExpiration(container, false);
     }
 
-    private void doBackupExpiration(CachePartitionSegment container) {
+    private void doBackupExpiration(CachePartitionSegment container, boolean omitChecks) {
         Iterator<ICacheRecordStore> iterator = container.recordStoreIterator();
         while (iterator.hasNext()) {
             AbstractCacheRecordStore store = (AbstractCacheRecordStore) iterator.next();
-            store.sendBackupExpirations(false);
+            store.sendBackupExpirations(false, omitChecks);
         }
     }
 
