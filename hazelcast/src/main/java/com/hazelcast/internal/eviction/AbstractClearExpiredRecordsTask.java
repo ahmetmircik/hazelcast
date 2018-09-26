@@ -30,6 +30,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.util.CollectionUtil.isEmpty;
 import static com.hazelcast.util.Preconditions.checkPositive;
@@ -58,6 +59,7 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
     private int partitionCount;
     private IPartitionService partitionService;
     private HazelcastProperties properties;
+    private AtomicInteger removedMember = new AtomicInteger();
 
     @SuppressFBWarnings({"EI_EXPOSE_REP2"})
     public AbstractClearExpiredRecordsTask(NodeEngine nodeEngine, T[] containers, HazelcastProperty cleanupOpProperty,
@@ -105,10 +107,6 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
             IPartition partition = partitionService.getPartition(partitionId, false);
             T container = this.containers[partitionId];
-
-//            if (partition.isLocal()) {
-//                sendBackupEqualizer(container);
-//            }
 
             if (partition.isOwnerOrBackup(thisAddress)) {
 
@@ -195,8 +193,18 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         }
     }
 
-    // only used for testing purposes
+    public void onMemberRemoved() {
+        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+            IPartition partition = partitionService.getPartition(partitionId, false);
+            T container = this.containers[partitionId];
 
+            if (partition.isLocal()) {
+                sendBackupEqualizer(container);
+            }
+        }
+    }
+
+    // only used for testing purposes
     int getCleanupPercentage() {
         return cleanupPercentage;
     }
