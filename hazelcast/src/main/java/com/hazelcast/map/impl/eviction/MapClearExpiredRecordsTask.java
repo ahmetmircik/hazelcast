@@ -21,6 +21,7 @@ import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.operation.ClearExpiredOperation;
 import com.hazelcast.map.impl.recordstore.AbstractEvictableRecordStore;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
@@ -170,6 +171,14 @@ public class MapClearExpiredRecordsTask extends ClearExpiredRecordsTask<Partitio
     @Override
     protected void setHasRunningCleanup(PartitionContainer container, boolean status) {
         container.setHasRunningCleanup(status);
+    }
+
+    @Override
+    protected void sendBackupEqualizer(PartitionContainer container) {
+        ConcurrentMap<String, RecordStore> maps = container.getMaps();
+        for (RecordStore recordStore : maps.values()) {
+            ((DefaultRecordStore) recordStore).sendExpiredKeysToBackups(false, true);
+        }
     }
 
     /**

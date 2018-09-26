@@ -108,6 +108,8 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
 
             if (partition.isOwnerOrBackup(thisAddress)) {
 
+                sendBackupEqualizer(container);
+
                 if (isContainerEmpty(container) && !hasExpiredKeyToSendBackup(container)) {
                     continue;
                 }
@@ -192,10 +194,10 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
     }
 
     // only used for testing purposes
+
     int getCleanupPercentage() {
         return cleanupPercentage;
     }
-
     int getTaskPeriodSeconds() {
         return taskPeriodSeconds;
     }
@@ -203,6 +205,8 @@ public abstract class ClearExpiredRecordsTask<T> implements Runnable {
     public int getCleanupOperationCount() {
         return cleanupOperationCount;
     }
+
+    protected abstract void sendBackupEqualizer(T container);
 
     protected abstract boolean hasExpiredKeyToSendBackup(T container);
 

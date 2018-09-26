@@ -104,6 +104,11 @@ public class CacheClearExpiredRecordsTask extends ClearExpiredRecordsTask<CacheP
     }
 
     @Override
+    protected void sendBackupEqualizer(CachePartitionSegment container) {
+
+    }
+
+    @Override
     protected boolean hasExpiredKeyToSendBackup(CachePartitionSegment container) {
         Iterator<ICacheRecordStore> iterator = container.recordStoreIterator();
         while (iterator.hasNext()) {
