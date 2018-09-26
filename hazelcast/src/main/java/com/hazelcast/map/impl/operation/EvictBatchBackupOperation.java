@@ -18,9 +18,12 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.eviction.ExpiredKey;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.LazyEntryViewFromRecord;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.BackupOperation;
 import com.hazelcast.spi.ExceptionAction;
 import com.hazelcast.spi.exception.WrongTargetException;
@@ -66,14 +69,25 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
         // equalize backup entry count to owner entry count to have identical memory occupancy
         int sizeBefore = recordStore.size();
         int diff = sizeBefore - ownerPartitionEntryCount;
-        for (int i = 0; i < diff; i++) {
-            mapContainer.getEvictor().evict(recordStore, null);
+
+        Evictor evictor = mapContainer.getEvictor();
+        if (evictor != Evictor.NULL_EVICTOR) {
+            for (int i = 0; i < diff; i++) {
+                evictor.evict(recordStore, null);
+            }
+        } else {
+            Iterable<LazyEntryViewFromRecord> sample = recordStore.getStorage().getRandomSamples(diff);
+            for (LazyEntryViewFromRecord entryViewFromRecord : sample) {
+                Data dataKey = entryViewFromRecord.getRecord().getKey();
+                recordStore.evict(dataKey, true);
+            }
         }
+
         int sizeAfter = recordStore.size();
 
         if (diff > 0) {
             getLogger().severe("partition-id: " + getPartitionId()
-                    + "primary-entry-count: " + ownerPartitionEntryCount
+                    + ", primary-entry-count: " + ownerPartitionEntryCount
                     + ", record-store-size [before-eviction: " + sizeBefore + ", after-eviction: " + sizeAfter + "]");
         }
     }
