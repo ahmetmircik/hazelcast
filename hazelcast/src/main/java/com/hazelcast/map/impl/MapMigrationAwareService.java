@@ -22,7 +22,6 @@ import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
-import com.hazelcast.map.impl.recordstore.AbstractEvictableRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.query.impl.Index;
@@ -32,7 +31,6 @@ import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.spi.FragmentedMigrationAwareService;
 import com.hazelcast.spi.ObjectNamespace;
 import com.hazelcast.spi.Operation;
-import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.PartitionMigrationEvent;
 import com.hazelcast.spi.PartitionReplicationEvent;
 import com.hazelcast.spi.ServiceNamespace;
@@ -43,7 +41,6 @@ import com.hazelcast.util.function.Predicate;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.map.impl.querycache.publisher.AccumulatorSweeper.flushAccumulator;
 import static com.hazelcast.map.impl.querycache.publisher.AccumulatorSweeper.removeAccumulator;
@@ -92,16 +89,6 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
 
         }
         flushAndRemoveQueryCaches(event);
-    }
-
-    private void test(PartitionMigrationEvent event) {
-        OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
-        int partitionId = event.getPartitionId();
-        PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
-        ConcurrentMap<String, RecordStore> maps = container.getMaps();
-        for (RecordStore recordStore : maps.values()) {
-            ((AbstractEvictableRecordStore) recordStore).sendExpiredKeysToBackups(false, true);
-        }
     }
 
     /**
@@ -180,10 +167,6 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
         mapServiceContext.reloadOwnedPartitions();
 
         removeOrRegenerateNearCacheUuid(event);
-
-        if (event.getMigrationEndpoint() == DESTINATION) {
-            test(event);
-        }
     }
 
     private void removeOrRegenerateNearCacheUuid(PartitionMigrationEvent event) {
