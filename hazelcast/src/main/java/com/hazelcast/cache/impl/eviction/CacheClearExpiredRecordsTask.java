@@ -22,6 +22,7 @@ import com.hazelcast.cache.impl.ICacheRecordStore;
 import com.hazelcast.cache.impl.operation.CacheClearExpiredOperation;
 import com.hazelcast.internal.eviction.AbstractClearExpiredRecordsTask;
 import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
+import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationResponseHandler;
@@ -200,5 +201,10 @@ public class CacheClearExpiredRecordsTask extends AbstractClearExpiredRecordsTas
                 .setValidateTarget(false)
                 .setServiceName(SERVICE_NAME)
                 .setOperationResponseHandler(this);
+    }
+
+    @Override
+    public void partitionLost(PartitionLostEvent event) {
+
     }
 }

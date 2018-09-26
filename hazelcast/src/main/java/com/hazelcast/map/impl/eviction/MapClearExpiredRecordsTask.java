@@ -23,6 +23,7 @@ import com.hazelcast.map.impl.operation.ClearExpiredOperation;
 import com.hazelcast.map.impl.recordstore.AbstractEvictableRecordStore;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationResponseHandler;
@@ -151,6 +152,11 @@ public class MapClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<
     }
 
     @Override
+    public void partitionLost(PartitionLostEvent event) {
+        sendBackupEqualizer(containers[event.getPartitionId()]);
+    }
+
+    @Override
     protected boolean hasExpiredKeyToSendBackup(PartitionContainer container) {
         long size = 0L;
         ConcurrentMap<String, RecordStore> maps = container.getMaps();
@@ -175,9 +181,11 @@ public class MapClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<
 
     @Override
     protected void sendBackupEqualizer(PartitionContainer container) {
-        ConcurrentMap<String, RecordStore> maps = container.getMaps();
-        for (RecordStore recordStore : maps.values()) {
-            ((DefaultRecordStore) recordStore).sendExpiredKeysToBackups(false, true);
+        if (nodeEngine.getPartitionService().getPartition(container.getPartitionId()).isLocal()) {
+            ConcurrentMap<String, RecordStore> maps = container.getMaps();
+            for (RecordStore recordStore : maps.values()) {
+                ((DefaultRecordStore) recordStore).sendExpiredKeysToBackups(false, true);
+            }
         }
     }
 
