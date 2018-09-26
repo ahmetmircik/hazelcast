@@ -108,7 +108,7 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 
             if (partition.isOwnerOrBackup(thisAddress)) {
 
-                sendBackupEqualizer(container);
+                //sendBackupEqualizer(container);
 
                 if (isContainerEmpty(container) && !hasExpiredKeyToSendBackup(container)) {
                     continue;
