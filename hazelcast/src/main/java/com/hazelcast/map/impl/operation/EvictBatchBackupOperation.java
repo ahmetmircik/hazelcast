@@ -72,7 +72,7 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
 
 
         getLogger().severe("partition-id: " + getPartitionId()
-                + ", recordStore-size: " + size + ", ownerPartitionEntryCount");
+                + ", recordStore-size: " + size + ", ownerPartitionEntryCount: " + ownerPartitionEntryCount);
     }
 
     @Override
