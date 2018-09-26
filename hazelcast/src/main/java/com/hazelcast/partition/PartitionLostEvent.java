@@ -97,7 +97,9 @@ public class PartitionLostEvent implements DataSerializable, PartitionEvent {
 
     @Override
     public String toString() {
-        return getClass().getName() + "{partitionId=" + partitionId + ", lostBackupCount=" + lostBackupCount + ", eventSource="
-                + eventSource + '}';
+        return getClass().getName() + "{partitionId=" + partitionId
+                + ", lostBackupCount = " + lostBackupCount
+                + ", eventSource = " + eventSource +
+                '}';
     }
 }

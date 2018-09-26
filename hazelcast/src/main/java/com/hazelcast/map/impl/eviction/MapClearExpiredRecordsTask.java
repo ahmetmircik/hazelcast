@@ -153,6 +153,8 @@ public class MapClearExpiredRecordsTask extends ClearExpiredRecordsTask<Partitio
 
     @Override
     public void onPartitionLost(PartitionLostEvent event) {
+        nodeEngine.getLogger(getClass()).severe("PartitionLostEvent received: " + event);
+
         int partitionId = event.getPartitionId();
         if (nodeEngine.getPartitionService().isPartitionOwner(partitionId)) {
             PartitionContainer container = containers[partitionId];
