@@ -64,16 +64,17 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
         }
 
         // equalize backup entry count to owner entry count to have identical memory occupancy
-        int size = recordStore.size();
-        int diff = size - ownerPartitionEntryCount;
+        int sizeBefore = recordStore.size();
+        int diff = sizeBefore - ownerPartitionEntryCount;
         for (int i = 0; i < diff; i++) {
             mapContainer.getEvictor().evict(recordStore, null);
         }
+        int sizeAfter = recordStore.size();
 
-
-        if(diff > 0) {
+        if (diff > 0) {
             getLogger().severe("partition-id: " + getPartitionId()
-                    + ", recordStore-size: " + size + ", ownerPartitionEntryCount: " + ownerPartitionEntryCount);
+                    + "primary-entry-count: " + ownerPartitionEntryCount
+                    + ", record-store-size [before-eviction: " + sizeBefore + ", after-eviction: " + sizeAfter + "]");
         }
     }
 

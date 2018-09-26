@@ -149,7 +149,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                     }
                 }
             }
-        }, 120);
+        }, 300);
     }
 
     private class Get implements Runnable {
