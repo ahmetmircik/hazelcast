@@ -84,11 +84,11 @@ public class MapClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<
     public static final String PROP_CLEANUP_OPERATION_COUNT = "hazelcast.internal.map.expiration.cleanup.operation.count";
     public static final String PROP_TASK_PERIOD_SECONDS = "hazelcast.internal.map.expiration.task.period.seconds";
 
-    public static final int DEFAULT_TASK_PERIOD_SECONDS = 1;
+    public static final int DEFAULT_TASK_PERIOD_SECONDS = 5;
     public static final HazelcastProperty TASK_PERIOD_SECONDS
             = new HazelcastProperty(PROP_TASK_PERIOD_SECONDS, DEFAULT_TASK_PERIOD_SECONDS, SECONDS);
     public static final boolean DEFAULT_PRIMARY_DRIVES_BACKUP = true;
-    public static final int DEFAULT_CLEANUP_PERCENTAGE = 100;
+    public static final int DEFAULT_CLEANUP_PERCENTAGE = 10;
     public static final int MAX_EXPIRED_KEY_COUNT_IN_BATCH = 100;
 
     public static final HazelcastProperty PRIMARY_DRIVES_BACKUP
