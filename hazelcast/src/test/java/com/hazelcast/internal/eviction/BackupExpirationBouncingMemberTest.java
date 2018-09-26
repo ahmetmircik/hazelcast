@@ -20,8 +20,12 @@ import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
+import com.hazelcast.internal.partition.InternalPartition;
+import com.hazelcast.internal.partition.impl.InternalPartitionServiceImpl;
 import com.hazelcast.map.impl.MapService;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.monitor.LocalMapStats;
+import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
@@ -34,6 +38,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
+import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import static com.hazelcast.map.BackupExpirationTest.getTotalEntryCount;
@@ -84,6 +89,20 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                 assertSize(testDrivers);
             }
 
+            private String memberCountMsg(AtomicReferenceArray<HazelcastInstance> members) {
+                int length = members.length();
+                String msg = "Number of members " + length;
+                for (int i = 0; i < length; i++) {
+                    HazelcastInstance node = members.get(i);
+                    assert node != null;
+                    if (node.getLifecycleService().isRunning()
+                            && node.getCluster().getClusterState() != ClusterState.PASSIVE) {
+                        msg += node.toString() + ", ";
+                    }
+                }
+                return msg;
+            }
+
             private void assertSize(AtomicReferenceArray<HazelcastInstance> members) {
                 int length = members.length();
                 for (int i = 0; i < length; i++) {
@@ -95,16 +114,34 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                         ClusterState clusterState = node.getCluster().getClusterState();
                         IMap map = node.getMap(mapName);
 
-                        MapService mapService = getNodeEngineImpl(node).getService(MapService.SERVICE_NAME);
-                        long lastStartMillis = getLastStartMillis(mapService.getMapServiceContext().getExpirationManager());
-                        long lastEndMillis = getLastEndMillis(mapService.getMapServiceContext().getExpirationManager());
+                        NodeEngineImpl nodeEngineImpl = getNodeEngineImpl(node);
+                        MapService mapService = nodeEngineImpl.getService(MapService.SERVICE_NAME);
+                        MapServiceContext mapServiceContext = mapService.getMapServiceContext();
+                        long lastStartMillis = getLastStartMillis(mapServiceContext.getExpirationManager());
+                        long lastEndMillis = getLastEndMillis(mapServiceContext.getExpirationManager());
+
+                        String partitionsOn = "";
+                        InternalPartition[] internalPartitions = ((InternalPartitionServiceImpl) nodeEngineImpl.getPartitionService()).getInternalPartitions();
+                        for (InternalPartition partition : internalPartitions) {
+                            if (partition.isOwnerOrBackup(nodeEngineImpl.getThisAddress())) {
+                                partitionsOn += partition.getPartitionId() + ", ";
+                            }
+                        }
+
+                        Collection<Integer> ownedPartitions = mapServiceContext.getOwnedPartitions();
 
                         LocalMapStats localMapStats = map.getLocalMapStats();
                         String msg = "Failed on node: %s, current cluster state is: %s, "
+                                + "members: %s, "
+                                + "partitionsOnThisMember: %s, "
                                 + "ownedEntryCount: %d, backupEntryCount: %d, "
                                 + "expiredRecordsCleanerTask=[now: %s, lastStart: %s, lastEnd: %s]";
 
-                        String formattedMsg = String.format(msg, node, clusterState.toString(),
+                        String formattedMsg = String.format(msg,
+                                node,
+                                clusterState.toString(),
+                                memberCountMsg(members),
+                                partitionsOn,
                                 localMapStats.getOwnedEntryCount(),
                                 localMapStats.getBackupEntryCount(),
                                 StringUtil.timeToStringFriendly(System.currentTimeMillis()),
