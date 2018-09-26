@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedList;
 
-import static com.hazelcast.util.CollectionUtil.isNotEmpty;
 import static com.hazelcast.util.TimeUtil.zeroOutMs;
 
 /**
@@ -47,8 +46,8 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
     public EvictBatchBackupOperation(String name, Collection<ExpiredKey> expiredKeys, int ownerPartitionEntryCount) {
         super(name);
 
-        assert isNotEmpty(expiredKeys);
-        assert name != null;
+        //assert isNotEmpty(expiredKeys);
+        //assert name != null;
 
         this.name = name;
         this.expiredKeys = expiredKeys;

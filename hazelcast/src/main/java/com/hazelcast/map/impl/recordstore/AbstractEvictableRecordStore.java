@@ -336,14 +336,13 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
             expiredKeys.offer(new ExpiredKey(toHeapData(record.getKey()), record.getCreationTime()));
         }
 
-        sendExpiredKeysToBackups(true);
+        sendExpiredKeysToBackups(true, false);
     }
 
-    public void sendExpiredKeysToBackups(boolean checkIfReachedBatch) {
+    public void sendExpiredKeysToBackups(boolean checkIfReachedBatch, boolean checkNothing) {
         InvalidationQueue<ExpiredKey> invalidationQueue = getExpiredKeys();
-
         int size = invalidationQueue.size();
-        if (size == 0 || checkIfReachedBatch && size < MAX_EXPIRED_KEY_COUNT_IN_BATCH) {
+        if (!checkNothing && (size == 0 || checkIfReachedBatch && size < MAX_EXPIRED_KEY_COUNT_IN_BATCH)) {
             return;
         }
 

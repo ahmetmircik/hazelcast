@@ -17,8 +17,11 @@
 package com.hazelcast.internal.eviction;
 
 import com.hazelcast.cluster.ClusterState;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.LifecycleEvent;
 import com.hazelcast.core.LifecycleListener;
+import com.hazelcast.partition.PartitionLostEvent;
+import com.hazelcast.partition.PartitionLostListener;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.TaskScheduler;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -36,7 +39,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * {@code 3.11}
  */
 @SuppressWarnings("checkstyle:linelength")
-public final class ExpirationManager implements LifecycleListener {
+public final class ExpirationManager implements LifecycleListener, PartitionLostListener {
 
     final ClearExpiredRecordsTask task;
 
@@ -50,17 +53,19 @@ public final class ExpirationManager implements LifecycleListener {
 
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
 
-    private volatile ScheduledFuture<?> expirationTask;
+    private volatile ScheduledFuture<?> scheduledExpirationTask;
 
     @SuppressWarnings("checkstyle:magicnumber")
     @SuppressFBWarnings({"EI_EXPOSE_REP2"})
     public ExpirationManager(ClearExpiredRecordsTask task, NodeEngine nodeEngine) {
-        this.nodeEngine = nodeEngine;
-        this.globalTaskScheduler = nodeEngine.getExecutionService().getGlobalTaskScheduler();
-        this.taskPeriodSeconds = task.getTaskPeriodSeconds();
-        checkPositive(taskPeriodSeconds, "taskPeriodSeconds should be a positive number");
-        this.nodeEngine.getHazelcastInstance().getLifecycleService().addLifecycleListener(this);
         this.task = task;
+        this.nodeEngine = nodeEngine;
+        this.taskPeriodSeconds = checkPositive(task.getTaskPeriodSeconds(), "taskPeriodSeconds should be a positive number");
+        this.globalTaskScheduler = nodeEngine.getExecutionService().getGlobalTaskScheduler();
+
+        HazelcastInstance hazelcastInstance = this.nodeEngine.getHazelcastInstance();
+        hazelcastInstance.getLifecycleService().addLifecycleListener(this);
+        hazelcastInstance.getPartitionService().addPartitionLostListener(this);
     }
 
     /**
@@ -72,7 +77,7 @@ public final class ExpirationManager implements LifecycleListener {
             return;
         }
 
-        expirationTask = globalTaskScheduler.scheduleWithRepetition(task, taskPeriodSeconds,
+        scheduledExpirationTask = globalTaskScheduler.scheduleWithRepetition(task, taskPeriodSeconds,
                 taskPeriodSeconds, SECONDS);
         scheduledOneTime.set(true);
     }
@@ -83,7 +88,7 @@ public final class ExpirationManager implements LifecycleListener {
      */
     void unscheduleExpirationTask() {
         scheduled.set(false);
-        ScheduledFuture<?> scheduledFuture = this.expirationTask;
+        ScheduledFuture<?> scheduledFuture = this.scheduledExpirationTask;
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);
         }
@@ -145,5 +150,10 @@ public final class ExpirationManager implements LifecycleListener {
     // only used for testing purposes
     boolean isScheduled() {
         return scheduled.get();
+    }
+
+    @Override
+    public void partitionLost(PartitionLostEvent event) {
+        task.onPartitionLost(event);
     }
 }
