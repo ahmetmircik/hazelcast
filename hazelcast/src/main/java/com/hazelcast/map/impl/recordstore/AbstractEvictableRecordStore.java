@@ -36,7 +36,6 @@ import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes.MapMergeTypes;
 import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.properties.HazelcastProperties;
-import com.hazelcast.util.ExceptionUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -363,22 +362,23 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
 //        }
 
         // send expired keys to all backups
-        try {
-            OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
-            int backupReplicaCount = getMapContainer().getTotalBackupCount();
-            for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
-                if (hasReplicaAddress(getPartitionId(), replicaIndex)) {
-                    Operation operation = new EvictBatchBackupOperation(getName(), expiredKeys, size());
-                    operationService.createInvocationBuilder(MapService.SERVICE_NAME, operation, getPartitionId())
-                            .setReplicaIndex(replicaIndex).invoke();
+        boolean loop = false;
+        do {
+            try {
+                OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
+                int backupReplicaCount = getMapContainer().getTotalBackupCount();
+                for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
+                    if (hasReplicaAddress(getPartitionId(), replicaIndex)) {
+                        Operation operation = new EvictBatchBackupOperation(getName(), expiredKeys, size());
+                        operationService.createInvocationBuilder(MapService.SERVICE_NAME, operation, getPartitionId())
+                                .setReplicaIndex(replicaIndex).invoke();
+                    }
                 }
+            } catch (Exception t) {
+                loop = true;
+                t.printStackTrace();
             }
-        } catch (Throwable t) {
-            for (ExpiredKey expiredKey : expiredKeys) {
-                invalidationQueue.offer(expiredKey);
-            }
-            throw ExceptionUtil.rethrow(t);
-        }
+        } while (loop);
     }
 
     protected boolean hasReplicaAddress(int partitionId, int replicaIndex) {
