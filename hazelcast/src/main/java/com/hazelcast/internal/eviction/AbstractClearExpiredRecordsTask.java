@@ -17,7 +17,6 @@
 package com.hazelcast.internal.eviction;
 
 import com.hazelcast.nio.Address;
-import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
@@ -229,6 +228,4 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
     protected abstract void sortPartitionContainers(List<T> containers);
 
     protected abstract Operation createExpirationOperation(int cleanupPercentage, T container);
-
-    public abstract void partitionLost(PartitionLostEvent event);
 }

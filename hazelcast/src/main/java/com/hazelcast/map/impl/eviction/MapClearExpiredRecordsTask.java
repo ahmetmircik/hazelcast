@@ -23,7 +23,6 @@ import com.hazelcast.map.impl.operation.ClearExpiredOperation;
 import com.hazelcast.map.impl.recordstore.AbstractEvictableRecordStore;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationResponseHandler;
@@ -149,11 +148,6 @@ public class MapClearExpiredRecordsTask extends AbstractClearExpiredRecordsTask<
                 .setValidateTarget(false)
                 .setServiceName(SERVICE_NAME)
                 .setOperationResponseHandler(this);
-    }
-
-    @Override
-    public void partitionLost(PartitionLostEvent event) {
-        sendBackupEqualizer(containers[event.getPartitionId()]);
     }
 
     @Override
