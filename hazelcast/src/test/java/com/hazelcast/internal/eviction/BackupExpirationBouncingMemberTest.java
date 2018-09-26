@@ -45,7 +45,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
-@Repeat(20)
+@Repeat(10)
 public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     String mapName = "test";
@@ -69,7 +69,7 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
         return config;
     }
 
-    @Test
+    @Test(timeout = 10 * 60 * 1000)
     public void backups_should_be_empty_after_expiration() {
         Runnable[] methods = new Runnable[2];
         HazelcastInstance testDriver = bounceMemberRule.getNextTestDriver();
