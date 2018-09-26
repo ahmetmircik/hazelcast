@@ -22,6 +22,7 @@ import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.query.impl.Index;
@@ -41,6 +42,7 @@ import com.hazelcast.util.function.Predicate;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.map.impl.querycache.publisher.AccumulatorSweeper.flushAccumulator;
 import static com.hazelcast.map.impl.querycache.publisher.AccumulatorSweeper.removeAccumulator;
@@ -89,6 +91,13 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
         }
 
         flushAndRemoveQueryCaches(event);
+
+        int partitionId = event.getPartitionId();
+        PartitionContainer container = mapServiceContext.getPartitionContainer(partitionId);
+        ConcurrentMap<String, RecordStore> maps = container.getMaps();
+        for (RecordStore recordStore : maps.values()) {
+            ((DefaultRecordStore) recordStore).sendExpiredKeysToBackups(false, true);
+        }
     }
 
     /**
