@@ -55,7 +55,6 @@ import static junit.framework.TestCase.assertTrue;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
-@Repeat(10)
 public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     private String cacheName = "test";
