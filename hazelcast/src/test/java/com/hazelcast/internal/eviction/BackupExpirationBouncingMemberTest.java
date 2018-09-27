@@ -33,6 +33,7 @@ import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.test.bounce.BounceMemberRule;
 import com.hazelcast.util.StringUtil;
+import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -67,6 +68,11 @@ public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
                 .setMaxIdleSeconds(maxIdleSeconds)
                 .setBackupCount(backupCount);
         return config;
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        bounceMemberRule.getFactory().shutdownAll();
     }
 
     @Test(timeout = 10 * 60 * 1000)
