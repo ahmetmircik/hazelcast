@@ -108,12 +108,7 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         final long now = Clock.currentTimeMillis();
         int inFlightCleanupOperationsCount = 0;
 
-        boolean sendEqualizer = false;
-        int currentLostCount = partitionLostCounter.get();
-        if (lastSeenLostCount.get() != currentLostCount) {
-            sendEqualizer = true;
-            lastSeenLostCount.set(currentLostCount);
-        }
+        boolean sendEqualizer = canSendBackupEqualizer();
 
         List<T> containersToProcess = null;
         for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
@@ -155,6 +150,15 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 
         sortPartitionContainers(containersToProcess);
         sendCleanupOperations(containersToProcess);
+    }
+
+    private boolean canSendBackupEqualizer() {
+        int currentLostCount = partitionLostCounter.get();
+        if (lastSeenLostCount.get() != currentLostCount) {
+            lastSeenLostCount.set(currentLostCount);
+            return true;
+        }
+        return false;
     }
 
     private static int calculateCleanupOperationCount(HazelcastProperties properties,
@@ -211,21 +215,9 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 
     public final void onPartitionLost(PartitionLostEvent event) {
         partitionLostCounter.incrementAndGet();
-
     }
 
-    public void onMemberRemoved() {
-//        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-//            IPartition partition = partitionService.getPartition(partitionId, false);
-//            T container = this.containers[partitionId];
-//
-//            if (partition.isLocal()) {
-//                sendBackupEqualizer(container);
-//            }
-//        }
-    }
     // only used for testing purposes
-
     int getCleanupPercentage() {
         return cleanupPercentage;
     }
