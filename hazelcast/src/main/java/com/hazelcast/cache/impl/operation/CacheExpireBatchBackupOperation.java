@@ -57,12 +57,14 @@ public class CacheExpireBatchBackupOperation extends CacheOperation {
             recordStore.forceEvict(diff);
         }
         int sizeAfter = recordStore.size();
-        
+
         if (diff > 0) {
             getLogger().severe("partition-id: " + getPartitionId()
                     + ", primary-entry-count: " + ownerPartitionEntryCount
                     + ", record-store-size [before-eviction: " + sizeBefore + ", after-eviction: " + sizeAfter + "]");
         }
+
+        assert recordStore.size() == ownerPartitionEntryCount;
     }
 
     @Override
