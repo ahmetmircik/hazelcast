@@ -62,6 +62,8 @@ import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.eventservice.InternalEventService;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes.CacheMergeTypes;
+import com.hazelcast.spi.partition.IPartition;
+import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
@@ -491,7 +493,7 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
     }
 
     protected void accumulateOrSendExpiredKeysToBackup(Data key, R record) {
-        if (cacheConfig.getBackupCount() == 0) {
+        if (cacheConfig.getTotalBackupCount() == 0) {
             return;
         }
         if (key != null && record != null) {
@@ -532,12 +534,10 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
                 OperationService operationService = nodeEngine.getOperationService();
                 int backupReplicaCount = cacheConfig.getTotalBackupCount();
                 for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
-                    Address replicaAddress = nodeEngine.getPartitionService().getPartition(partitionId).getReplicaAddress(replicaIndex);
-                    if (replicaAddress != null && canSendBackupExpiration(replicaAddress)) {
+                    if (canSendBackupExpiration(replicaIndex)) {
                         Operation operation = new CacheExpireBatchBackupOperation(getName(), expiredKeys, size());
-                        operation.setReplicaIndex(replicaIndex);
-                        operation.setPartitionId(getPartitionId());
-                        operationService.invokeOnTarget(CacheService.SERVICE_NAME, operation, replicaAddress);
+                        operationService.createInvocationBuilder(CacheService.SERVICE_NAME, operation, getPartitionId())
+                                .setReplicaIndex(replicaIndex).invoke();
                     }
                 }
             } catch (Exception t) {
@@ -563,7 +563,14 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
         return expiredKeys;
     }
 
-    protected boolean canSendBackupExpiration(Address replicaAddress) {
+    protected boolean canSendBackupExpiration(int replicaIndex) {
+        IPartitionService partitionService = nodeEngine.getPartitionService();
+        IPartition partition = partitionService.getPartition(partitionId);
+        Address replicaAddress = partition.getReplicaAddress(replicaIndex);
+        if (replicaAddress == null) {
+            return false;
+        }
+
         // Previous versions did not remove expired entries until they are touched. Old members behave the same whereas
         // newer members still benefit from periodic removal of expired entries.
         //
@@ -1670,7 +1677,7 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
             hasEntryWithExpiration = true;
         }
 
-        if (hasEntryWithExpiration) {
+        if (isPrimary() && hasEntryWithExpiration) {
             cacheService.getExpirationManager().scheduleExpirationTask();
         }
     }
