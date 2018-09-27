@@ -362,23 +362,23 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
 //        }
 
         // send expired keys to all backups
-        boolean loop = false;
-        do {
-            try {
-                OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
-                int backupReplicaCount = getMapContainer().getTotalBackupCount();
-                for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
-                    if (hasReplicaAddress(getPartitionId(), replicaIndex)) {
-                        Operation operation = new EvictBatchBackupOperation(getName(), expiredKeys, size());
-                        operationService.createInvocationBuilder(MapService.SERVICE_NAME, operation, getPartitionId())
-                                .setReplicaIndex(replicaIndex).invoke();
-                    }
-                }
-            } catch (Exception t) {
-                loop = true;
-                t.printStackTrace();
+//        boolean loop = false;
+//        do {
+//            try {
+        OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
+        int backupReplicaCount = getMapContainer().getTotalBackupCount();
+        for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
+            if (hasReplicaAddress(getPartitionId(), replicaIndex)) {
+                Operation operation = new EvictBatchBackupOperation(getName(), expiredKeys, size());
+                operationService.createInvocationBuilder(MapService.SERVICE_NAME, operation, getPartitionId())
+                        .setReplicaIndex(replicaIndex).invoke();
             }
-        } while (loop);
+        }
+//            } catch (Exception t) {
+//                loop = true;
+//                t.printStackTrace();
+//            }
+//        } while (loop);
     }
 
     protected boolean hasReplicaAddress(int partitionId, int replicaIndex) {

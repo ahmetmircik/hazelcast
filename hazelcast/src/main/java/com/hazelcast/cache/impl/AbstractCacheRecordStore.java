@@ -528,23 +528,23 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
 
         // send expired keys to all backups
         // send expired keys to all backups
-        boolean loop = false;
-        do {
-            try {
-                OperationService operationService = nodeEngine.getOperationService();
-                int backupReplicaCount = cacheConfig.getTotalBackupCount();
-                for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
-                    if (canSendBackupExpiration(replicaIndex)) {
-                        Operation operation = new CacheExpireBatchBackupOperation(getName(), expiredKeys, size());
-                        operationService.createInvocationBuilder(CacheService.SERVICE_NAME, operation, getPartitionId())
-                                .setReplicaIndex(replicaIndex).invoke();
-                    }
-                }
-            } catch (Exception t) {
-                loop = true;
-                t.printStackTrace();
+//        boolean loop = false;
+//        do {
+//            try {
+        OperationService operationService = nodeEngine.getOperationService();
+        int backupReplicaCount = cacheConfig.getTotalBackupCount();
+        for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
+            if (canSendBackupExpiration(replicaIndex)) {
+                Operation operation = new CacheExpireBatchBackupOperation(getName(), expiredKeys, size());
+                operationService.createInvocationBuilder(CacheService.SERVICE_NAME, operation, getPartitionId())
+                        .setReplicaIndex(replicaIndex).invoke();
             }
-        } while (loop);
+        }
+//            } catch (Exception t) {
+//                loop = true;
+//                t.printStackTrace();
+//            }
+//        } while (loop);
     }
 
     private Collection<ExpiredKey> collectExpiredKeys(InvalidationQueue<ExpiredKey> invalidationQueue) {
