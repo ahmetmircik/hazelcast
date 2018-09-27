@@ -17,6 +17,7 @@
 package com.hazelcast.internal.eviction;
 
 import com.hazelcast.nio.Address;
+import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
@@ -43,23 +44,26 @@ import static java.lang.Math.min;
 public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 
     public static final int DIFFERENCE_BETWEEN_TWO_SUBSEQUENT_PARTITION_CLEANUP_MILLIS = 1000;
-    protected final int cleanupOperationCount;
-    protected final int cleanupPercentage;
+
     protected final int taskPeriodSeconds;
+    protected final int cleanupPercentage;
+    protected final int cleanupOperationCount;
     protected final T[] containers;
+
     protected NodeEngine nodeEngine;
     protected InternalOperationService operationService;
 
     volatile long lastStartMillis;
     volatile long lastEndMillis;
 
-    private AtomicBoolean singleRunPermit = new AtomicBoolean(false);
+    private final AtomicInteger partitionLostCounter = new AtomicInteger();
+    private final AtomicInteger lastSeenLostCount = new AtomicInteger();
+    private final AtomicBoolean singleRunPermit = new AtomicBoolean(false);
 
-    private Address thisAddress;
     private int partitionCount;
-    private IPartitionService partitionService;
+    private Address thisAddress;
     private HazelcastProperties properties;
-    private AtomicInteger removedMember = new AtomicInteger();
+    private IPartitionService partitionService;
 
     @SuppressFBWarnings({"EI_EXPOSE_REP2"})
     public AbstractClearExpiredRecordsTask(NodeEngine nodeEngine, T[] containers, HazelcastProperty cleanupOpProperty,
@@ -79,6 +83,7 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         checkTrue(cleanupPercentage > 0 && cleanupPercentage <= 100,
                 "cleanupPercentage should be in range (0,100]");
         this.taskPeriodSeconds = nodeEngine.getProperties().getSeconds(taskPeriodProperty);
+        this.lastSeenLostCount.set(partitionLostCounter.get());
     }
 
     @Override
@@ -103,12 +108,19 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         final long now = Clock.currentTimeMillis();
         int inFlightCleanupOperationsCount = 0;
 
+        boolean sendEqualizer = false;
+        int currentLostCount = partitionLostCounter.get();
+        if (lastSeenLostCount.get() != currentLostCount) {
+            sendEqualizer = true;
+            lastSeenLostCount.set(currentLostCount);
+        }
+
         List<T> containersToProcess = null;
         for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
             IPartition partition = partitionService.getPartition(partitionId, false);
             T container = this.containers[partitionId];
 
-            if (partition.isLocal()) {
+            if (partition.isLocal() && sendEqualizer) {
                 sendBackupEqualizer(container);
             }
 
@@ -197,6 +209,11 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
         }
     }
 
+    public final void onPartitionLost(PartitionLostEvent event) {
+        partitionLostCounter.incrementAndGet();
+
+    }
+
     public void onMemberRemoved() {
 //        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
 //            IPartition partition = partitionService.getPartition(partitionId, false);
@@ -207,8 +224,8 @@ public abstract class AbstractClearExpiredRecordsTask<T> implements Runnable {
 //            }
 //        }
     }
-
     // only used for testing purposes
+
     int getCleanupPercentage() {
         return cleanupPercentage;
     }

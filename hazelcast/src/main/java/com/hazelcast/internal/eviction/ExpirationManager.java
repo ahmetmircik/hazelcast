@@ -154,6 +154,6 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
 
     @Override
     public void partitionLost(PartitionLostEvent event) {
-        System.err.println(event);
+        task.onPartitionLost(event);
     }
 }
