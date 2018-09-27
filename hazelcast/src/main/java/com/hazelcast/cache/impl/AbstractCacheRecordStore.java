@@ -1670,7 +1670,7 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
             hasEntryWithExpiration = true;
         }
 
-        if (isPrimary() && hasEntryWithExpiration) {
+        if (hasEntryWithExpiration) {
             cacheService.getExpirationManager().scheduleExpirationTask();
         }
     }
