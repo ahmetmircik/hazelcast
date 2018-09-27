@@ -520,17 +520,26 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
 //        }
 
         // send expired keys to all backups
-        OperationService operationService = nodeEngine.getOperationService();
-        int backupReplicaCount = cacheConfig.getTotalBackupCount();
-        for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
-            Address replicaAddress = nodeEngine.getPartitionService().getPartition(partitionId).getReplicaAddress(replicaIndex);
-            if (replicaAddress != null && canSendBackupExpiration(replicaAddress)) {
-                Operation operation = new CacheExpireBatchBackupOperation(getName(), expiredKeys, size());
-                operation.setReplicaIndex(replicaIndex);
-                operation.setPartitionId(getPartitionId());
-                operationService.invokeOnTarget(CacheService.SERVICE_NAME, operation, replicaAddress);
+        // send expired keys to all backups
+        boolean loop = false;
+        do {
+            try {
+                OperationService operationService = nodeEngine.getOperationService();
+                int backupReplicaCount = cacheConfig.getTotalBackupCount();
+                for (int replicaIndex = 1; replicaIndex < backupReplicaCount + 1; replicaIndex++) {
+                    Address replicaAddress = nodeEngine.getPartitionService().getPartition(partitionId).getReplicaAddress(replicaIndex);
+                    if (replicaAddress != null && canSendBackupExpiration(replicaAddress)) {
+                        Operation operation = new CacheExpireBatchBackupOperation(getName(), expiredKeys, size());
+                        operation.setReplicaIndex(replicaIndex);
+                        operation.setPartitionId(getPartitionId());
+                        operationService.invokeOnTarget(CacheService.SERVICE_NAME, operation, replicaAddress);
+                    }
+                }
+            } catch (Exception t) {
+                loop = true;
+                t.printStackTrace();
             }
-        }
+        } while (loop);
     }
 
     private Collection<ExpiredKey> collectExpiredKeys(InvalidationQueue<ExpiredKey> invalidationQueue) {
