@@ -77,7 +77,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
         return cacheConfig;
     }
 
-    @Test
+    @Test(timeout = 10 * 60 * 1000)
     public void backups_should_be_empty_after_expiration() {
         Runnable[] methods = new Runnable[2];
         HazelcastInstance testDriver = bounceMemberRule.getNextTestDriver();
@@ -180,7 +180,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                 return builder.toString();
             }
 
-        }, 240);
+        }, 300);
     }
 
     private class Get implements Runnable {
