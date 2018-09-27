@@ -65,6 +65,7 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
 
         HazelcastInstance hazelcastInstance = this.nodeEngine.getHazelcastInstance();
         hazelcastInstance.getLifecycleService().addLifecycleListener(this);
+        hazelcastInstance.getPartitionService().addPartitionLostListener(this);
     }
 
     /**
