@@ -370,10 +370,10 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
     }
 
     @Override
-    public void forceEvict(int count) {
+    public void sampleAndRemoveEntries(int entryCountToRemove) {
         assertRunningOnPartitionThread();
 
-        Iterable<EvictionCandidate<Data, R>> entries = records.sample(count);
+        Iterable<EvictionCandidate<Data, R>> entries = records.sample(entryCountToRemove);
         for (EvictionCandidate<Data, R> entry : entries) {
             removeRecord(entry.getAccessor());
         }

@@ -51,17 +51,17 @@ public class CacheExpireBatchBackupOperation extends CacheOperation {
             evictIfSame(expiredKey);
         }
 
-        int sizeBefore = recordStore.size();
-        int diff = sizeBefore - ownerPartitionEntryCount;
-        if (diff > 0) {
-            recordStore.forceEvict(diff);
-        }
-        int sizeAfter = recordStore.size();
+        equalizeEntryCountWithPrimary();
+    }
 
+    /**
+     * Equalizes backup entry count with primary in order to have identical
+     * memory occupancy.
+     */
+    private void equalizeEntryCountWithPrimary() {
+        int diff = recordStore.size() - ownerPartitionEntryCount;
         if (diff > 0) {
-            getLogger().severe("partition-id: " + getPartitionId()
-                    + ", primary-entry-count: " + ownerPartitionEntryCount
-                    + ", record-store-size [before-eviction: " + sizeBefore + ", after-eviction: " + sizeAfter + "]");
+            recordStore.sampleAndRemoveEntries(diff);
         }
 
         assert recordStore.size() == ownerPartitionEntryCount;

@@ -66,9 +66,19 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
             }
         }
 
-        // equalize backup entry count to owner entry count to have identical memory occupancy
-        int sizeBefore = recordStore.size();
-        int diff = sizeBefore - ownerPartitionEntryCount;
+        equalizeEntryCountWithPrimary();
+    }
+
+    /**
+     * Equalizes backup entry count with primary in order to have identical
+     * memory occupancy.
+     *
+     * If eviction configured for this map, equalize entry count by using
+     * evictor, otherwise, sample entries and evict them from this backup
+     * replica.
+     */
+    private void equalizeEntryCountWithPrimary() {
+        int diff = recordStore.size() - ownerPartitionEntryCount;
 
         Evictor evictor = mapContainer.getEvictor();
         if (evictor != Evictor.NULL_EVICTOR) {
@@ -81,14 +91,6 @@ public class EvictBatchBackupOperation extends MapOperation implements BackupOpe
                 Data dataKey = entryViewFromRecord.getRecord().getKey();
                 recordStore.evict(dataKey, true);
             }
-        }
-
-        int sizeAfter = recordStore.size();
-
-        if (diff > 0) {
-            getLogger().severe("partition-id: " + getPartitionId()
-                    + ", primary-entry-count: " + ownerPartitionEntryCount
-                    + ", record-store-size [before-eviction: " + sizeBefore + ", after-eviction: " + sizeAfter + "]");
         }
     }
 
