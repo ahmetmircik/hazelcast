@@ -373,7 +373,7 @@ public abstract class AbstractCacheRecordStore<R extends CacheRecord, CRM extend
 
         Iterable<EvictionCandidate<Data, R>> entries = records.sample(count);
         for (EvictionCandidate<Data, R> entry : entries) {
-            records.remove(entry.getKey());
+            records.remove(entry.getAccessor());
         }
     }
 
