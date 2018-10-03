@@ -32,6 +32,7 @@ import com.hazelcast.monitor.impl.NearCacheStatsImpl;
 import com.hazelcast.query.TruePredicate;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.Test;
 
 import javax.cache.expiry.ExpiryPolicy;
@@ -935,7 +936,7 @@ public abstract class AbstractNearCacheBasicTest<NK, NV> extends HazelcastTestSu
     /**
      * Checks that the Near Cache is eventually invalidated when {@link DataStructureMethods#LOAD_ALL} is used.
      */
-    @Test
+    @Test @Repeat(500)
     public void whenLoadAllIsUsed_thenNearCacheIsInvalidated_onDataAdapter() {
         whenEntryIsLoaded_thenNearCacheShouldBeInvalidated(true, DataStructureMethods.LOAD_ALL);
     }
