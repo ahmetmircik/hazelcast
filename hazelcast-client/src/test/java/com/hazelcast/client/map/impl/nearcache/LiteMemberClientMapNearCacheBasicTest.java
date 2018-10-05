@@ -36,6 +36,7 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.experimental.categories.Category;
@@ -54,6 +55,7 @@ import static com.hazelcast.map.impl.nearcache.MapNearCacheBasicTest.addMapStore
  */
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
+@Repeat(100)
 public class LiteMemberClientMapNearCacheBasicTest extends AbstractNearCacheBasicTest<Data, String> {
 
     private final TestHazelcastFactory hazelcastFactory = new TestHazelcastFactory();
