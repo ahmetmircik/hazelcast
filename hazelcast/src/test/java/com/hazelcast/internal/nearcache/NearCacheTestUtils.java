@@ -50,8 +50,6 @@ import static com.hazelcast.config.InMemoryFormat.BINARY;
 import static com.hazelcast.config.InMemoryFormat.OBJECT;
 import static com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy.CACHE_ON_UPDATE;
 import static com.hazelcast.internal.nearcache.NearCacheRecord.READ_PERMITTED;
-import static com.hazelcast.spi.properties.GroupProperty.CACHE_INVALIDATION_MESSAGE_BATCH_FREQUENCY_SECONDS;
-import static com.hazelcast.spi.properties.GroupProperty.MAP_INVALIDATION_MESSAGE_BATCH_FREQUENCY_SECONDS;
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -73,11 +71,7 @@ public final class NearCacheTestUtils extends HazelcastTestSupport {
     }
 
     public static Config getBaseConfig() {
-        return smallInstanceConfig()
-                .setProperty(CACHE_INVALIDATION_MESSAGE_BATCH_FREQUENCY_SECONDS.getName(), "1")
-                .setProperty(MAP_INVALIDATION_MESSAGE_BATCH_FREQUENCY_SECONDS.getName(), "1")
-                .setProperty(NearCache.PROP_EXPIRATION_TASK_INITIAL_DELAY_SECONDS, "0")
-                .setProperty(NearCache.PROP_EXPIRATION_TASK_PERIOD_SECONDS, "1");
+        return regularInstanceConfig();
     }
 
     /**
