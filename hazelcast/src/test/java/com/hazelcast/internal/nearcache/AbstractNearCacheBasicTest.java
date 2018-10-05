@@ -935,7 +935,7 @@ public abstract class AbstractNearCacheBasicTest<NK, NV> extends HazelcastTestSu
     /**
      * Checks that the Near Cache is eventually invalidated when {@link DataStructureMethods#LOAD_ALL} is used.
      */
-    @Test
+    @Test(timeout = 1000 * 60 * 30)
     public void whenLoadAllIsUsed_thenNearCacheIsInvalidated_onDataAdapter() {
         whenEntryIsLoaded_thenNearCacheShouldBeInvalidated(true, DataStructureMethods.LOAD_ALL);
     }
