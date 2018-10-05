@@ -35,9 +35,9 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.SerializableByConvention;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.Clock;
-import com.hazelcast.util.ConcurrentReferenceHashMap;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.internal.eviction.EvictionPolicyEvaluatorProvider.getEvictionPolicyEvaluator;
 import static com.hazelcast.internal.memory.GlobalMemoryAccessorRegistry.MEM;
@@ -90,7 +90,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     protected EvictionChecker evictionChecker;
     protected SamplingEvictionStrategy<KS, R, NCRM> evictionStrategy;
     protected EvictionPolicyEvaluator<KS, R> evictionPolicyEvaluator;
-    protected NCRM records;
+    protected AtomicReference<NCRM> records = new AtomicReference<NCRM>();
 
     protected volatile StaleReadDetector staleReadDetector = ALWAYS_FRESH;
     protected volatile long reservationId;
@@ -115,13 +115,17 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
 
     @Override
     public void initialize() {
-        this.records = createNearCacheRecordMap(nearCacheConfig);
+        initRecords();
         EvictionConfig evictionConfig = nearCacheConfig.getEvictionConfig();
         this.evictionChecker = createNearCacheEvictionChecker(evictionConfig, nearCacheConfig);
         if (!evictionDisabled) {
             this.evictionStrategy = SamplingEvictionStrategy.INSTANCE;
             this.evictionPolicyEvaluator = getEvictionPolicyEvaluator(evictionConfig, classLoader);
         }
+    }
+
+    protected void initRecords() {
+        this.records.set(createNearCacheRecordMap(nearCacheConfig));
     }
 
     @Override
@@ -162,6 +166,10 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
 
     protected abstract boolean containsRecordKey(K key);
 
+    protected NCRM getRecords() {
+        return records.get();
+    }
+
     protected void checkAvailable() {
         if (!isAvailable()) {
             throw new IllegalStateException(nearCacheConfig.getName() + " named Near Cache record store is not available");
@@ -169,7 +177,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     }
 
     protected boolean isAvailable() {
-        return records != null;
+        return getRecords() != null;
     }
 
     protected Data valueToData(V value) {
@@ -362,7 +370,15 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     public void clear() {
         checkAvailable();
 
-        int size = ((ConcurrentReferenceHashMap) records).clear2();
+        NCRM oldMap = null;
+        NCRM newMap = null;
+        do {
+            oldMap = records.get();
+            newMap = createNearCacheRecordMap(nearCacheConfig);
+
+        } while (!records.compareAndSet(oldMap, newMap));
+
+        int size = oldMap.size();
         nearCacheStats.decrementOwnedEntryCount(size);
         nearCacheStats.setOwnedEntryMemoryCost(0L);
         nearCacheStats.incrementInvalidations(size);
@@ -385,7 +401,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     public int size() {
         checkAvailable();
 
-        return records.size();
+        return getRecords().size();
     }
 
     @Override
@@ -393,7 +409,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         checkAvailable();
 
         if (!evictionDisabled) {
-            evictionStrategy.evict(records, evictionPolicyEvaluator, evictionChecker, this);
+            evictionStrategy.evict(getRecords(), evictionPolicyEvaluator, evictionChecker, this);
         }
     }
 
@@ -402,7 +418,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         checkAvailable();
 
         if (!evictionDisabled) {
-            evictionStrategy.evict(records, evictionPolicyEvaluator, null, this);
+            evictionStrategy.evict(getRecords(), evictionPolicyEvaluator, null, this);
         }
     }
 

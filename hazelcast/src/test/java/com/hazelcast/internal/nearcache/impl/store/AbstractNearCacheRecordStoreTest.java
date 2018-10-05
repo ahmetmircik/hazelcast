@@ -95,7 +95,7 @@ public class AbstractNearCacheRecordStoreTest {
         assertRecordState(READ_PERMITTED);
 
         // only a single record has been created
-        assertEquals(1, store.records.size());
+        assertEquals(1, store.getRecords().size());
         assertEquals(1, store.getNearCacheStats().getOwnedEntryCount());
     }
 

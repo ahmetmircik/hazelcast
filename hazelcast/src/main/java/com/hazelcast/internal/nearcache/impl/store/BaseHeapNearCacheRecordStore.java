@@ -64,7 +64,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
             throw new IllegalArgumentException(format("Invalid max-size policy (%s) for %s! Only %s is supported.",
                     maxSizePolicy, getClass().getName(), MaxSizePolicy.ENTRY_COUNT));
         }
-        return new EntryCountNearCacheEvictionChecker(evictionConfig.getSize(), records);
+        return new EntryCountNearCacheEvictionChecker(evictionConfig.getSize(), getRecords());
     }
 
     @Override
@@ -74,12 +74,12 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
     @Override
     public R getRecord(K key) {
-        return records.get(key);
+        return getRecords().get(key);
     }
 
     @Override
     protected R putRecord(K key, R record) {
-        R oldRecord = records.put(key, record);
+        R oldRecord = getRecords().put(key, record);
         nearCacheStats.incrementOwnedEntryMemoryCost(getTotalStorageMemoryCost(key, record));
         if (oldRecord != null) {
             nearCacheStats.decrementOwnedEntryMemoryCost(getTotalStorageMemoryCost(key, oldRecord));
@@ -89,7 +89,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
     @Override
     protected R removeRecord(K key) {
-        R removedRecord = records.remove(key);
+        R removedRecord = getRecords().remove(key);
         if (removedRecord != null && removedRecord.getRecordState() == READ_PERMITTED) {
             nearCacheStats.decrementOwnedEntryMemoryCost(getTotalStorageMemoryCost(key, removedRecord));
         }
@@ -98,7 +98,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
     @Override
     protected boolean containsRecordKey(K key) {
-        return records.containsKey(key);
+        return getRecords().containsKey(key);
     }
 
     @Override
@@ -109,7 +109,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
     @Override
     public void doExpiration() {
-        for (Map.Entry<K, R> entry : records.entrySet()) {
+        for (Map.Entry<K, R> entry : getRecords().entrySet()) {
             K key = entry.getKey();
             R value = entry.getValue();
             if (isRecordExpired(value)) {
@@ -129,7 +129,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
     @Override
     public void storeKeys() {
         if (nearCachePreloader != null) {
-            nearCachePreloader.storeKeys(records.keySet().iterator());
+            nearCachePreloader.storeKeys(getRecords().keySet().iterator());
         }
     }
 
@@ -143,13 +143,13 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
     @Override
     protected R getOrCreateToReserve(K key, Data keyData) {
-        return records.applyIfAbsent(key, new ReserveForUpdateFunction(keyData));
+        return getRecords().applyIfAbsent(key, new ReserveForUpdateFunction(keyData));
     }
 
     @Override
     @SuppressWarnings("unchecked")
     protected V updateAndGetReserved(K key, final V value, final long reservationId, boolean deserialize) {
-        R existingRecord = records.applyIfPresent(key, new IBiFunction<K, R, R>() {
+        R existingRecord = getRecords().applyIfPresent(key, new IBiFunction<K, R, R>() {
             @Override
             public R apply(K key, R reservedRecord) {
                 return updateReservedRecordInternal(key, value, reservedRecord, reservationId);
