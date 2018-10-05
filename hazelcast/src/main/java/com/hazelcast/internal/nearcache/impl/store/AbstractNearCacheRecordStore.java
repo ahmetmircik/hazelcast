@@ -38,6 +38,8 @@ import com.hazelcast.util.Clock;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 import static com.hazelcast.internal.eviction.EvictionPolicyEvaluatorProvider.getEvictionPolicyEvaluator;
@@ -303,29 +305,43 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         }
     }
 
+
+    AtomicInteger clearCounter = new AtomicInteger();
+    AtomicBoolean cleanInProgress = new AtomicBoolean(false);
+
     @Override
     public void clear() {
         checkAvailable();
-
-        int size = records.size();
-        int removedSoFar = 0;
+        int prevCount;
+        int currCount = clearCounter.incrementAndGet();
         do {
-            Iterator<Map.Entry<KS, R>> iterator = records.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<KS, R> entry = iterator.next();
-                R record = entry.getValue();
-                if (records.remove(entry.getKey(), record)) {
-                    if (canUpdateStatsOf(record)) {
-                        nearCacheStats.decrementOwnedEntryMemoryCost(calculateMemoryCostOf(entry));
-                        nearCacheStats.decrementOwnedEntryCount();
-                        nearCacheStats.incrementInvalidations();
-                    }
-                    removedSoFar++;
+            prevCount = currCount;
+            if (cleanInProgress.compareAndSet(false, true)) {
+                try {
+                    clear0();
+                } finally {
+                    cleanInProgress.set(true);
                 }
             }
-        } while (removedSoFar < size && !records.isEmpty());
+            currCount = clearCounter.get();
+        } while (currCount != prevCount);
 
         nearCacheStats.incrementInvalidationRequests();
+    }
+
+    protected void clear0() {
+        Iterator<Map.Entry<KS, R>> iterator = records.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<KS, R> entry = iterator.next();
+            R record = entry.getValue();
+            if (records.remove(entry.getKey(), record)) {
+                if (canUpdateStatsOf(record)) {
+                    nearCacheStats.decrementOwnedEntryMemoryCost(calculateMemoryCostOf(entry));
+                    nearCacheStats.decrementOwnedEntryCount();
+                    nearCacheStats.incrementInvalidations();
+                }
+            }
+        }
     }
 
     @Override
