@@ -36,6 +36,8 @@ import com.hazelcast.nio.serialization.SerializableByConvention;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.Clock;
 
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 import static com.hazelcast.internal.eviction.EvictionPolicyEvaluatorProvider.getEvictionPolicyEvaluator;
@@ -144,6 +146,8 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     protected abstract long getKeyStorageMemoryCost(K key);
 
     protected abstract long getRecordStorageMemoryCost(R record);
+
+    protected abstract long calculateMemoryCostOf(Map.Entry<KS, R> entry);
 
     protected abstract R valueToRecord(V value);
 
@@ -300,6 +304,31 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
     }
 
     @Override
+    public void clear() {
+        checkAvailable();
+
+        int size = records.size();
+        int removedSoFar = 0;
+        do {
+            Iterator<Map.Entry<KS, R>> iterator = records.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<KS, R> entry = iterator.next();
+                R record = entry.getValue();
+                if (records.remove(entry.getKey(), record)) {
+                    if (canUpdateStatsOf(record)) {
+                        nearCacheStats.decrementOwnedEntryMemoryCost(calculateMemoryCostOf(entry));
+                        nearCacheStats.decrementOwnedEntryCount();
+                        nearCacheStats.incrementInvalidations();
+                    }
+                    removedSoFar++;
+                }
+            }
+        } while (removedSoFar < size && !records.isEmpty());
+
+        nearCacheStats.incrementInvalidationRequests();
+    }
+
+    @Override
     public void put(K key, Data keyData, V value) {
         checkAvailable();
         // if there is no eviction configured we return if the Near Cache is full and it's a new key
@@ -332,7 +361,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         boolean removed = false;
         try {
             record = removeRecord(key);
-            if (record != null && record.getRecordState() == READ_PERMITTED) {
+            if (canUpdateStatsOf(record)) {
                 removed = true;
                 nearCacheStats.decrementOwnedEntryCount();
             }
@@ -342,6 +371,10 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
             onRemoveError(key, record, removed, error);
             throw rethrow(error);
         }
+    }
+
+    protected boolean canUpdateStatsOf(R record) {
+        return record != null && record.getRecordState() == READ_PERMITTED;
     }
 
     @Override
@@ -355,18 +388,6 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         } finally {
             nearCacheStats.incrementInvalidationRequests();
         }
-    }
-
-    @Override
-    public void clear() {
-        checkAvailable();
-
-        int size = records.size();
-        records.clear();
-        nearCacheStats.setOwnedEntryCount(0);
-        nearCacheStats.setOwnedEntryMemoryCost(0L);
-        nearCacheStats.incrementInvalidations(size);
-        nearCacheStats.incrementInvalidationRequests();
     }
 
     @Override
