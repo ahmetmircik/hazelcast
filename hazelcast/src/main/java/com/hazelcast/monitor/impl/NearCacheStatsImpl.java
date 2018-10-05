@@ -16,8 +16,8 @@
 
 package com.hazelcast.monitor.impl;
 
-import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.json.JsonObject;
+import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.monitor.NearCacheStats;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
@@ -127,6 +127,10 @@ public class NearCacheStatsImpl implements NearCacheStats {
 
     public void decrementOwnedEntryCount() {
         OWNED_ENTRY_COUNT.decrementAndGet(this);
+    }
+
+    public void decrementOwnedEntryCount(long countToDecrement) {
+        OWNED_ENTRY_COUNT.addAndGet(this, -countToDecrement);
     }
 
     @Override

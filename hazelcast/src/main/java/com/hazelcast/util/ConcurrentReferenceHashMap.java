@@ -951,7 +951,9 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V>
             }
         }
 
-        void clear() {
+        int clear() {
+            int clearedCount = 0;
+
             if (count != 0) {
                 lock();
                 try {
@@ -962,12 +964,15 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V>
                     ++modCount;
                     // replace the reference queue to avoid unnecessary stale cleanups
                     refQueue = new ReferenceQueue<Object>();
+
+                    clearedCount = count;
                     // write-volatile
                     count = 0;
                 } finally {
                     unlock();
                 }
             }
+            return clearedCount;
         }
     }
 
@@ -1522,6 +1527,14 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V>
         for (int i = 0; i < segments.length; ++i) {
             segments[i].clear();
         }
+    }
+
+    public int clear2() {
+        int sum = 0;
+        for (int i = 0; i < segments.length; ++i) {
+            sum += segments[i].clear();
+        }
+        return sum;
     }
 
     /**
