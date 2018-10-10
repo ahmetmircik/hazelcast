@@ -1375,7 +1375,7 @@ public abstract class AbstractNearCacheBasicTest<NK, NV> extends HazelcastTestSu
     }
 
     @SuppressWarnings("UnnecessaryLocalVariable")
-    private void testNearCacheExpiration(int expireSeconds) {
+    protected final void testNearCacheExpiration(int expireSeconds) {
         final NearCacheTestContext<Integer, String, NK, NV> context = createContext();
 
         populateDataAdapter(context, DEFAULT_RECORD_COUNT);
