@@ -31,6 +31,7 @@ import com.hazelcast.spi.properties.HazelcastProperty;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
@@ -240,6 +241,28 @@ public class MapClearExpiredRecordsTask
             }
         }
         return notExist;
+    }
+
+    @Override
+    protected void sendQueuedInvalidations(PartitionContainer container) {
+        if (!canPrimaryDriveExpiration()) {
+            return;
+        }
+
+        ConcurrentMap<String, RecordStore> maps = container.getMaps();
+        for (RecordStore recordStore : maps.values()) {
+            int totalBackupCount = recordStore.getMapContainer().getTotalBackupCount();
+            InvalidationQueue<ExpiredKey> expiredKeysQueue = recordStore.getExpiredKeysQueue();
+
+            LinkedList<ExpiredKey> expiredKeys = new LinkedList<ExpiredKey>();
+            ExpiredKey key;
+            while ((key = expiredKeysQueue.poll()) != null) {
+                expiredKeys.add(key);
+            }
+
+            toBackupSender.invokeBackupExpiryOperation(expiredKeys,
+                    totalBackupCount, recordStore.getPartitionId(), recordStore);
+        }
     }
 
     @Override

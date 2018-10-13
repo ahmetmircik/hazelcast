@@ -41,7 +41,7 @@ import static org.junit.Assert.assertEquals;
 public class BackupExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     String mapName = "test";
-    int maxIdleSeconds = 2;
+    int maxIdleSeconds = 1;
     int backupCount = 3;
     int keySpace = 1000;
 

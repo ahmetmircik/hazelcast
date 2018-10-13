@@ -549,7 +549,7 @@
                                 ${vmHeapSettings}
                                 -Dhazelcast.phone.home.enabled=false
                                 -Dhazelcast.mancenter.enabled=false
-                                -Dhazelcast.logging.type=none
+                                -Dhazelcast.logging.type=jdk
                                 -Dhazelcast.test.use.network=false
                                 -Dlog4j.skipJansi=true
                                 ${extraVmArgs}
@@ -579,7 +579,7 @@
                     ${vmHeapSettings}
                     -Dhazelcast.phone.home.enabled=false
                     -Dhazelcast.mancenter.enabled=false
-                    -Dhazelcast.logging.type=none
+                    -Dhazelcast.logging.type=jdk
                     -Dhazelcast.test.use.network=false
                     -Dhazelcast.operation.call.timeout.millis=120000
                     -Dhazelcast.graceful.shutdown.max.wait=240
@@ -649,7 +649,7 @@
                                 ${vmHeapSettings}
                                 -Dhazelcast.phone.home.enabled=false
                                 -Dhazelcast.mancenter.enabled=false
-                                -Dhazelcast.logging.type=none
+                                -Dhazelcast.logging.type=jdk
                                 -Dhazelcast.test.use.network=true
                                 -Dlog4j.skipJansi=true
                                 ${extraVmArgs}
@@ -879,7 +879,7 @@
                                 ${vmHeapSettings}
                                 -Dhazelcast.phone.home.enabled=false
                                 -Dhazelcast.mancenter.enabled=false
-                                -Dhazelcast.logging.type=none
+                                -Dhazelcast.logging.type=jdk
                                 -Dhazelcast.test.use.network=false
                                 -Dlog4j.skipJansi=true
                                 ${extraVmArgs}
@@ -908,7 +908,7 @@
                                 ${vmHeapSettings}
                                 -Dhazelcast.phone.home.enabled=false
                                 -Dhazelcast.mancenter.enabled=false
-                                -Dhazelcast.logging.type=none
+                                -Dhazelcast.logging.type=jdk
                                 -Dhazelcast.test.use.network=true
                                 -Dlog4j.skipJansi=true
                                 ${extraVmArgs}

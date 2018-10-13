@@ -166,6 +166,18 @@ public abstract class ClearExpiredRecordsTask<T, S> implements Runnable {
                 && !notHaveAnyExpirableRecord(container);
     }
 
+    public final void sendQueuedInvalidations() {
+        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+            T container = this.containers[partitionId];
+            IPartition partition = partitionService.getPartition(partitionId, false);
+            if (partition.isLocal()) {
+                sendQueuedInvalidations(container);
+            }
+        }
+    }
+
+    protected abstract void sendQueuedInvalidations(T container);
+
     /**
      * This method increments a counter to count partition lost events.
      *
@@ -201,9 +213,10 @@ public abstract class ClearExpiredRecordsTask<T, S> implements Runnable {
         return equalizeBackupSizeWithPrimary;
     }
 
-    private static int calculateCleanupOperationCount(HazelcastProperties properties,
-                                                      final HazelcastProperty cleanupOpCountProperty,
-                                                      int partitionCount, int partitionThreadCount) {
+    private static int calculateCleanupOperationCount
+            (HazelcastProperties properties,
+             final HazelcastProperty cleanupOpCountProperty,
+             int partitionCount, int partitionThreadCount) {
         String stringValue = properties.getString(cleanupOpCountProperty);
         if (stringValue != null) {
             return parseInt(stringValue);
@@ -299,7 +312,8 @@ public abstract class ClearExpiredRecordsTask<T, S> implements Runnable {
 
     protected abstract Operation newBackupExpiryOp(S store, Collection<ExpiredKey> expiredKeys);
 
-    public abstract void tryToSendBackupExpiryOp(S store, boolean checkIfReachedBatch);
+    public abstract void tryToSendBackupExpiryOp(S store,
+                                                 boolean checkIfReachedBatch);
 
     /**
      * Used when traversing partitions.

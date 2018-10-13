@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 import static com.hazelcast.cache.impl.ICacheService.SERVICE_NAME;
@@ -165,6 +166,26 @@ public class CacheClearExpiredRecordsTask
                 return member.getVersion().asVersion().isGreaterOrEqual(Versions.V3_11);
             }
         };
+    }
+
+    @Override
+    protected void sendQueuedInvalidations(CachePartitionSegment container) {
+        Iterator<ICacheRecordStore> iterator = container.recordStoreIterator();
+        while (iterator.hasNext()) {
+            ICacheRecordStore recordStore = iterator.next();
+            int totalBackupCount = recordStore.getConfig().getTotalBackupCount();
+            int partitionId = recordStore.getPartitionId();
+
+            InvalidationQueue<ExpiredKey> expiredKeysQueue = recordStore.getExpiredKeysQueue();
+
+            LinkedList<ExpiredKey> expiredKeys = new LinkedList<ExpiredKey>();
+            ExpiredKey key;
+            while ((key = expiredKeysQueue.poll()) != null) {
+                expiredKeys.add(key);
+            }
+
+            toBackupSender.invokeBackupExpiryOperation(expiredKeys, totalBackupCount, partitionId, recordStore);
+        }
     }
 
     @Override

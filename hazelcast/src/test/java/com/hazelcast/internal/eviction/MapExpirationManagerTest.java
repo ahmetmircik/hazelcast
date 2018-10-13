@@ -26,6 +26,7 @@ import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.PartitionContainer;
 import com.hazelcast.map.impl.eviction.MapClearExpiredRecordsTask;
 import com.hazelcast.map.listener.EntryExpiredListener;
+import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
@@ -38,7 +39,6 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.hazelcast.core.LifecycleEvent.LifecycleState.MERGED;
 import static com.hazelcast.core.LifecycleEvent.LifecycleState.MERGING;
 import static com.hazelcast.core.LifecycleEvent.LifecycleState.SHUTTING_DOWN;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
@@ -58,31 +58,22 @@ public class MapExpirationManagerTest extends AbstractExpirationManagerTest {
     @Test
     public void restarts_running_backgroundClearTask_when_lifecycleState_turns_to_MERGED() {
         Config config = new Config();
-        config.setProperty(taskPeriodSecondsPropName(), "1");
-        HazelcastInstance node = createHazelcastInstance(config);
+        config.setProperty(GroupProperty.PARTITION_COUNT.getName(), "2");
+        config.setProperty(taskPeriodSecondsPropName(), "1000");
 
-        final AtomicInteger expirationCounter = new AtomicInteger();
+        TestHazelcastInstanceFactory factory = new TestHazelcastInstanceFactory();
+        HazelcastInstance node = factory.newHazelcastInstance(config);
+        HazelcastInstance node2 = factory.newHazelcastInstance(config);
 
-        IMap<Integer, Integer> map = node.getMap("test");
-        map.addEntryListener(new EntryExpiredListener() {
-            @Override
-            public void entryExpired(EntryEvent event) {
-                expirationCounter.incrementAndGet();
-            }
-        }, true);
 
-        map.put(1, 1, 3, TimeUnit.SECONDS);
+        IMap map = node.getMap("test");
+        String key = generateKeyOwnedBy(node);
 
-        ((LifecycleServiceImpl) node.getLifecycleService()).fireLifecycleEvent(MERGING);
-        ((LifecycleServiceImpl) node.getLifecycleService()).fireLifecycleEvent(MERGED);
+        map.put(key, 1, 0, TimeUnit.SECONDS, 1, TimeUnit.SECONDS);
+        sleepAtLeastSeconds(2);
+        map.get(key);
 
-        assertTrueEventually(new AssertTask() {
-            @Override
-            public void run() {
-                int expirationCount = expirationCounter.get();
-                assertEquals(format("Expecting 1 expiration but found:%d", expirationCount), 1, expirationCount);
-            }
-        });
+        node.shutdown();
     }
 
     @Test

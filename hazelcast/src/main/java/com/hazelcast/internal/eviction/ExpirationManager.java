@@ -20,6 +20,7 @@ import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.LifecycleEvent;
 import com.hazelcast.core.LifecycleListener;
+import com.hazelcast.core.LifecycleService;
 import com.hazelcast.core.PartitionService;
 import com.hazelcast.partition.PartitionLostEvent;
 import com.hazelcast.partition.PartitionLostListener;
@@ -44,10 +45,11 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
 
     private final int taskPeriodSeconds;
     private final NodeEngine nodeEngine;
+    private final String lifecycleListenerId;
     private final ClearExpiredRecordsTask task;
+    private final String partitionLostListenerId;
     private final TaskScheduler globalTaskScheduler;
     private final PartitionService partitionService;
-    private final String regIdOfPartitionLostListener;
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     /**
      * @see #rescheduleIfScheduledBefore()
@@ -65,9 +67,10 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
         this.taskPeriodSeconds = checkPositive(task.getTaskPeriodSeconds(),
                 "taskPeriodSeconds should be a positive number");
 
-        getHazelcastInstance().getLifecycleService().addLifecycleListener(this);
         this.partitionService = getHazelcastInstance().getPartitionService();
-        this.regIdOfPartitionLostListener = partitionService.addPartitionLostListener(this);
+
+        this.partitionLostListenerId = partitionService.addPartitionLostListener(this);
+        this.lifecycleListenerId = getHazelcastInstance().getLifecycleService().addLifecycleListener(this);
     }
 
     protected HazelcastInstance getHazelcastInstance() {
@@ -96,6 +99,7 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
      * Calling this method multiple times has same effect.
      */
     void unscheduleExpirationTask() {
+        nodeEngine.getLogger(getClass()).severe("unscheduleExpirationTask");
         scheduled.set(false);
         ScheduledFuture<?> scheduledFuture = this.scheduledExpirationTask;
         if (scheduledFuture != null) {
@@ -108,7 +112,11 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
         switch (event.getState()) {
             case SHUTTING_DOWN:
             case MERGING:
-                unscheduleExpirationTask();
+                try {
+                    task.sendQueuedInvalidations();
+                } finally {
+                    unscheduleExpirationTask();
+                }
                 break;
             case MERGED:
                 rescheduleIfScheduledBefore();
@@ -135,7 +143,11 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
      * Called upon shutdown of {@link com.hazelcast.map.impl.MapService}
      */
     public void onShutdown() {
-        partitionService.removePartitionLostListener(regIdOfPartitionLostListener);
+        partitionService.removePartitionLostListener(partitionLostListenerId);
+
+        HazelcastInstance node = nodeEngine.getHazelcastInstance();
+        LifecycleService lifecycleService = node.getLifecycleService();
+        lifecycleService.removeLifecycleListener(lifecycleListenerId);
     }
 
     public ClearExpiredRecordsTask getTask() {
