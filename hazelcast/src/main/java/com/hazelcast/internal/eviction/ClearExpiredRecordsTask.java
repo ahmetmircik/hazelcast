@@ -176,6 +176,14 @@ public abstract class ClearExpiredRecordsTask<T, S> implements Runnable {
         }
     }
 
+    public final void sendQueuedInvalidations(int partitionId) {
+        T container = this.containers[partitionId];
+        IPartition partition = partitionService.getPartition(partitionId, false);
+        if (partition.isLocal()) {
+            sendQueuedInvalidations(container);
+        }
+    }
+
     protected abstract void sendQueuedInvalidations(T container);
 
     /**

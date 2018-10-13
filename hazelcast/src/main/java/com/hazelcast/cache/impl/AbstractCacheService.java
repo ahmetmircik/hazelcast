@@ -284,6 +284,11 @@ public abstract class AbstractCacheService implements ICacheService, PreJoinAwar
 
     @Override
     public void beforeMigration(PartitionMigrationEvent event) {
+        if (event.getMigrationEndpoint() == MigrationEndpoint.SOURCE) {
+            if (event.getCurrentReplicaIndex() == 0) {
+                clearExpiredRecordsTask.sendQueuedInvalidations(event.getPartitionId());
+            }
+        }
     }
 
     @Override
