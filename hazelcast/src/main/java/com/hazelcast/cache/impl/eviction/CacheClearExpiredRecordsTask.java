@@ -169,7 +169,7 @@ public class CacheClearExpiredRecordsTask
     }
 
     @Override
-    protected void sendQueuedInvalidations(CachePartitionSegment container) {
+    public void sendQueuedInvalidations(CachePartitionSegment container) {
         Iterator<ICacheRecordStore> iterator = container.recordStoreIterator();
         while (iterator.hasNext()) {
             ICacheRecordStore recordStore = iterator.next();

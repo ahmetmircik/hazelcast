@@ -244,7 +244,7 @@ public class MapClearExpiredRecordsTask
     }
 
     @Override
-    protected void sendQueuedInvalidations(PartitionContainer container) {
+    public void sendQueuedInvalidations(PartitionContainer container) {
         if (!canPrimaryDriveExpiration()) {
             return;
         }
