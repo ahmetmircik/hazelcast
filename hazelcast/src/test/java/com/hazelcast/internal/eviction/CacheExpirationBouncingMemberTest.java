@@ -18,22 +18,26 @@ package com.hazelcast.internal.eviction;
 
 import com.hazelcast.cache.HazelcastCacheManager;
 import com.hazelcast.cache.HazelcastExpiryPolicy;
+import com.hazelcast.cache.impl.CachePartitionSegment;
 import com.hazelcast.cache.impl.CacheService;
 import com.hazelcast.cache.impl.HazelcastServerCacheManager;
 import com.hazelcast.cache.impl.HazelcastServerCachingProvider;
 import com.hazelcast.cache.impl.ICacheRecordStore;
-import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.config.CacheConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.HazelcastInstanceAware;
+import com.hazelcast.core.Member;
+import com.hazelcast.core.MultiExecutionCallback;
 import com.hazelcast.internal.partition.InternalPartitionService;
-import com.hazelcast.internal.partition.PartitionTableView;
-import com.hazelcast.nio.Address;
-import com.hazelcast.spi.partition.IPartitionService;
+import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.OverridePropertyRule;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.test.bounce.BounceMemberRule;
+import com.hazelcast.test.bounce.BounceTestConfiguration;
+import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -42,11 +46,22 @@ import org.junit.runner.RunWith;
 import javax.cache.Cache;
 import javax.cache.configuration.FactoryBuilder;
 import javax.cache.spi.CachingProvider;
-import java.util.HashMap;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static junit.framework.TestCase.assertTrue;
+import static com.hazelcast.cache.impl.eviction.CacheClearExpiredRecordsTask.PROP_CLEANUP_OPERATION_COUNT;
+import static com.hazelcast.cache.impl.eviction.CacheClearExpiredRecordsTask.PROP_CLEANUP_PERCENTAGE;
+import static com.hazelcast.cache.impl.eviction.CacheClearExpiredRecordsTask.PROP_TASK_PERIOD_SECONDS;
+import static com.hazelcast.test.OverridePropertyRule.set;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
@@ -55,30 +70,43 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
     private String cacheName = "test";
     private int backupCount = 3;
     private int keySpace = 1000;
-    private String cacheNameWithPrefix;
+
+    @Rule
+    public final OverridePropertyRule overrideTaskSecondsRule = set(PROP_TASK_PERIOD_SECONDS, "1");
+
+    @Rule
+    public final OverridePropertyRule overrideTaskPercentage = set(PROP_CLEANUP_PERCENTAGE, "100");
+
+    @Rule
+    public final OverridePropertyRule overrideOpCount = set(PROP_CLEANUP_OPERATION_COUNT, "1000");
 
     @Rule
     public BounceMemberRule bounceMemberRule = BounceMemberRule.with(getConfig())
             .clusterSize(4)
             .driverCount(1)
+            .driverType(BounceTestConfiguration.DriverType.ALWAYS_UP_MEMBER)
             .build();
 
     protected CacheConfig getCacheConfig() {
         CacheConfig cacheConfig = new CacheConfig();
         cacheConfig.setName(cacheName);
         cacheConfig.setBackupCount(backupCount);
-        cacheConfig.setExpiryPolicyFactory(FactoryBuilder.factoryOf(new HazelcastExpiryPolicy(1, 1, 1)));
+        cacheConfig.setExpiryPolicyFactory(FactoryBuilder.factoryOf(new HazelcastExpiryPolicy(2000, 2000, 2000)));
         return cacheConfig;
     }
 
-    @Test
+    @After
+    public void tearDown() throws Exception {
+        bounceMemberRule.getFactory().shutdownAll();
+    }
+
+    @Test(timeout = 1000 * 60 * 10)
     public void backups_should_be_empty_after_expiration() {
         Runnable[] methods = new Runnable[2];
-        HazelcastInstance testDriver = bounceMemberRule.getNextTestDriver();
+        final HazelcastInstance testDriver = bounceMemberRule.getNextTestDriver();
         final CachingProvider provider = HazelcastServerCachingProvider.createCachingProvider(testDriver);
         provider.getCacheManager().createCache(cacheName, getCacheConfig());
         final HazelcastCacheManager cacheManager = (HazelcastServerCacheManager) provider.getCacheManager();
-        cacheNameWithPrefix = cacheManager.getCacheNameWithPrefix(cacheName);
 
         methods[0] = new Get(provider);
         methods[1] = new Set(provider);
@@ -87,72 +115,86 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
         assertTrueEventually(new AssertTask() {
             @Override
-            public void run() {
-                AtomicReferenceArray<HazelcastInstance> members = bounceMemberRule.getMembers();
-                AtomicReferenceArray<HazelcastInstance> testDrivers = bounceMemberRule.getTestDrivers();
+            public void run() throws Exception {
+                final AtomicReference msg = new AtomicReference(Collections.emptyList());
+                final AtomicInteger sum = new AtomicInteger();
+                final CountDownLatch latch = new CountDownLatch(1);
+                HazelcastInstance steadyMember = bounceMemberRule.getSteadyMember();
+                steadyMember.getExecutorService("test").submitToAllMembers(new Count(), new MultiExecutionCallback() {
+                    @Override
+                    public void onResponse(Member member, Object value) {
 
-                assertSize(members);
-                assertSize(testDrivers);
-            }
+                    }
 
-            private void assertSize(AtomicReferenceArray<HazelcastInstance> members) {
-                Map<Address, Map<Integer, Integer>> addressEntriesMap = new HashMap<Address, Map<Integer, Integer>>();
-                int length = members.length();
-                for (int i = 0; i < length; i++) {
-                    HazelcastInstance node = members.get(i);
-                    assert node != null;
-                    if (node.getLifecycleService().isRunning()
-                            && node.getCluster().getClusterState() != ClusterState.PASSIVE) {
-                        CacheService cacheService = getNodeEngineImpl(node).getService(CacheService.SERVICE_NAME);
-                        IPartitionService partitionService = getNodeEngineImpl(node).getPartitionService();
-                        int partitionCount = partitionService.getPartitionCount();
+                    @Override
+                    public void onComplete(Map<Member, Object> results) {
+                        try {
+                            List all = new ArrayList();
+                            int total = 0;
+                            for (Map.Entry<Member, Object> entry : results.entrySet()) {
+                                Member member = entry.getKey();
 
-                        for (int j = 0; j < partitionCount; j++) {
-                            ICacheRecordStore recordStore = cacheService.getRecordStore(cacheNameWithPrefix, j);
-                            if (recordStore == null) {
-                                continue;
+                                List list = (List) entry.getValue();
+                                for (int i = 0; i < list.size(); i += 5) {
+                                    Integer partitionId = (Integer) list.get(i);
+                                    Boolean expirable = (Boolean) list.get(i + 1);
+                                    Integer size = (Integer) list.get(i + 2);
+                                    Boolean local = (Boolean) list.get(i + 3);
+                                    total += size;
+                                }
+                                all.add(list);
                             }
-                            int recordStoreSize = recordStore.size();
-
-                            if (recordStoreSize > 0) {
-                                addInfo(addressEntriesMap, getNodeEngineImpl(node).getThisAddress(), recordStore.getPartitionId(), recordStoreSize);
-                            }
+                            sum.set(total);
+                            msg.set(all);
+                        } finally {
+                            latch.countDown();
                         }
                     }
-                }
+                });
+                assertOpenEventually(latch, 20);
 
-                assertTrue(nonEmptyPartitionsInfo(addressEntriesMap), addressEntriesMap.isEmpty());
+                assertEquals(msg.get().toString(), 0, sum.get());
             }
+        }, 120);
+    }
 
 
-            private void addInfo(Map<Address, Map<Integer, Integer>> map, Address address, int partitionId, int count) {
-                Map<Integer, Integer> partitionIdEntryMap = map.get(address);
-                if (partitionIdEntryMap == null) {
-                    partitionIdEntryMap = new HashMap<Integer, Integer>();
-                    map.put(address, partitionIdEntryMap);
-                }
-                partitionIdEntryMap.put(partitionId, count);
-            }
+    private static class Count implements Callable, HazelcastInstanceAware, Serializable {
 
-            private String nonEmptyPartitionsInfo(Map<Address, Map<Integer, Integer>> addressEntriesMap) {
-                HazelcastInstance steadyMember = bounceMemberRule.getSteadyMember();
-                InternalPartitionService partitionService = getPartitionService(steadyMember);
-                PartitionTableView partitionTableView = partitionService.createPartitionTableView();
-                StringBuilder builder = new StringBuilder();
-                for (Map.Entry<Address, Map<Integer, Integer>> addressMapEntry : addressEntriesMap.entrySet()) {
-                    for (Map.Entry<Integer, Integer> partitionIdRecordsEntry : addressMapEntry.getValue().entrySet()) {
-                        Address address = addressMapEntry.getKey();
-                        int partitionId = partitionIdRecordsEntry.getKey();
-                        int entryCount = partitionIdRecordsEntry.getValue();
-                        Address ownerAddress = partitionTableView.getAddress(partitionId, 0);
-                        builder.append(String.format("On %s: partition %d -> remaining entry count %d (owned by %s)\n",
-                                address, partitionId, entryCount,
-                                ownerAddress.equals(address) ? "this" : ownerAddress));
+        HazelcastInstance hazelcastInstance;
+
+        @Override
+        public void setHazelcastInstance(HazelcastInstance hazelcastInstance) {
+            this.hazelcastInstance = hazelcastInstance;
+        }
+
+        @Override
+        public Object call() throws Exception {
+            ArrayList<Object> objects = new ArrayList<Object>();
+
+            NodeEngineImpl nodeEngineImpl = getNodeEngineImpl(hazelcastInstance);
+            CacheService service = nodeEngineImpl.getService(CacheService.SERVICE_NAME);
+            InternalPartitionService partitionService = nodeEngineImpl.getPartitionService();
+            for (int partitionId = 0; partitionId < partitionService.getPartitionCount(); partitionId++) {
+                CachePartitionSegment container = service.getSegment(partitionId);
+                boolean local = partitionService.getPartition(partitionId).isLocal();
+                Iterator<ICacheRecordStore> iterator = container.recordStoreIterator();
+                while (iterator.hasNext()) {
+                    ICacheRecordStore recordStore = iterator.next();
+                    boolean expirable = recordStore.isExpirable();
+
+                    if (recordStore.size() > 0) {
+                        objects.add(recordStore.getPartitionId());
+                        objects.add(expirable);
+                        objects.add(recordStore.size());
+                        objects.add(local);
+                        objects.add(nodeEngineImpl.getClusterService().getLocalMember().getAddress());
                     }
                 }
-                return builder.toString();
             }
-        }, 240);
+
+            return objects;
+        }
     }
 
     private class Get implements Runnable {
