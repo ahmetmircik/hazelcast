@@ -154,9 +154,6 @@ public class CacheReplicationOperation extends Operation implements IdentifiedDa
                 final Data key = e.getKey();
                 final CacheRecord record = e.getValue();
 
-                if (record.isExpiredAt(now)) {
-                    continue;
-                }
                 out.writeData(key);
                 out.writeObject(record);
             }

@@ -91,7 +91,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
         CacheConfig cacheConfig = new CacheConfig();
         cacheConfig.setName(cacheName);
         cacheConfig.setBackupCount(backupCount);
-        cacheConfig.setExpiryPolicyFactory(FactoryBuilder.factoryOf(new HazelcastExpiryPolicy(2000, 2000, 2000)));
+        cacheConfig.setExpiryPolicyFactory(FactoryBuilder.factoryOf(new HazelcastExpiryPolicy(1, 1, 1)));
         return cacheConfig;
     }
 
