@@ -94,6 +94,21 @@ public interface NearCache<K, V> extends InitializingObject {
     void destroy();
 
     /**
+     * Gets the count of stored records.
+     *
+     * @return the count of stored records
+     */
+    int size();
+
+    /**
+     * Checks if this near cache destroyed before access
+     *
+     * @return {@code false} if near cache was destroyed, otherwise returns
+     * {@code true}
+     */
+    boolean isAvailable();
+
+    /**
      * Gets the {@link com.hazelcast.config.InMemoryFormat} of the storage for internal records.
      *
      * @return the {@link com.hazelcast.config.InMemoryFormat} of the storage for internal records
@@ -128,13 +143,6 @@ public interface NearCache<K, V> extends InitializingObject {
      * @return the best candidate object to store, selected from the given {@code candidates}.
      */
     Object selectToSave(Object... candidates);
-
-    /**
-     * Gets the count of stored records.
-     *
-     * @return the count of stored records
-     */
-    int size();
 
     /**
      * Executes the Near Cache pre-loader on the given {@link DataStructureAdapter}.
