@@ -63,7 +63,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     private static final long FIVE_MINUTES = 5 * 60 * 1000;
 
-    private int backupCount = 3;
+    private int backupCount = 1;
     private int keySpace = 1000;
     private String cacheName = "test";
 
