@@ -59,7 +59,6 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
-@Repeat(10)
 public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     private static final long FIVE_MINUTES = 5 * 60 * 1000;
