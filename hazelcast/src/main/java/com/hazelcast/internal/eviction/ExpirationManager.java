@@ -150,6 +150,10 @@ public final class ExpirationManager implements LifecycleListener, PartitionLost
      * Called upon shutdown of {@link com.hazelcast.map.impl.MapService}
      */
     public void onShutdown() {
+        Object[] containers = task.containers;
+        for (Object container : containers) {
+            task.sendQueuedExpiredKeys(container);
+        }
         partitionService.removePartitionLostListener(regIdOfPartitionLostListener);
     }
 
