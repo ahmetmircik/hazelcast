@@ -32,6 +32,7 @@ import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
+import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.test.annotation.SlowTest;
 import com.hazelcast.test.bounce.BounceMemberRule;
 import com.hazelcast.test.bounce.BounceTestConfiguration;
@@ -58,6 +59,7 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
+@Repeat(10)
 public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
     private static final long FIVE_MINUTES = 5 * 60 * 1000;
@@ -103,7 +105,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                 HazelcastInstance steadyMember = bounceMemberRule.getSteadyMember();
                 IExecutorService executorService = steadyMember.getExecutorService("test");
                 RemainingCacheSize remainingCacheSize = new RemainingCacheSize(latch);
-                executorService.submitToAllMembers(new UnexpiredRecordstoreCollector(), remainingCacheSize);
+                executorService.submitToAllMembers(new UnexpiredRecordStoreCollector(), remainingCacheSize);
                 assertOpenEventually(latch);
                 return remainingCacheSize;
             }
@@ -137,10 +139,13 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                 int sumUnexpired = 0;
                 for (Map.Entry<Member, Object> entry : values.entrySet()) {
                     List info = (List) entry.getValue();
+                    String msg = null;
                     for (int i = 0; i < info.size(); i += 5) {
                         sumUnexpired += (Integer) info.get(i);
+                        String format = "partition[remaining: %d, id: %d, expirable: %b, primary: %b, address: %s]%n";
+                        msg = String.format(format, info.get(i), info.get(i + 1), info.get(i + 2), info.get(i + 3), info.get(i + 4));
                     }
-                    infoList.add(info);
+                    infoList.add(msg);
                 }
                 totalUnexpired.set(sumUnexpired);
                 infoUnexpired.set(infoList);
@@ -158,8 +163,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
         }
     }
 
-
-    private static class UnexpiredRecordstoreCollector
+    private static class UnexpiredRecordStoreCollector
             implements Callable, HazelcastInstanceAware, Serializable {
 
         HazelcastInstance hazelcastInstance;
