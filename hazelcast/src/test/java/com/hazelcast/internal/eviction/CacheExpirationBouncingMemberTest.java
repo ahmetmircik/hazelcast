@@ -45,7 +45,6 @@ import javax.cache.configuration.FactoryBuilder;
 import javax.cache.spi.CachingProvider;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +53,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.hazelcast.util.StringUtil.isNullOrEmpty;
+import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
@@ -95,7 +96,8 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
             @Override
             public void run() {
                 RemainingCacheSize remainingCacheSize = findRemainingCacheSize();
-                assertEquals(remainingCacheSize.getInfoUnexpired(), 0, remainingCacheSize.getTotalUnexpired());
+                assertEquals(remainingCacheSize.getMsgUnexpired(),
+                        0, remainingCacheSize.getTotalUnexpired());
             }
 
             private RemainingCacheSize findRemainingCacheSize() {
@@ -119,7 +121,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
     private static final class RemainingCacheSize implements MultiExecutionCallback {
         private final CountDownLatch latch;
         private final AtomicInteger totalUnexpired = new AtomicInteger();
-        private final AtomicReference<List> infoUnexpired = new AtomicReference(Collections.emptyList());
+        private final AtomicReference<String> msgUnexpired = new AtomicReference();
 
         public RemainingCacheSize(CountDownLatch latch) {
             this.latch = latch;
@@ -133,20 +135,25 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
         @Override
         public void onComplete(Map<Member, Object> values) {
             try {
-                List infoList = new ArrayList();
+                String formatStr = "";
+                ArrayList params = new ArrayList();
                 int sumUnexpired = 0;
                 for (Map.Entry<Member, Object> entry : values.entrySet()) {
                     List info = (List) entry.getValue();
-                    String msg = null;
                     for (int i = 0; i < info.size(); i += 5) {
                         sumUnexpired += (Integer) info.get(i);
-                        String format = "partition[remaining: %d, id: %d, expirable: %b, primary: %b, address: %s]%n";
-                        msg = String.format(format, info.get(i), info.get(i + 1), info.get(i + 2), info.get(i + 3), info.get(i + 4));
+
+                        formatStr += "%n[id: %d, remaining: %d, expirable: %b, primary: %b, address: %s]";
+
+                        params.add(info.get(i + 1));
+                        params.add(info.get(i));
+                        params.add(info.get(i + 2));
+                        params.add(info.get(i + 3));
+                        params.add(info.get(i + 4));
                     }
-                    infoList.add(msg);
                 }
                 totalUnexpired.set(sumUnexpired);
-                infoUnexpired.set(infoList);
+                msgUnexpired.set(isNullOrEmpty(formatStr) ? "" : format(formatStr + "%n", params.toArray()));
             } finally {
                 latch.countDown();
             }
@@ -156,8 +163,8 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
             return totalUnexpired.get();
         }
 
-        public String getInfoUnexpired() {
-            return infoUnexpired.get().toString();
+        public String getMsgUnexpired() {
+            return "Unexpired partitions found:" + msgUnexpired;
         }
     }
 
@@ -173,7 +180,7 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
 
         @Override
         public Object call() throws Exception {
-            List<Object> objects = new ArrayList<Object>();
+            List unexpiredMsg = new ArrayList();
 
             NodeEngineImpl nodeEngineImpl = getNodeEngineImpl(hazelcastInstance);
             CacheService service = nodeEngineImpl.getService(CacheService.SERVICE_NAME);
@@ -187,16 +194,16 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                     boolean expirable = recordStore.isExpirable();
 
                     if (recordStore.size() > 0) {
-                        objects.add(recordStore.size());
-                        objects.add(recordStore.getPartitionId());
-                        objects.add(expirable);
-                        objects.add(local);
-                        objects.add(nodeEngineImpl.getClusterService().getLocalMember().getAddress());
+                        unexpiredMsg.add(recordStore.size());
+                        unexpiredMsg.add(recordStore.getPartitionId());
+                        unexpiredMsg.add(expirable);
+                        unexpiredMsg.add(local);
+                        unexpiredMsg.add(nodeEngineImpl.getClusterService().getLocalMember().getAddress());
                     }
                 }
             }
 
-            return objects;
+            return unexpiredMsg;
         }
     }
 
