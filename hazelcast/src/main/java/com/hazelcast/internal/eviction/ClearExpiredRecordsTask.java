@@ -133,9 +133,10 @@ public abstract class ClearExpiredRecordsTask<T, S> implements Runnable {
                 if (lostPartitionDetected) {
                     equalizeBackupSizeWithPrimary(container);
                 }
-            } else {
-                clearLeftoverExpiredKeyQueues(container);
             }
+//            else {
+//                clearLeftoverExpiredKeyQueues(container);
+//            }
 
             if (canProcessContainer(container, partition, nowInMillis)) {
                 containersToProcess = addContainerTo(containersToProcess, container);
