@@ -60,23 +60,11 @@ public final class ToBackupSender<RS> {
 
     private static Collection<ExpiredKey> tryTakeExpiredKeys(InvalidationQueue<ExpiredKey> invalidationQueue,
                                                              boolean checkIfReachedBatch) {
-        int size = invalidationQueue.size();
-        if (size == 0 || checkIfReachedBatch && size < MAX_EXPIRED_KEY_COUNT_IN_BATCH) {
+        if (checkIfReachedBatch && invalidationQueue.size() < MAX_EXPIRED_KEY_COUNT_IN_BATCH) {
             return null;
         }
 
-        if (!invalidationQueue.tryAcquire()) {
-            return null;
-        }
-
-        Collection<ExpiredKey> expiredKeys;
-        try {
-            expiredKeys = pollExpiredKeys(invalidationQueue);
-        } finally {
-            invalidationQueue.release();
-        }
-
-        return expiredKeys;
+        return pollExpiredKeys(invalidationQueue);
     }
 
     private static Collection<ExpiredKey> pollExpiredKeys(Queue<ExpiredKey> expiredKeys) {
