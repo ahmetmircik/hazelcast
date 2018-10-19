@@ -140,16 +140,17 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                 int sumUnexpired = 0;
                 for (Map.Entry<Member, Object> entry : values.entrySet()) {
                     List info = (List) entry.getValue();
-                    for (int i = 0; i < info.size(); i += 5) {
-                        sumUnexpired += (Integer) info.get(i);
+                    for (int i = 0; i < info.size(); i += 6) {
+                        sumUnexpired += (Integer) info.get(i + 1);
 
-                        formatStr += "%n[id: %d, remaining: %d, expirable: %b, primary: %b, address: %s]";
+                        formatStr += "%n[id: %d, size: %d, sizeQueued: %d, expirable: %b, primary: %b, address: %s]";
 
-                        params.add(info.get(i + 1));
                         params.add(info.get(i));
+                        params.add(info.get(i + 1));
                         params.add(info.get(i + 2));
                         params.add(info.get(i + 3));
                         params.add(info.get(i + 4));
+                        params.add(info.get(i + 5));
                     }
                 }
                 totalUnexpired.set(sumUnexpired);
@@ -193,9 +194,10 @@ public class CacheExpirationBouncingMemberTest extends HazelcastTestSupport {
                     ICacheRecordStore recordStore = iterator.next();
                     boolean expirable = recordStore.isExpirable();
 
-                    if (recordStore.size() > 0) {
-                        unexpiredMsg.add(recordStore.size());
+                    if (recordStore.size() > 0 || recordStore.getExpiredKeysQueue().size() > 0) {
                         unexpiredMsg.add(recordStore.getPartitionId());
+                        unexpiredMsg.add(recordStore.size());
+                        unexpiredMsg.add(recordStore.getExpiredKeysQueue().size());
                         unexpiredMsg.add(expirable);
                         unexpiredMsg.add(local);
                         unexpiredMsg.add(nodeEngineImpl.getClusterService().getLocalMember().getAddress());
