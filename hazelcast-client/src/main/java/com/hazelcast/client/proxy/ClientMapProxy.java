@@ -20,6 +20,8 @@ import com.hazelcast.aggregation.Aggregator;
 import com.hazelcast.client.impl.clientside.ClientLockReferenceIdGenerator;
 import com.hazelcast.client.impl.clientside.ClientMessageDecoder;
 import com.hazelcast.client.impl.protocol.ClientMessage;
+import com.hazelcast.client.impl.protocol.codec.FasterMapEntrySetCodec;
+import com.hazelcast.client.impl.protocol.codec.FasterMapKeySetCodec;
 import com.hazelcast.client.impl.protocol.codec.MapAddEntryListenerCodec;
 import com.hazelcast.client.impl.protocol.codec.MapAddEntryListenerToKeyCodec;
 import com.hazelcast.client.impl.protocol.codec.MapAddEntryListenerToKeyWithPredicateCodec;
@@ -36,7 +38,6 @@ import com.hazelcast.client.impl.protocol.codec.MapDeleteCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntriesWithPagingPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntriesWithPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntrySetCodec;
-import com.hazelcast.client.impl.protocol.codec.MapEntrySetCodec2;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalReadCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalSubscribeCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalSubscribeCodec.ResponseParameters;
@@ -54,7 +55,6 @@ import com.hazelcast.client.impl.protocol.codec.MapGetEntryViewCodec;
 import com.hazelcast.client.impl.protocol.codec.MapIsEmptyCodec;
 import com.hazelcast.client.impl.protocol.codec.MapIsLockedCodec;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetCodec;
-import com.hazelcast.client.impl.protocol.codec.MapKeySetCodec2;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetWithPagingPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetWithPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapLoadAllCodec;
@@ -155,7 +155,6 @@ import com.hazelcast.spi.impl.UnmodifiableLazyList;
 import com.hazelcast.util.CollectionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.Preconditions;
-import com.hazelcast.util.collection.InflatableSet;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -1175,19 +1174,6 @@ public class ClientMapProxy<K, V> extends ClientProxy
         return newKeySet(response);
     }
 
-    public Set<K> keySet2() {
-        ClientMessage request = MapKeySetCodec.encodeRequest(name);
-        ClientMessage response = invoke(request);
-        MapKeySetCodec.ResponseParameters resultParameters = MapKeySetCodec.decodeResponse(response);
-
-        InflatableSet.Builder<K> setBuilder = InflatableSet.newBuilder(resultParameters.response.size());
-        for (Data data : resultParameters.response) {
-            K key = toObject(data);
-            setBuilder.add(key);
-        }
-        return setBuilder.build();
-    }
-
     @Override
     public Map<K, V> getAll(Set<K> keys) {
         if (CollectionUtil.isEmpty(keys)) {
@@ -1273,11 +1259,11 @@ public class ClientMapProxy<K, V> extends ClientProxy
     }
 
     private Set<Entry<K, V>> newEntrySet(final ClientMessage clientMessage) {
-        return MapEntrySetCodec2.decodeResponse(clientMessage,getSerializationService());
+        return FasterMapEntrySetCodec.decodeResponse(clientMessage,getSerializationService());
     }
 
     private Set<K> newKeySet(final ClientMessage clientMessage) {
-        return (Set<K>) MapKeySetCodec2.decodeResponse(clientMessage,getSerializationService());
+        return (Set<K>) FasterMapKeySetCodec.decodeResponse(clientMessage,getSerializationService());
     }
 
     @Override
