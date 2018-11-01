@@ -36,6 +36,7 @@ import com.hazelcast.client.impl.protocol.codec.MapDeleteCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntriesWithPagingPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntriesWithPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEntrySetCodec;
+import com.hazelcast.client.impl.protocol.codec.MapEntrySetCodec2;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalReadCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalSubscribeCodec;
 import com.hazelcast.client.impl.protocol.codec.MapEventJournalSubscribeCodec.ResponseParameters;
@@ -53,6 +54,7 @@ import com.hazelcast.client.impl.protocol.codec.MapGetEntryViewCodec;
 import com.hazelcast.client.impl.protocol.codec.MapIsEmptyCodec;
 import com.hazelcast.client.impl.protocol.codec.MapIsLockedCodec;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetCodec;
+import com.hazelcast.client.impl.protocol.codec.MapKeySetCodec2;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetWithPagingPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapKeySetWithPredicateCodec;
 import com.hazelcast.client.impl.protocol.codec.MapLoadAllCodec;
@@ -106,7 +108,6 @@ import com.hazelcast.core.EntryView;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.core.IFunction;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.IMapEvent;
 import com.hazelcast.core.MapEvent;
@@ -122,7 +123,6 @@ import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.MapPartitionLostEvent;
 import com.hazelcast.map.QueryCache;
 import com.hazelcast.map.impl.DataAwareEntryEvent;
-import com.hazelcast.map.impl.LazyMapEntry;
 import com.hazelcast.map.impl.ListenerAdapter;
 import com.hazelcast.map.impl.SimpleEntryView;
 import com.hazelcast.map.impl.querycache.subscriber.QueryCacheEndToEndProvider;
@@ -155,6 +155,7 @@ import com.hazelcast.spi.impl.UnmodifiableLazyList;
 import com.hazelcast.util.CollectionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.Preconditions;
+import com.hazelcast.util.collection.InflatableSet;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -168,7 +169,6 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.client.proxy.ClientMessageUnpackingSet.toClientMessageUnpackingSet;
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.map.impl.MapListenerFlagOperator.setAndGetListenerFlags;
 import static com.hazelcast.map.impl.querycache.subscriber.QueryCacheRequest.newQueryCacheRequest;
@@ -252,8 +252,6 @@ public class ClientMapProxy<K, V> extends ClientProxy
     };
 
     private InternalSerializationService ss;
-    private IFunction<ClientMessage, K> toKeyFunction;
-    private IFunction<ClientMessage, Entry<K, V>> toEntryFunction;
     private ClientQueryCacheContext queryCacheContext;
     private ClientMessageDecoder eventJournalReadResponseDecoder;
     private ClientLockReferenceIdGenerator lockReferenceIdGenerator;
@@ -286,20 +284,6 @@ public class ClientMapProxy<K, V> extends ClientProxy
             public EventJournalInitialSubscriberState decodeClientMessage(ClientMessage message) {
                 final ResponseParameters resp = MapEventJournalSubscribeCodec.decodeResponse(message);
                 return new EventJournalInitialSubscriberState(resp.oldestSequence, resp.newestSequence);
-            }
-        };
-        toEntryFunction = new IFunction<ClientMessage, Entry<K, V>>() {
-            @Override
-            public Entry<K, V> apply(ClientMessage response) {
-                Data dataKey = response.getData();
-                Data dataValue = response.getData();
-                return new LazyMapEntry<K, V>(dataKey, dataValue, ss);
-            }
-        };
-        toKeyFunction = new IFunction<ClientMessage, K>() {
-            @Override
-            public K apply(ClientMessage response) {
-                return toObject(response.getData());
             }
         };
     }
@@ -1187,8 +1171,21 @@ public class ClientMapProxy<K, V> extends ClientProxy
     @Override
     public Set<K> keySet() {
         ClientMessage request = MapKeySetCodec.encodeRequest(name);
-        final ClientMessage response = invoke(request);
+        ClientMessage response = invoke(request);
         return newKeySet(response);
+    }
+
+    public Set<K> keySet2() {
+        ClientMessage request = MapKeySetCodec.encodeRequest(name);
+        ClientMessage response = invoke(request);
+        MapKeySetCodec.ResponseParameters resultParameters = MapKeySetCodec.decodeResponse(response);
+
+        InflatableSet.Builder<K> setBuilder = InflatableSet.newBuilder(resultParameters.response.size());
+        for (Data data : resultParameters.response) {
+            K key = toObject(data);
+            setBuilder.add(key);
+        }
+        return setBuilder.build();
     }
 
     @Override
@@ -1276,11 +1273,11 @@ public class ClientMapProxy<K, V> extends ClientProxy
     }
 
     private Set<Entry<K, V>> newEntrySet(final ClientMessage clientMessage) {
-        return toClientMessageUnpackingSet(clientMessage, toEntryFunction);
+        return MapEntrySetCodec2.decodeResponse(clientMessage,getSerializationService());
     }
 
     private Set<K> newKeySet(final ClientMessage clientMessage) {
-        return toClientMessageUnpackingSet(clientMessage, toKeyFunction);
+        return (Set<K>) MapKeySetCodec2.decodeResponse(clientMessage,getSerializationService());
     }
 
     @Override
