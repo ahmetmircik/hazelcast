@@ -32,10 +32,6 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
     }
 
     @Override
-    public void beforeRun() throws Exception {
-    }
-
-    @Override
     public void run() {
         Object oldValue = recordStore.set(dataKey, dataValue, ttl, maxIdle);
 //        newRecord = oldValue == null;
