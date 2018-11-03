@@ -20,9 +20,6 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.MutatingOperation;
 
-import static com.hazelcast.core.EntryEventType.ADDED;
-import static com.hazelcast.core.EntryEventType.UPDATED;
-
 public class SetOperation extends BasePutOperation implements MutatingOperation {
 
     private boolean newRecord;
@@ -36,7 +33,7 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     public void run() {
-        Object oldValue = recordStore.set(dataKey, dataValue, ttl, maxIdle);
+//        Object oldValue = recordStore.set(dataKey, dataValue, ttl, maxIdle);
 //        newRecord = oldValue == null;
 
 //        if (recordStore.hasQueryCache()) {
@@ -46,9 +43,9 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     public void afterRun() {
-        eventType = newRecord ? ADDED : UPDATED;
-
-        super.afterRun();
+//        eventType = newRecord ? ADDED : UPDATED;
+//
+//        super.afterRun();
     }
 
     @Override
