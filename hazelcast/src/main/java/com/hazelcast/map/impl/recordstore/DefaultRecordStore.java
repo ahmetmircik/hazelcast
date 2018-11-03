@@ -41,6 +41,7 @@ import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.MapPublisherRegistry;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherRegistry;
+import com.hazelcast.map.impl.record.DataRecord;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
 import com.hazelcast.map.merge.MapMergePolicy;
@@ -692,18 +693,21 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         long now = getNow();
 //        markRecordStoreExpirable(ttl, maxIdle);
 
-        Record record = getRecordOrNull(key, now, false);
+//        Record record = getRecordOrNull(key, now, false);
+        Record record = storage.get(key);
 //        Object oldValue = record == null ? (loadFromStore ? mapDataStore.load(key) : null) : record.getValue();
 //        value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
 //        value = mapDataStore.add(key, value, now);
 //        onStore(record);
+        Data dataValue = serializationService.toData(value);
 
         if (record == null) {
-            record = createRecord(value, ttl, maxIdle, now);
-            storage.put(key, record);
+//            record = createRecord(value, ttl, maxIdle, now);
+            storage.put(key, new DataRecord(dataValue));
 //            mutationObserver.onPutRecord(key, record);
         } else {
-            updateRecord(key, record, value, now, countAsAccess);
+            record.setValue(dataValue);
+//            updateRecord(key, record, value, now, countAsAccess);
 //            setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
         }
 

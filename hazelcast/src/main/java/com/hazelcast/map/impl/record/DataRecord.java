@@ -20,11 +20,11 @@ import com.hazelcast.nio.serialization.Data;
 
 import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 
-class DataRecord extends AbstractRecord<Data> {
+public class DataRecord extends AbstractRecord<Data> {
 
     protected volatile Data value;
 
-    DataRecord(Data value) {
+    public DataRecord(Data value) {
         this.value = value;
     }
 

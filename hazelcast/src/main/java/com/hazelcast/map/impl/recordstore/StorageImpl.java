@@ -90,11 +90,11 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public void updateRecordValue(Data key, R record, Object value) {
-        updateCostEstimate(-entryCostEstimator.calculateValueCost(record));
+//        updateCostEstimate(-entryCostEstimator.calculateValueCost(record));
 
         recordFactory.setValue(record, value);
 
-        updateCostEstimate(entryCostEstimator.calculateValueCost(record));
+//        updateCostEstimate(entryCostEstimator.calculateValueCost(record));
     }
 
     @Override
