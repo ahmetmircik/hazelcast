@@ -687,28 +687,28 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     protected Object putInternal(Data key, Object value, long ttl, long maxIdle, boolean loadFromStore, boolean countAsAccess) {
-        checkIfLoaded();
+//        checkIfLoaded();
 
         long now = getNow();
-        markRecordStoreExpirable(ttl, maxIdle);
+//        markRecordStoreExpirable(ttl, maxIdle);
 
         Record record = getRecordOrNull(key, now, false);
-        Object oldValue = record == null ? (loadFromStore ? mapDataStore.load(key) : null) : record.getValue();
-        value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
-        value = mapDataStore.add(key, value, now);
-        onStore(record);
+//        Object oldValue = record == null ? (loadFromStore ? mapDataStore.load(key) : null) : record.getValue();
+//        value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
+//        value = mapDataStore.add(key, value, now);
+//        onStore(record);
 
         if (record == null) {
             record = createRecord(value, ttl, maxIdle, now);
             storage.put(key, record);
-            mutationObserver.onPutRecord(key, record);
+//            mutationObserver.onPutRecord(key, record);
         } else {
             updateRecord(key, record, value, now, countAsAccess);
-            setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
+//            setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
         }
 
-        saveIndex(record, oldValue);
-        return oldValue;
+//        saveIndex(record, oldValue);
+        return null;
     }
 
     @Override
