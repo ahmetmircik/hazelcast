@@ -31,7 +31,7 @@ public class PutOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     public void run() {
-        dataOldValue = mapServiceContext.toData(recordStore.put(dataKey, dataValue, ttl, maxIdle));
+        //dataOldValue = mapServiceContext.toData(recordStore.put(dataKey, dataValue, ttl, maxIdle));
     }
 
     @Override

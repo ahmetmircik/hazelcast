@@ -38,12 +38,12 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
 
     @Override
     public void run() {
-        result = mapServiceContext.toData(recordStore.get(dataKey, false, getCallerAddress()));
+        //result = mapServiceContext.toData(recordStore.get(dataKey, false, getCallerAddress()));
     }
 
     @Override
     public void afterRun() {
-        mapServiceContext.interceptAfterGet(name, result, mapContainer);
+       // mapServiceContext.interceptAfterGet(name, result, mapContainer);
     }
 
     @Override
