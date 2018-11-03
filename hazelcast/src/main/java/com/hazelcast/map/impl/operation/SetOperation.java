@@ -37,7 +37,7 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     public void run() {
-//        Object oldValue = recordStore.set(dataKey, dataValue, ttl, maxIdle);
+        Object oldValue = recordStore.set(dataKey, dataValue, ttl, maxIdle);
 //        newRecord = oldValue == null;
 
 //        if (recordStore.hasQueryCache()) {

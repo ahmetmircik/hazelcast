@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +46,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
     private final RecordFactory<R> recordFactory;
 //    private final StorageSCHM<R> records;
     private final Map<Data,R> records;
+    private final LinkedList list = new LinkedList();
 
     // not final for testing purposes.
     private EntryCostEstimator<Data, Record> entryCostEstimator;
@@ -78,7 +80,8 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
         record.setKey(key);
 
-        R previousRecord = records.put(key, record);
+//        R previousRecord = records.put(key, record);
+        list.add(record);
 
 //        if (previousRecord == null) {
 //            updateCostEstimate(entryCostEstimator.calculateEntryCost(key, record));
