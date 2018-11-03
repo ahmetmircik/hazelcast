@@ -80,13 +80,13 @@ public abstract class MapOperation extends AbstractNamedOperation implements Ide
 
     @Override
     public void beforeRun() throws Exception {
-//        super.beforeRun();
-//
-//        mapService = getService();
-//        mapServiceContext = mapService.getMapServiceContext();
-//        mapEventPublisher = mapServiceContext.getMapEventPublisher();
-//
-//        innerBeforeRun();
+        super.beforeRun();
+
+        mapService = getService();
+        mapServiceContext = mapService.getMapServiceContext();
+        mapEventPublisher = mapServiceContext.getMapEventPublisher();
+
+        innerBeforeRun();
     }
 
     public void innerBeforeRun() throws Exception {
