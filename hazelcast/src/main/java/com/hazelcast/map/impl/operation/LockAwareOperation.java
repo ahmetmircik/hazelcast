@@ -40,7 +40,7 @@ public abstract class LockAwareOperation extends KeyBasedMapOperation implements
 
     @Override
     public boolean shouldWait() {
-        return !recordStore.canAcquireLock(dataKey, getCallerUuid(), getThreadId());
+        return false;//!recordStore.canAcquireLock(dataKey, getCallerUuid(), getThreadId());
     }
 
     @Override
