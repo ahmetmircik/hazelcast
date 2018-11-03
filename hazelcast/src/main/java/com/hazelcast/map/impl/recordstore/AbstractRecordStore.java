@@ -43,8 +43,6 @@ import com.hazelcast.wan.impl.CallerProvenance;
 import javax.annotation.Nonnull;
 import java.util.Collection;
 
-import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTimes;
-
 
 /**
  * Contains record store common parts.
@@ -109,11 +107,11 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     @Override
     public Record createRecord(Object value, long ttlMillis, long maxIdle, long now) {
         Record record = recordFactory.newRecord(value);
-        record.setCreationTime(now);
-        record.setLastUpdateTime(now);
-
-        setExpirationTimes(ttlMillis, maxIdle, record, mapContainer.getMapConfig(), true);
-        updateStatsOnPut(false, now);
+//        record.setCreationTime(now);
+//        record.setLastUpdateTime(now);
+//
+//        setExpirationTimes(ttlMillis, maxIdle, record, mapContainer.getMapConfig(), true);
+       // updateStatsOnPut(false, now);
         return record;
     }
 
@@ -142,12 +140,12 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     protected void updateRecord(Data key, Record record, Object value, long now, boolean countAsAccess) {
-        updateStatsOnPut(countAsAccess, now);
-        if (countAsAccess) {
-            record.onAccess(now);
-        }
-        record.onUpdate(now);
-        mutationObserver.onUpdateRecord(key, record, value);
+//        updateStatsOnPut(countAsAccess, now);
+//        if (countAsAccess) {
+//            record.onAccess(now);
+//        }
+//        record.onUpdate(now);
+//        mutationObserver.onUpdateRecord(key, record, value);
         storage.updateRecordValue(key, record, value);
     }
 

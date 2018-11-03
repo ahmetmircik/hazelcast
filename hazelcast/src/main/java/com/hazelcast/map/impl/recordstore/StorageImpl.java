@@ -80,12 +80,12 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
         R previousRecord = records.put(key, record);
 
-        if (previousRecord == null) {
-            updateCostEstimate(entryCostEstimator.calculateEntryCost(key, record));
-        } else {
-            updateCostEstimate(-entryCostEstimator.calculateValueCost(previousRecord));
-            updateCostEstimate(entryCostEstimator.calculateValueCost(record));
-        }
+//        if (previousRecord == null) {
+//            updateCostEstimate(entryCostEstimator.calculateEntryCost(key, record));
+//        } else {
+//            updateCostEstimate(-entryCostEstimator.calculateValueCost(previousRecord));
+//            updateCostEstimate(entryCostEstimator.calculateValueCost(record));
+//        }
     }
 
     @Override

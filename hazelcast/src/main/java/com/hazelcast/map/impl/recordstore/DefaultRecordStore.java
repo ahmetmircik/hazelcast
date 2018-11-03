@@ -1048,11 +1048,12 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     protected Record getRecordOrNull(Data key, long now,
                                      boolean backup) {
-        Record record = storage.get(key);
-        if (record == null) {
-            return null;
-        }
-        return getOrNullIfExpired(record, now, backup);
+        return storage.get(key);
+//        Record record = storage.get(key);
+//        if (record == null) {
+//            return null;
+//        }
+//        return getOrNullIfExpired(record, now, backup);
     }
 
     protected void onStore(Record record) {
