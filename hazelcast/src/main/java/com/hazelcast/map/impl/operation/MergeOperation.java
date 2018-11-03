@@ -95,7 +95,7 @@ public class MergeOperation extends MapOperation implements PartitionAwareOperat
         if (recordStore.merge(mergingEntry, mergePolicy, getCallerProvenance())) {
             hasMergedValues = true;
             Data dataValue = getValueOrPostProcessedValue(dataKey, getValue(dataKey));
-            mapServiceContext.interceptAfterPut(name, dataValue);
+            mapServiceContext.interceptAfterPut(name, dataValue, mapContainer);
 
             if (hasMapListener) {
                 mapEventPublisher.publishEvent(getCallerAddress(), name, MERGED, dataKey, oldValue, dataValue);

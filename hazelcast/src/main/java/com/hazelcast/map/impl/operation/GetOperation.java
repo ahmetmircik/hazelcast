@@ -43,7 +43,7 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
 
     @Override
     public void afterRun() {
-        mapServiceContext.interceptAfterGet(name, result);
+        mapServiceContext.interceptAfterGet(name, result, mapContainer);
     }
 
     @Override

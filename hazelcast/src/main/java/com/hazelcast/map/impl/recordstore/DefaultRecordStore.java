@@ -33,6 +33,7 @@ import com.hazelcast.map.impl.event.EntryEventData;
 import com.hazelcast.map.impl.iterator.MapEntriesWithCursor;
 import com.hazelcast.map.impl.iterator.MapKeysWithCursor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
+import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
@@ -540,7 +541,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         }
 
         Object value = record.getValue();
-        mapServiceContext.interceptAfterGet(name, value);
+        mapServiceContext.interceptAfterGet(name, value, mapContainer);
         // this serialization step is needed not to expose the object, see issue 1292
         return mapServiceContext.toData(value);
     }
@@ -693,7 +694,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
         Record record = getRecordOrNull(key, now, false);
         Object oldValue = record == null ? (loadFromStore ? mapDataStore.load(key) : null) : record.getValue();
-        value = mapServiceContext.interceptPut(name, oldValue, value);
+        value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
         value = mapDataStore.add(key, value, now);
         onStore(record);
 
@@ -840,7 +841,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             return null;
         }
         Object oldValue = record.getValue();
-        update = mapServiceContext.interceptPut(name, oldValue, update);
+        update = mapServiceContext.interceptPut(name, oldValue, update, mapContainer);
         update = mapDataStore.add(key, update, now);
         onStore(record);
         updateRecord(key, record, update, now, true);
@@ -862,7 +863,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         if (!valueComparator.isEqual(expect, current, serializationService)) {
             return false;
         }
-        update = mapServiceContext.interceptPut(name, current, update);
+        update = mapServiceContext.interceptPut(name, current, update, mapContainer);
         update = mapDataStore.add(key, update, now);
         onStore(record);
         updateRecord(key, record, update, now, true);
@@ -880,13 +881,13 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         Record record = getRecordOrNull(key, now, false);
         Object oldValue = null;
         if (record == null) {
-            value = mapServiceContext.interceptPut(name, null, value);
+            value = mapServiceContext.interceptPut(name, null, value, mapContainer);
             record = createRecord(value, ttl, maxIdle, now);
             storage.put(key, record);
             mutationObserver.onPutRecord(key, record);
         } else {
             oldValue = record.getValue();
-            value = mapServiceContext.interceptPut(name, oldValue, value);
+            value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
             updateRecord(key, record, value, now, true);
             setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
         }
@@ -922,7 +923,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         Object oldValue = null;
         EntryEventType entryEventType = null;
         if (record == null) {
-            value = mapServiceContext.interceptPut(name, null, value);
+            value = mapServiceContext.interceptPut(name, null, value, mapContainer);
             record = createRecord(value, ttl, maxIdle, now);
             storage.put(key, record);
             if (canPublishLoadEvent()) {
@@ -932,7 +933,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             }
         } else {
             oldValue = record.getValue();
-            value = mapServiceContext.interceptPut(name, oldValue, value);
+            value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
             updateRecord(key, record, value, now, true);
             setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
 
@@ -1010,7 +1011,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             oldValue = record.getValue();
         }
         if (oldValue == null) {
-            value = mapServiceContext.interceptPut(name, null, value);
+            value = mapServiceContext.interceptPut(name, null, value, mapContainer);
             value = mapDataStore.add(key, value, now);
             onStore(record);
             record = createRecord(value, ttl, maxIdle, now);
@@ -1084,6 +1085,10 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     @Override
     public void checkIfLoaded() {
+        if (mapDataStore == MapDataStores.EMPTY_MAP_DATA_STORE) {
+            return;
+        }
+
         if (loadingFutures.isEmpty()) {
             return;
         }

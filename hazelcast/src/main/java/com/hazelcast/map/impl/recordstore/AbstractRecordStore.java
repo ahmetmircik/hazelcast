@@ -157,13 +157,15 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     protected void saveIndex(Record record, Object oldValue) {
-        Data dataKey = record.getKey();
         Indexes indexes = mapContainer.getIndexes(partitionId);
-        if (indexes.hasIndex()) {
-            Object value = Records.getValueOrCachedValue(record, serializationService);
-            QueryableEntry queryableEntry = mapContainer.newQueryEntry(dataKey, value);
-            indexes.saveEntryIndex(queryableEntry, oldValue, Index.OperationSource.USER);
+        if (!indexes.hasIndex()) {
+            return;
         }
+
+        Data dataKey = record.getKey();
+        Object value = Records.getValueOrCachedValue(record, serializationService);
+        QueryableEntry queryableEntry = mapContainer.newQueryEntry(dataKey, value);
+        indexes.saveEntryIndex(queryableEntry, oldValue, Index.OperationSource.USER);
     }
 
 

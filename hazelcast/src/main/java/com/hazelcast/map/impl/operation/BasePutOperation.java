@@ -47,9 +47,9 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
 
     @Override
     public void afterRun() {
-        mapServiceContext.interceptAfterPut(name, dataValue);
-        Record record = recordStore.getRecord(dataKey);
-        Object value = isPostProcessing(recordStore) ? record.getValue() : dataValue;
+        mapServiceContext.interceptAfterPut(name, dataValue, mapContainer);
+        Object value = isPostProcessing(recordStore)
+                ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapEventPublisher.publishEvent(getCallerAddress(), name, getEventType(),
                 dataKey, dataOldValue, value, dataMergingValue);
         invalidateNearCache(dataKey);

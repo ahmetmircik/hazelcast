@@ -67,6 +67,7 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     protected Iterator<Record> expirationIterator;
 
     protected volatile boolean hasEntryWithCustomExpiration;
+    private boolean expiryInformed;
 
     protected AbstractEvictableRecordStore(MapContainer mapContainer, int partitionId) {
         super(mapContainer, partitionId);
@@ -176,8 +177,13 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
     }
 
     protected void markRecordStoreExpirable(long ttl, long maxIdle) {
+        if (expiryInformed) {
+            return;
+        }
+        
         if (!isInfiniteTTL(ttl) || isMaxIdleDefined(maxIdle)) {
             hasEntryWithCustomExpiration = true;
+            expiryInformed = true;
         }
 
         if (isRecordStoreExpirable()) {

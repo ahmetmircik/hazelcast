@@ -48,12 +48,12 @@ import com.hazelcast.map.impl.query.AggregationResult;
 import com.hazelcast.map.impl.query.AggregationResultProcessor;
 import com.hazelcast.map.impl.query.CallerRunsAccumulationExecutor;
 import com.hazelcast.map.impl.query.CallerRunsPartitionScanExecutor;
-import com.hazelcast.map.impl.query.QueryEngine;
-import com.hazelcast.map.impl.query.QueryEngineImpl;
 import com.hazelcast.map.impl.query.ParallelAccumulationExecutor;
 import com.hazelcast.map.impl.query.ParallelPartitionScanExecutor;
 import com.hazelcast.map.impl.query.PartitionScanExecutor;
 import com.hazelcast.map.impl.query.PartitionScanRunner;
+import com.hazelcast.map.impl.query.QueryEngine;
+import com.hazelcast.map.impl.query.QueryEngineImpl;
 import com.hazelcast.map.impl.query.QueryResult;
 import com.hazelcast.map.impl.query.QueryResultProcessor;
 import com.hazelcast.map.impl.query.QueryRunner;
@@ -566,44 +566,47 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void interceptAfterGet(String mapName, Object value) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public void interceptAfterGet(String mapName, Object value, MapContainer mapContainer) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
-        if (!interceptors.isEmpty()) {
-            value = toObject(value);
-            for (MapInterceptor interceptor : interceptors) {
-                interceptor.afterGet(value);
-            }
+        if (interceptors.isEmpty()) {
+            return;
+        }
+
+        value = toObject(value);
+        for (MapInterceptor interceptor : interceptors) {
+            interceptor.afterGet(value);
         }
     }
 
     @Override
-    public Object interceptPut(String mapName, Object oldValue, Object newValue) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public Object interceptPut(String mapName, Object oldValue,
+                               Object newValue, MapContainer mapContainer) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
-        Object result = null;
-        if (!interceptors.isEmpty()) {
-            result = toObject(newValue);
-            oldValue = toObject(oldValue);
-            for (MapInterceptor interceptor : interceptors) {
-                Object temp = interceptor.interceptPut(oldValue, result);
-                if (temp != null) {
-                    result = temp;
-                }
+        if (interceptors.isEmpty()) {
+            return newValue;
+        }
+
+        Object result = toObject(newValue);
+        oldValue = toObject(oldValue);
+        for (MapInterceptor interceptor : interceptors) {
+            Object temp = interceptor.interceptPut(oldValue, result);
+            if (temp != null) {
+                result = temp;
             }
         }
         return result == null ? newValue : result;
     }
 
     @Override
-    public void interceptAfterPut(String mapName, Object newValue) {
-        MapContainer mapContainer = getMapContainer(mapName);
+    public void interceptAfterPut(String mapName, Object newValue, MapContainer mapContainer) {
         List<MapInterceptor> interceptors = mapContainer.getInterceptorRegistry().getInterceptors();
-        if (!interceptors.isEmpty()) {
-            newValue = toObject(newValue);
-            for (MapInterceptor interceptor : interceptors) {
-                interceptor.afterPut(newValue);
-            }
+        if (interceptors.isEmpty()) {
+            return;
+        }
+
+        newValue = toObject(newValue);
+        for (MapInterceptor interceptor : interceptors) {
+            interceptor.afterPut(newValue);
         }
     }
 

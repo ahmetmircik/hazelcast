@@ -290,7 +290,7 @@ public final class EntryOperator {
                 Record record = recordStore.getRecord(dataKey);
                 newValue = record == null ? null : record.getValue();
             }
-            mapServiceContext.interceptAfterPut(mapName, newValue);
+            mapServiceContext.interceptAfterPut(mapName, newValue, mapContainer);
             stats.incrementPutLatencyNanos(getLatencyNanos(startTimeNanos));
         }
     }

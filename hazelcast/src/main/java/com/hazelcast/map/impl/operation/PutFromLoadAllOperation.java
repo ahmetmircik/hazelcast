@@ -104,7 +104,7 @@ public class PutFromLoadAllOperation extends MapOperation implements PartitionAw
 
 
     private void callAfterPutInterceptors(Object value) {
-        mapService.getMapServiceContext().interceptAfterPut(name, value);
+        mapService.getMapServiceContext().interceptAfterPut(name, value, mapContainer);
     }
 
     @Override

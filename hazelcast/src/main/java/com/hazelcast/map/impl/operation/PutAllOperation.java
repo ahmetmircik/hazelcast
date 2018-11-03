@@ -92,7 +92,7 @@ public class PutAllOperation extends MapOperation
     private void put(Data dataKey, Data dataValue) {
         Object oldValue = putToRecordStore(dataKey, dataValue);
         dataValue = getValueOrPostProcessedValue(dataKey, dataValue);
-        mapServiceContext.interceptAfterPut(name, dataValue);
+        mapServiceContext.interceptAfterPut(name, dataValue, mapContainer);
 
         if (hasMapListener) {
             EntryEventType eventType = (oldValue == null ? ADDED : UPDATED);
