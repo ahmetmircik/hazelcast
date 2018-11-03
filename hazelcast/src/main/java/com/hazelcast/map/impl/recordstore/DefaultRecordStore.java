@@ -689,27 +689,28 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     protected Object putInternal(Data key, Object value, long ttl, long maxIdle, boolean loadFromStore, boolean countAsAccess) {
 //        checkIfLoaded();
-
-        long now = getNow();
+        Data dataValue = serializationService.toData(value);
+        storage.put(key, new DataRecord(dataValue));
+//        long now = getNow();
 //        markRecordStoreExpirable(ttl, maxIdle);
 
 //        Record record = getRecordOrNull(key, now, false);
-        Record record = storage.get(key);
+       // Record record = storage.get(key);
 //        Object oldValue = record == null ? (loadFromStore ? mapDataStore.load(key) : null) : record.getValue();
 //        value = mapServiceContext.interceptPut(name, oldValue, value, mapContainer);
 //        value = mapDataStore.add(key, value, now);
 //        onStore(record);
-        Data dataValue = serializationService.toData(value);
-
-        if (record == null) {
-//            record = createRecord(value, ttl, maxIdle, now);
-            storage.put(key, new DataRecord(dataValue));
-//            mutationObserver.onPutRecord(key, record);
-        } else {
-            record.setValue(dataValue);
-//            updateRecord(key, record, value, now, countAsAccess);
-//            setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
-        }
+//        Data dataValue = serializationService.toData(value);
+//
+//        if (record == null) {
+////            record = createRecord(value, ttl, maxIdle, now);
+//            storage.put(key, new DataRecord(dataValue));
+////            mutationObserver.onPutRecord(key, record);
+//        } else {
+//            record.setValue(dataValue);
+////            updateRecord(key, record, value, now, countAsAccess);
+////            setExpirationTimes(ttl, maxIdle, record, mapContainer.getMapConfig(), false);
+//        }
 
 //        saveIndex(record, oldValue);
         return null;
