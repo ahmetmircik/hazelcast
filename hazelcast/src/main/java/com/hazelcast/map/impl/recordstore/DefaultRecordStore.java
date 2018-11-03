@@ -687,10 +687,11 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return putInternal(key, value, ttl, maxIdle, true, true);
     }
 
+    DataRecord record = new DataRecord();
     protected Object putInternal(Data key, Object value, long ttl, long maxIdle, boolean loadFromStore, boolean countAsAccess) {
 //        checkIfLoaded();
-        Data dataValue = serializationService.toData(value);
-        storage.put(key, new DataRecord(dataValue));
+        record.setValue(((Data) value));
+        storage.put(key, record);
 //        long now = getNow();
 //        markRecordStoreExpirable(ttl, maxIdle);
 

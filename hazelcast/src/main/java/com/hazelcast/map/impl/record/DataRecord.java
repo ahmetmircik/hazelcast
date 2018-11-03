@@ -28,7 +28,7 @@ public class DataRecord extends AbstractRecord<Data> {
         this.value = value;
     }
 
-    DataRecord() {
+    public DataRecord() {
     }
 
     @Override
