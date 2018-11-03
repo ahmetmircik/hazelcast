@@ -183,7 +183,7 @@ public abstract class TransactionalMapProxySupport extends TransactionalDistribu
             return null;
         }
 
-        mapServiceContext.interceptAfterGet(name, value, mapContainer);
+//        mapServiceContext.interceptAfterGet(name, value, mapContainer);
         return deserializeValue ? ss.toObject(value) : value;
     }
 

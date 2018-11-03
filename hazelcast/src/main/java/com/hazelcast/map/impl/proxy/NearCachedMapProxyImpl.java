@@ -608,7 +608,7 @@ public class NearCachedMapProxyImpl<K, V> extends MapProxyImpl<K, V> {
         if (value == CACHED_AS_NULL) {
             return null;
         }
-        mapServiceContext.interceptAfterGet(name, value, mapContainer);
+       // mapServiceContext.interceptAfterGet(name, value, mapContainer);
         return deserializeValue ? toObject(value) : value;
     }
 
