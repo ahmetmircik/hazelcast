@@ -37,7 +37,7 @@ import java.util.NoSuchElementException;
 @SerializableByConvention
 public class SampleableConcurrentHashMap<K, V> extends ConcurrentReferenceHashMap<K, V> {
 
-    private static final float LOAD_FACTOR = 0.91f;
+    private static final float LOAD_FACTOR = 0.5f;
 
     public SampleableConcurrentHashMap(int initialCapacity) {
         // Concurrency level 1 is important for fetch-method to function properly.
