@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.recordstore;
 
 public class SimpleMap<K, V> {
 
-    private static final int DEFAULT_CAPACITY = 8;
+    private static final int DEFAULT_CAPACITY = 256;
     private static final float DEFAULT_LOAD_FACTOR = 0.55f;
 
     private int size = 0;
