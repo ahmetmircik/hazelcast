@@ -42,7 +42,7 @@ import static com.hazelcast.map.impl.OwnedEntryCostEstimatorFactory.createMapSiz
 public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     private final RecordFactory<R> recordFactory;
-    private final StorageSCHM<R> records;
+    private final SimpleMap records;
 
     // not final for testing purposes.
     private EntryCostEstimator<Data, Record> entryCostEstimator;
@@ -50,24 +50,24 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
     StorageImpl(RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat, SerializationService serializationService) {
         this.recordFactory = recordFactory;
         this.entryCostEstimator = createMapSizeEstimator(inMemoryFormat);
-        this.records = new StorageSCHM<R>(serializationService);
+        this.records = new SimpleMap<Data, Record>();
     }
 
     @Override
     public void clear(boolean isDuringShutdown) {
-        records.clear();
+//        records.clear();
 
         entryCostEstimator.reset();
     }
 
     @Override
     public Collection<R> values() {
-        return records.values();
+        return null;//records.values();
     }
 
     @Override
     public Iterator<R> mutationTolerantIterator() {
-        return records.values().iterator();
+        return null;//records.values().iterator();
     }
 
     @Override
@@ -75,7 +75,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
         record.setKey(key);
 
-        R previousRecord = records.put(key, record);
+        R previousRecord = (R) records.put(key, record);
 
         if (previousRecord == null) {
             updateCostEstimate(entryCostEstimator.calculateEntryCost(key, record));
@@ -96,7 +96,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public R get(Data key) {
-        return records.get(key);
+        return (R) records.get(key);
     }
 
     @Override
@@ -111,7 +111,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public boolean isEmpty() {
-        return records.isEmpty();
+        return false;//records.isEmpty();
     }
 
     @Override
@@ -125,7 +125,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public boolean containsKey(Data key) {
-        return records.containsKey(key);
+        return false;//records.containsKey(key);
     }
 
     @Override
@@ -155,20 +155,20 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public Iterable<LazyEntryViewFromRecord> getRandomSamples(int sampleCount) {
-        return records.getRandomSamples(sampleCount);
+        return null;//records.getRandomSamples(sampleCount);
     }
 
     @Override
     public MapKeysWithCursor fetchKeys(int tableIndex, int size) {
         List<Data> keys = new ArrayList<Data>(size);
-        int newTableIndex = records.fetchKeys(tableIndex, size, keys);
+        int newTableIndex = -1;//records.fetchKeys(tableIndex, size, keys);
         return new MapKeysWithCursor(keys, newTableIndex);
     }
 
     @Override
     public MapEntriesWithCursor fetchEntries(int tableIndex, int size, SerializationService serializationService) {
         List<Map.Entry<Data, R>> entries = new ArrayList<Map.Entry<Data, R>>(size);
-        int newTableIndex = records.fetchEntries(tableIndex, size, entries);
+        int newTableIndex = -1;//records.fetchEntries(tableIndex, size, entries);
         List<Map.Entry<Data, Data>> entriesData = new ArrayList<Map.Entry<Data, Data>>(entries.size());
         for (Map.Entry<Data, R> entry : entries) {
             R record = entry.getValue();
