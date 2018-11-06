@@ -24,7 +24,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.serialization.SerializationService;
-import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
         this.recordFactory = recordFactory;
         this.entryCostEstimator = createMapSizeEstimator(inMemoryFormat);
 //        this.records = new SimpleMap<Data, Record>();
-        this.records = new Object2ObjectOpenHashMap<Data, Record>(256, 0.55f);
+        this.records = new Object2ObjectArrayMap<Data, Record>(256);
     }
 
     @Override
