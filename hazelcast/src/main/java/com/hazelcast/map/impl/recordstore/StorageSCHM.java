@@ -35,7 +35,7 @@ public class StorageSCHM<R extends Record> extends SampleableConcurrentHashMap<D
     private final SerializationService serializationService;
 
     public StorageSCHM(SerializationService serializationService) {
-        super(DEFAULT_INITIAL_CAPACITY);
+        super(DEFAULT_INITIAL_CAPACITY, 0.1f);
 
         this.serializationService = serializationService;
     }
