@@ -24,7 +24,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.serialization.SerializationService;
-import com.hazelcast.util.MapUtil;
+import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
     StorageImpl(RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat, SerializationService serializationService) {
         this.recordFactory = recordFactory;
         this.entryCostEstimator = createMapSizeEstimator(inMemoryFormat);
-        this.records = MapUtil.createHashMap(1024);
+        this.records = HashObjObjMaps.newMutableMap(256);
     }
 
     @Override
