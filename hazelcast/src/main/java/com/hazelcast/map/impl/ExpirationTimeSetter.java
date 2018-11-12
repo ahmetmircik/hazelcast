@@ -19,6 +19,8 @@ package com.hazelcast.map.impl;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.map.impl.record.Record;
 
+import javax.annotation.Nonnull;
+
 import static com.hazelcast.util.Preconditions.checkNotNegative;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -41,11 +43,11 @@ public final class ExpirationTimeSetter {
     private static long calculateExpirationTime(Record record) {
         // calculate TTL expiration time
         long ttl = checkedTime(record.getTtl());
-        long ttlExpirationTime = sumForExpiration(ttl, getLifeStartTime(record));
+        long ttlExpirationTime = sumForExpiration(ttl, lastUpdateTimeMillis(record));
 
         // calculate MaxIdle expiration time
         long maxIdle = checkedTime(record.getMaxIdle());
-        long maxIdleExpirationTime = sumForExpiration(maxIdle, getIdlenessStartTime(record));
+        long maxIdleExpirationTime = sumForExpiration(maxIdle, lastAccessTimeMillis(record));
         // select most nearest expiration time
         return Math.min(ttlExpirationTime, maxIdleExpirationTime);
     }
@@ -56,7 +58,7 @@ public final class ExpirationTimeSetter {
      * {@link com.hazelcast.core.IMap#put}, the {@code lastAccessTime} is zero till the first access.
      * Any subsequent get or update operation after first put will increase the {@code lastAccessTime}.
      */
-    public static long getIdlenessStartTime(Record record) {
+    public static long lastAccessTimeMillis(@Nonnull Record record) {
         long lastAccessTime = record.getLastAccessTime();
         return lastAccessTime <= 0 ? record.getCreationTime() : lastAccessTime;
     }
@@ -66,7 +68,7 @@ public final class ExpirationTimeSetter {
      * This calculation is required for time-to-live expiration, because after first creation of an entry via
      * {@link com.hazelcast.core.IMap#put}, the {@code lastUpdateTime} is zero till the first update.
      */
-    public static long getLifeStartTime(Record record) {
+    public static long lastUpdateTimeMillis(@Nonnull Record record) {
         long lastUpdateTime = record.getLastUpdateTime();
         return lastUpdateTime <= 0 ? record.getCreationTime() : lastUpdateTime;
     }
@@ -141,7 +143,7 @@ public final class ExpirationTimeSetter {
     }
 
     private static long pickMaxIdleMillis(long operationMaxIdleMillis, long existingMaxIdleMillis, MapConfig mapConfig,
-                                      boolean entryCreated) {
+                                          boolean entryCreated) {
         // if user set operationMaxIdleMillis when calling operation, use it
         if (operationMaxIdleMillis > 0) {
             return checkedTime(operationMaxIdleMillis);

@@ -132,7 +132,8 @@ class BasicRecordStoreLoader implements RecordStoreLoader {
             Future removeKeysFuture = removeExistingKeys(keys);
             removeKeysFuture.get();
         }
-        removeUnloadableKeys(keys);
+        // TODO this seems not needed
+        //removeUnloadableKeys(keys);
         if (keys.isEmpty()) {
             return;
         }

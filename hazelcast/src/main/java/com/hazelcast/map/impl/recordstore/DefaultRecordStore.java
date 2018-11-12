@@ -74,6 +74,7 @@ import static com.hazelcast.config.NativeMemoryConfig.MemoryAllocatorType.POOLED
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.map.impl.EntryViews.toLazyEntryView;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.lastUpdateTimeMillis;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTimes;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
@@ -88,6 +89,11 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     protected final ILogger logger;
     protected final RecordStoreLoader recordStoreLoader;
     protected final MapKeyLoader keyLoader;
+
+    boolean refreshAheadEnabled;
+    long timeToRefreshMillis;
+    int enqueueThreshold;
+    RefreshAheadLoader refreshAheadLoader;
 
     /**
      * A collection of futures representing pending completion of the key and
@@ -123,6 +129,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         this.keyLoader = keyLoader;
         this.recordStoreLoader = createRecordStoreLoader(mapStoreContext);
         this.partitionService = mapServiceContext.getNodeEngine().getPartitionService();
+        // TODO Create RefreshAheadLoader via builder?
+        this.refreshAheadLoader = new RefreshAheadLoader(enqueueThreshold, name, recordStoreLoader, logger);
     }
 
     @Override
@@ -510,9 +518,14 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
         Record record = getRecordOrNull(key, now, backup);
         if (record == null) {
+            // TODO wait if still loading by refresh ahead
             record = loadRecordOrNull(key, backup, callerAddress);
         } else {
             accessRecord(record, now);
+            if (refreshAheadEnabled
+                    && (now - lastUpdateTimeMillis(record) > timeToRefreshMillis)) {
+                refreshAheadLoader.enqueueRefreshRequest(key);
+            }
         }
         Object value = record == null ? null : record.getValue();
         value = mapServiceContext.interceptGet(name, value);

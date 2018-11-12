@@ -43,8 +43,8 @@ import static com.hazelcast.core.EntryEventType.EVICTED;
 import static com.hazelcast.core.EntryEventType.EXPIRED;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.calculateExpirationWithDelay;
-import static com.hazelcast.map.impl.ExpirationTimeSetter.getIdlenessStartTime;
-import static com.hazelcast.map.impl.ExpirationTimeSetter.getLifeStartTime;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.lastAccessTimeMillis;
+import static com.hazelcast.map.impl.ExpirationTimeSetter.lastUpdateTimeMillis;
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTime;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 import static com.hazelcast.map.impl.eviction.Evictor.NULL_EVICTOR;
@@ -243,7 +243,7 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
             return false;
         }
 
-        long idlenessStartTime = getIdlenessStartTime(record);
+        long idlenessStartTime = lastAccessTimeMillis(record);
         long idleMillis = calculateExpirationWithDelay(maxIdleMillis, expiryDelayMillis, backup);
         long elapsedMillis = now - idlenessStartTime;
         return elapsedMillis >= idleMillis;
@@ -258,7 +258,7 @@ public abstract class AbstractEvictableRecordStore extends AbstractRecordStore {
         if (ttl < 1L || ttl == Long.MAX_VALUE) {
             return false;
         }
-        long ttlStartTime = getLifeStartTime(record);
+        long ttlStartTime = lastUpdateTimeMillis(record);
         long ttlMillis = calculateExpirationWithDelay(ttl, expiryDelayMillis, backup);
         long elapsedMillis = now - ttlStartTime;
         return elapsedMillis >= ttlMillis;
