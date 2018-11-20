@@ -139,11 +139,18 @@ public class HeapData implements Data {
         if (data2.length != length) {
             return false;
         }
-        for (int i = length - 1; i >= DATA_OFFSET; i--) {
+//        for (int i = length - 1; i >= DATA_OFFSET; i--) {
+//            if (data1[i] != data2[i]) {
+//                return false;
+//            }
+//        }
+        int i = length - 1;
+        do {
             if (data1[i] != data2[i]) {
                 return false;
             }
-        }
+        } while (i-- >= DATA_OFFSET);
+
         return true;
     }
 
