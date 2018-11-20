@@ -107,12 +107,6 @@ public class HeapData implements Data {
         if (this == o) {
             return true;
         }
-        if (o == null) {
-            return false;
-        }
-        if (!(o instanceof Data)) {
-            return false;
-        }
 
         Data data = (Data) o;
         if (getType() != data.getType()) {
@@ -131,9 +125,6 @@ public class HeapData implements Data {
     private static boolean equals(byte[] data1, byte[] data2) {
         if (data1 == data2) {
             return true;
-        }
-        if (data1 == null || data2 == null) {
-            return false;
         }
         final int length = data1.length;
         if (data2.length != length) {
