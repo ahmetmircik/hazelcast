@@ -1169,6 +1169,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>smoothie-map</artifactId>
+            <version>LATEST</version>
+        </dependency>
+        <dependency>
             <groupId>javax.cache</groupId>
             <artifactId>cache-api</artifactId>
             <version>${jsr107.api.version}</version>

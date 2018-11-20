@@ -42,7 +42,8 @@ import static com.hazelcast.map.impl.OwnedEntryCostEstimatorFactory.createMapSiz
 public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     private final RecordFactory<R> recordFactory;
-    private final StorageSCHM<R> records;
+    //    private final StorageSCHM<R> records;
+    private Map<Data, R> records;
 
     // not final for testing purposes.
     private EntryCostEstimator<Data, Record> entryCostEstimator;
@@ -50,7 +51,9 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
     StorageImpl(RecordFactory<R> recordFactory, InMemoryFormat inMemoryFormat, SerializationService serializationService) {
         this.recordFactory = recordFactory;
         this.entryCostEstimator = createMapSizeEstimator(inMemoryFormat);
-        this.records = new StorageSCHM<R>(serializationService);
+        //this.records = new StorageSCHM<R>(serializationService);
+        this.records = new net.openhft.smoothie.SmoothieMap<Data, R>(256);
+
     }
 
     @Override
@@ -72,7 +75,6 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public void put(Data key, R record) {
-
         record.setKey(key);
 
         R previousRecord = records.put(key, record);
@@ -155,20 +157,20 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
 
     @Override
     public Iterable<LazyEntryViewFromRecord> getRandomSamples(int sampleCount) {
-        return records.getRandomSamples(sampleCount);
+        return null;//records.getRandomSamples(sampleCount);
     }
 
     @Override
     public MapKeysWithCursor fetchKeys(int tableIndex, int size) {
         List<Data> keys = new ArrayList<Data>(size);
-        int newTableIndex = records.fetchKeys(tableIndex, size, keys);
+        int newTableIndex = -1;//ecords.fetchKeys(tableIndex, size, keys);
         return new MapKeysWithCursor(keys, newTableIndex);
     }
 
     @Override
     public MapEntriesWithCursor fetchEntries(int tableIndex, int size, SerializationService serializationService) {
         List<Map.Entry<Data, R>> entries = new ArrayList<Map.Entry<Data, R>>(size);
-        int newTableIndex = records.fetchEntries(tableIndex, size, entries);
+        int newTableIndex = -1;//records.fetchEntries(tableIndex, size, entries);
         List<Map.Entry<Data, Data>> entriesData = new ArrayList<Map.Entry<Data, Data>>(entries.size());
         for (Map.Entry<Data, R> entry : entries) {
             R record = entry.getValue();
