@@ -22,6 +22,7 @@ import com.hazelcast.util.HashUtil;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.Arrays;
+import java.util.Random;
 
 import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 
@@ -139,12 +140,8 @@ public class HeapData implements Data {
         if (data2.length != length) {
             return false;
         }
-        for (int i = length - 1; i >= DATA_OFFSET; i--) {
-            if (data1[i] != data2[i]) {
-                return false;
-            }
-        }
-        return true;
+
+        return Bits.readIntB(data1, DATA_OFFSET) == Bits.readIntB(data2, DATA_OFFSET);
     }
 
     @Override
@@ -172,5 +169,19 @@ public class HeapData implements Data {
                 + ", dataSize=" + dataSize()
                 + ", heapCost=" + getHeapCost()
                 + '}';
+    }
+
+    public static void main(String[] args) {
+        byte[] a = new byte[3];
+        byte[] b = new byte[4];
+        Random random = new Random();
+        random.nextBytes(a);
+        random.nextBytes(b);
+
+        int ai = Bits.readIntB(a, 0);
+        int bi = Bits.readIntB(b, 0);
+
+        System.out.println("ai = " + ai);
+        System.out.println("bi = " + bi);
     }
 }

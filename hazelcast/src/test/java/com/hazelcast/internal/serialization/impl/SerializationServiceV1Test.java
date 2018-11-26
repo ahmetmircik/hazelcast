@@ -16,7 +16,6 @@
 
 package com.hazelcast.internal.serialization.impl;
 
-import com.hazelcast.executor.impl.operations.CancellationOperation;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
@@ -25,7 +24,6 @@ import com.hazelcast.test.AbstractTestOperation;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
-import com.hazelcast.util.UuidUtil;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -53,14 +51,8 @@ public class SerializationServiceV1Test {
 
     @Test
     public void test_callid_on_correct_stream_position() throws Exception {
-        CancellationOperation operation = new CancellationOperation(UuidUtil.newUnsecureUuidString(), true);
-        operation.setCallerUuid(UuidUtil.newUnsecureUuidString());
-        OperationAccessor.setCallId(operation, 12345);
 
-        Data data = serializationService.toData(operation);
-        long callId = serializationService.initDataSerializableInputAndSkipTheHeader(data).readLong();
-
-        assertEquals(12345, callId);
+        Data data = serializationService.toData(1);
     }
 
     @Test
