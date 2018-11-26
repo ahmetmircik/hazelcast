@@ -30,8 +30,10 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import static com.hazelcast.map.impl.OwnedEntryCostEstimatorFactory.createMapSizeEstimator;
 
@@ -71,18 +73,33 @@ public class StorageImpl<R extends Record> implements Storage<Data, R> {
         return records.values().iterator();
     }
 
+    Queue buffer = new LinkedList();
+
     @Override
     public void put(Data key, R record) {
 
         record.setKey(key);
 
-        R previousRecord = records.put(key, record);
+        buffer.add(record);
 
-        if (previousRecord == null) {
-            updateCostEstimate(entryCostEstimator.calculateEntryCost(key, record));
-        } else {
-            updateCostEstimate(-entryCostEstimator.calculateValueCost(previousRecord));
-            updateCostEstimate(entryCostEstimator.calculateValueCost(record));
+        if (buffer.size() > 5) {
+            do {
+                Object poll = buffer.poll();
+                if (poll == null) {
+                    break;
+                }
+                R polled = (R) poll;
+                R previousRecord = records.put(((Record) poll).getKey(), polled);
+
+                if (previousRecord == null) {
+                    updateCostEstimate(entryCostEstimator.calculateEntryCost(key, polled));
+                } else {
+                    updateCostEstimate(-entryCostEstimator.calculateValueCost(previousRecord));
+                    updateCostEstimate(entryCostEstimator.calculateValueCost(polled));
+                }
+
+            } while (true);
+
         }
     }
 
