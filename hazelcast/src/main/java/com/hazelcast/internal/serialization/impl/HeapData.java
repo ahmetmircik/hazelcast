@@ -22,7 +22,6 @@ import com.hazelcast.util.HashUtil;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.Arrays;
-import java.util.Random;
 
 import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 
@@ -105,27 +104,7 @@ public class HeapData implements Data {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null) {
-            return false;
-        }
-        if (!(o instanceof Data)) {
-            return false;
-        }
-
-        Data data = (Data) o;
-        if (getType() != data.getType()) {
-            return false;
-        }
-
-        final int dataSize = dataSize();
-        if (dataSize != data.dataSize()) {
-            return false;
-        }
-
-        return dataSize == 0 || equals(this.payload, data.toByteArray());
+        return equals(this.payload, ((Data) o).toByteArray());
     }
 
     // Same as Arrays.equals(byte[] a, byte[] a2) but loop order is reversed.
@@ -169,19 +148,5 @@ public class HeapData implements Data {
                 + ", dataSize=" + dataSize()
                 + ", heapCost=" + getHeapCost()
                 + '}';
-    }
-
-    public static void main(String[] args) {
-        byte[] a = new byte[3];
-        byte[] b = new byte[4];
-        Random random = new Random();
-        random.nextBytes(a);
-        random.nextBytes(b);
-
-        int ai = Bits.readIntB(a, 0);
-        int bi = Bits.readIntB(b, 0);
-
-        System.out.println("ai = " + ai);
-        System.out.println("bi = " + bi);
     }
 }
