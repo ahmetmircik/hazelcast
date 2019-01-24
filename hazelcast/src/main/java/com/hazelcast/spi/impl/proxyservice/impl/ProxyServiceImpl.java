@@ -156,17 +156,13 @@ public class ProxyServiceImpl
         Collection<Member> members = nodeEngine.getClusterService().getMembers();
         Collection<Future> calls = new ArrayList<Future>(members.size());
         for (Member member : members) {
-            if (member.localMember()) {
-                continue;
-            }
-
             DistributedObjectDestroyOperation operation = new DistributedObjectDestroyOperation(serviceName, name);
             Future f = operationService.createInvocationBuilder(SERVICE_NAME, operation, member.getAddress())
                     .setTryCount(TRY_COUNT).invoke();
             calls.add(f);
         }
 
-        destroyLocalDistributedObject(serviceName, name, true);
+       // destroyLocalDistributedObject(serviceName, name, true);
 
         waitWithDeadline(calls, DESTROY_TIMEOUT_SECONDS, TimeUnit.SECONDS, destroyProxyExceptionHandler);
     }

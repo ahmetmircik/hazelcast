@@ -406,6 +406,11 @@ class MapServiceContextImpl implements MapServiceContext {
         mapContainer.getMapStoreContext().stop();
         localMapStatsProvider.destroyLocalMapStatsImpl(mapContainer.getName());
         destroyPartitionsAndMapContainer(mapContainer);
+        try {
+            TimeUnit.SECONDS.sleep(20);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
