@@ -119,4 +119,8 @@ class SynchronizedWriteBehindQueue<E> implements WriteBehindQueue<E> {
         }
     }
 
+    @Override
+    public WriteBehindQueue getUnderlyingQueue() {
+        return queue;
+    }
 }

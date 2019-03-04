@@ -46,10 +46,13 @@ public class TxnPrepareBackupOperation extends KeyBasedMapOperation implements B
 
     @Override
     public void run() throws Exception {
-        if (!recordStore.txnLock(getKey(), lockOwner, lockThreadId, getCallId(), LOCK_TTL_MILLIS, true)) {
-            throw new TransactionException("Lock is not owned by the transaction! Caller: " + lockOwner
-                    + ", Owner: " + recordStore.getLockOwnerInfo(getKey()));
+        recordStore.acquireWbqCapacity(getKey(), lockOwner, getThreadId());
+        if (recordStore.txnLock(getKey(), lockOwner, lockThreadId, getCallId(), LOCK_TTL_MILLIS, true)) {
+            return;
         }
+        recordStore.releaseWbqCapacity(getKey(), lockOwner, getThreadId());
+        throw new TransactionException("Lock is not owned by the transaction! Caller: " + lockOwner
+                + ", Owner: " + recordStore.getLockOwnerInfo(getKey()));
     }
 
     @Override

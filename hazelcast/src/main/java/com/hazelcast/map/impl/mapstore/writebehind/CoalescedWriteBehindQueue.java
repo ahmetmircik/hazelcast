@@ -147,6 +147,11 @@ class CoalescedWriteBehindQueue implements WriteBehindQueue<DelayedEntry> {
         }
     }
 
+    @Override
+    public WriteBehindQueue getUnderlyingQueue() {
+        return this;
+    }
+
     /**
      * If this is an existing key in this queue, use previously set store time;
      * since we do not want to shift store time of an existing key on every update.

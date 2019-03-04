@@ -33,6 +33,7 @@ import com.hazelcast.map.impl.event.EntryEventData;
 import com.hazelcast.map.impl.iterator.MapEntriesWithCursor;
 import com.hazelcast.map.impl.iterator.MapKeysWithCursor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
+import com.hazelcast.map.impl.mapstore.writebehind.BoundedWriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
@@ -64,6 +65,7 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1184,6 +1186,50 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return "on partitionId=" + partitionId + " on " + mapServiceContext.getNodeEngine().getThisAddress()
                 + " loadedOnCreate=" + loadedOnCreate + " loadedOnPreMigration=" + loadedOnPreMigration
                 + " isLoaded=" + isLoaded();
+    }
+
+
+    Map<Data, ReservationInfo> reservations = new HashMap<Data, ReservationInfo>();
+
+    static class ReservationInfo {
+        private long threadId;
+        private String ownerUuid;
+
+        public ReservationInfo(long threadId, String ownerUuid) {
+            this.threadId = threadId;
+            this.ownerUuid = ownerUuid;
+        }
+    }
+
+    @Override
+    public void acquireWbqCapacity(Data key, String ownerUuid, long threadId) {
+        if (mapDataStore instanceof WriteBehindStore) {
+            WriteBehindQueue<DelayedEntry> writeBehindQueue
+                    = ((WriteBehindStore) mapDataStore).getWriteBehindQueue();
+            WriteBehindQueue underlyingQueue = writeBehindQueue.getUnderlyingQueue();
+            if (underlyingQueue instanceof BoundedWriteBehindQueue) {
+                ((BoundedWriteBehindQueue<DelayedEntry>) underlyingQueue).addCapacity(1);
+                reservations.put(key, new ReservationInfo(threadId, ownerUuid));
+            }
+        }
+    }
+
+    @Override
+    public void releaseWbqCapacity(Data key, String ownerUuid, long threadId) {
+        if (mapDataStore instanceof WriteBehindStore) {
+            WriteBehindQueue<DelayedEntry> writeBehindQueue
+                    = ((WriteBehindStore) mapDataStore).getWriteBehindQueue();
+            WriteBehindQueue underlyingQueue = writeBehindQueue.getUnderlyingQueue();
+            if (underlyingQueue instanceof BoundedWriteBehindQueue) {
+                ReservationInfo reservationInfo = reservations.get(key);
+                if (reservationInfo != null
+                        && reservationInfo.ownerUuid == ownerUuid
+                        && reservationInfo.threadId == threadId) {
+                    ((BoundedWriteBehindQueue<DelayedEntry>) underlyingQueue).addCapacity(-1);
+                    reservations.remove(key);
+                }
+            }
+        }
     }
 
     @Override

@@ -534,4 +534,7 @@ public interface RecordStore<R extends Record> {
      * Destroys data in this record store.
      */
     void destroy();
+
+    void acquireWbqCapacity(Data key, String ownerUuid, long threadId);
+    void releaseWbqCapacity(Data key, String ownerUuid, long threadId);
 }

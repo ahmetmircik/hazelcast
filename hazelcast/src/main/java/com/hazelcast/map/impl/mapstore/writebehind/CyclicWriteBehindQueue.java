@@ -167,6 +167,11 @@ class CyclicWriteBehindQueue implements WriteBehindQueue<DelayedEntry> {
         }
     }
 
+    @Override
+    public WriteBehindQueue getUnderlyingQueue() {
+        return this;
+    }
+
     private void addCountIndex(DelayedEntry entry) {
         Data key = (Data) entry.getKey();
         Map<Data, MutableInteger> index = this.index;

@@ -25,15 +25,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.lang.String.format;
 
 /**
- * A bounded queue which throws {@link com.hazelcast.map.ReachedMaxSizeException}
- * when it exceeds max size. Used when non-write-coalescing mode is on.
- * <p/>
- * Note that this {@link WriteBehindQueue} implementation is not thread-safe. When it is in action, thread-safe access
- * will be provided by wrapping it in a {@link SynchronizedWriteBehindQueue}
+ * A bounded queue which throws {@link
+ * com.hazelcast.map.ReachedMaxSizeException} when it exceeds
+ * max size. Used when non-write-coalescing mode is on. <p/>
+ * Note that this {@link WriteBehindQueue} implementation is not
+ * thread-safe. When it is in action, thread-safe access will be
+ * provided by wrapping it in a {@link SynchronizedWriteBehindQueue}
  *
  * @see SynchronizedWriteBehindQueue
  */
-class BoundedWriteBehindQueue<E> implements WriteBehindQueue<E> {
+public class BoundedWriteBehindQueue<E> implements WriteBehindQueue<E> {
 
     /**
      * Per node write behind queue item counter.
@@ -159,6 +160,11 @@ class BoundedWriteBehindQueue<E> implements WriteBehindQueue<E> {
         queue.filter(predicate, collection);
     }
 
+    @Override
+    public WriteBehindQueue getUnderlyingQueue() {
+        return this;
+    }
+
     /**
      * Increments or decrements node-wide {@link WriteBehindQueue} capacity according to the given value.
      * Throws {@link ReachedMaxSizeException} when node-wide maximum capacity which is stated by the variable
@@ -167,7 +173,7 @@ class BoundedWriteBehindQueue<E> implements WriteBehindQueue<E> {
      * @param capacity capacity to be added or subtracted.
      * @throws ReachedMaxSizeException
      */
-    private void addCapacity(int capacity) {
+    public void addCapacity(int capacity) {
         int maxCapacity = this.maxCapacity;
         AtomicInteger writeBehindQueueItemCounter = this.writeBehindQueueItemCounter;
 

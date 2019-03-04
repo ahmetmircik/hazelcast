@@ -102,5 +102,6 @@ public interface WriteBehindQueue<E> {
      */
     void filter(IPredicate<E> predicate, Collection<E> collection);
 
+    WriteBehindQueue getUnderlyingQueue();
 }
 
