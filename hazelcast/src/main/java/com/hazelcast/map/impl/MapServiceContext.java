@@ -28,8 +28,8 @@ import com.hazelcast.map.impl.eviction.MapClearExpiredRecordsTask;
 import com.hazelcast.map.impl.journal.MapEventJournal;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
-import com.hazelcast.map.impl.query.QueryEngine;
 import com.hazelcast.map.impl.query.PartitionScanRunner;
+import com.hazelcast.map.impl.query.QueryEngine;
 import com.hazelcast.map.impl.query.QueryRunner;
 import com.hazelcast.map.impl.query.ResultProcessorRegistry;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
@@ -155,9 +155,7 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport, 
 
     MapClearExpiredRecordsTask getClearExpiredRecordsTask();
 
-    MapOperationProvider getMapOperationProvider(String name);
-
-    MapOperationProvider getMapOperationProvider(MapConfig mapConfig);
+    MapOperationProvider getMapOperationProvider(String mapName);
 
     IndexProvider getIndexProvider(MapConfig mapConfig);
 

@@ -49,12 +49,12 @@ import com.hazelcast.map.impl.query.AggregationResult;
 import com.hazelcast.map.impl.query.AggregationResultProcessor;
 import com.hazelcast.map.impl.query.CallerRunsAccumulationExecutor;
 import com.hazelcast.map.impl.query.CallerRunsPartitionScanExecutor;
-import com.hazelcast.map.impl.query.QueryEngine;
-import com.hazelcast.map.impl.query.QueryEngineImpl;
 import com.hazelcast.map.impl.query.ParallelAccumulationExecutor;
 import com.hazelcast.map.impl.query.ParallelPartitionScanExecutor;
 import com.hazelcast.map.impl.query.PartitionScanExecutor;
 import com.hazelcast.map.impl.query.PartitionScanRunner;
+import com.hazelcast.map.impl.query.QueryEngine;
+import com.hazelcast.map.impl.query.QueryEngineImpl;
 import com.hazelcast.map.impl.query.QueryResult;
 import com.hazelcast.map.impl.query.QueryResultProcessor;
 import com.hazelcast.map.impl.query.QueryRunner;
@@ -205,7 +205,7 @@ class MapServiceContextImpl implements MapServiceContext {
 
     // this method is overridden in another context
     MapOperationProviders createOperationProviders() {
-        return new MapOperationProviders(this);
+        return new MapOperationProviders();
     }
 
     // this method is overridden in another context
@@ -745,13 +745,8 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public MapOperationProvider getMapOperationProvider(String name) {
-        return operationProviders.getOperationProvider(name);
-    }
-
-    @Override
-    public MapOperationProvider getMapOperationProvider(MapConfig mapConfig) {
-        return operationProviders.getOperationProvider(mapConfig);
+    public MapOperationProvider getMapOperationProvider(String mapName) {
+        return operationProviders.getOperationProvider(mapName);
     }
 
     @Override
