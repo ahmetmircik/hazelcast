@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
-import static com.hazelcast.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static com.hazelcast.util.Preconditions.checkPositive;
 
@@ -80,7 +79,7 @@ import static com.hazelcast.util.Preconditions.checkPositive;
 public class Pipelining<E> {
 
     private final AtomicInteger permits = new AtomicInteger();
-    private final List<ICompletableFuture<E>> futures = new ArrayList<ICompletableFuture<E>>();
+    private final List<ICompletableFuture<E>> futures = new ArrayList<>();
     private Thread thread;
 
     /**
@@ -106,7 +105,7 @@ public class Pipelining<E> {
      * @throws Exception is something fails getting the results.
      */
     public List<E> results() throws Exception {
-        List<E> result = new ArrayList<E>(futures.size());
+        List<E> result = new ArrayList<>(futures.size());
         for (ICompletableFuture<E> f : futures) {
             result.add(f.get());
         }
@@ -140,7 +139,7 @@ public class Pipelining<E> {
             public void onFailure(Throwable t) {
                 up();
             }
-        }, CALLER_RUNS);
+        });
         return future;
     }
 

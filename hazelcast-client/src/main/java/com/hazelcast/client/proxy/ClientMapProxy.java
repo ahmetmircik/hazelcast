@@ -104,9 +104,7 @@ import com.hazelcast.core.EntryListener;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.map.IMap;
-import com.hazelcast.map.IMapEvent;
-import com.hazelcast.map.MapEvent;
+import com.hazelcast.core.Pipelining;
 import com.hazelcast.core.ReadOnly;
 import com.hazelcast.internal.journal.EventJournalInitialSubscriberState;
 import com.hazelcast.internal.journal.EventJournalReader;
@@ -114,6 +112,9 @@ import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.SimpleCompletedFuture;
 import com.hazelcast.internal.util.collection.ImmutableInflatableSet;
 import com.hazelcast.map.EntryProcessor;
+import com.hazelcast.map.IMap;
+import com.hazelcast.map.IMapEvent;
+import com.hazelcast.map.MapEvent;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.MapPartitionLostEvent;
 import com.hazelcast.map.QueryCache;
@@ -140,7 +141,9 @@ import com.hazelcast.ringbuffer.impl.client.PortableReadResultSet;
 import com.hazelcast.spi.impl.UnmodifiableLazyList;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.CollectionUtil;
+import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
+import com.hazelcast.util.collection.Int2ObjectHashMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -184,6 +187,9 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 @SuppressWarnings("checkstyle:classdataabstractioncoupling")
 public class ClientMapProxy<K, V> extends ClientProxy
         implements IMap<K, V>, EventJournalReader<EventJournalMapEvent<K, V>> {
+
+    private final String IMPL = System.getProperty("impl");
+    private final int DEPTH = Integer.getInteger("pipeline_depth", 100);
 
     protected static final String NULL_LISTENER_IS_NOT_ALLOWED = "Null listener is not allowed!";
     protected static final String NULL_KEY_IS_NOT_ALLOWED = "Null key is not allowed!";
@@ -393,22 +399,27 @@ public class ClientMapProxy<K, V> extends ClientProxy
     protected ICompletableFuture<V> putAsyncInternal(long ttl, TimeUnit timeunit, Long maxIdle, TimeUnit maxIdleUnit,
                                                      Object key, Object value) {
         try {
-            Data keyData = toData(key);
-            Data valueData = toData(value);
-            long ttlMillis = timeInMsOrOneIfResultIsZero(ttl, timeunit);
-            ClientMessage request;
-            if (maxIdle != null) {
-                request = MapPutWithMaxIdleCodec.encodeRequest(name, keyData, valueData, getThreadId(),
-                        ttlMillis, timeInMsOrOneIfResultIsZero(maxIdle, maxIdleUnit));
-            } else {
-                request = MapPutCodec.encodeRequest(name, keyData, valueData, getThreadId(), ttlMillis);
-            }
-            ClientInvocationFuture future = invokeOnKeyOwner(request, keyData);
+            ClientInvocationFuture future = putAsyncInternal0(ttl, timeunit, maxIdle, maxIdleUnit, key, value);
             SerializationService ss = getSerializationService();
             return new ClientDelegatingFuture<V>(future, ss, message -> MapPutCodec.decodeResponse(message).response);
         } catch (Exception e) {
             throw rethrow(e);
         }
+    }
+
+    private ClientInvocationFuture putAsyncInternal0(long ttl, TimeUnit timeunit, Long maxIdle, TimeUnit maxIdleUnit,
+                                                     Object key, Object value) {
+        Data keyData = toData(key);
+        Data valueData = toData(value);
+        long ttlMillis = timeInMsOrOneIfResultIsZero(ttl, timeunit);
+        ClientMessage request;
+        if (maxIdle != null) {
+            request = MapPutWithMaxIdleCodec.encodeRequest(name, keyData, valueData, getThreadId(),
+                    ttlMillis, timeInMsOrOneIfResultIsZero(maxIdle, maxIdleUnit));
+        } else {
+            request = MapPutCodec.encodeRequest(name, keyData, valueData, getThreadId(), ttlMillis);
+        }
+        return invokeOnKeyOwner(request, keyData);
     }
 
     @Override
@@ -453,6 +464,17 @@ public class ClientMapProxy<K, V> extends ClientProxy
 
             ClientInvocationFuture future = invokeOnKeyOwner(request, keyData);
             return new ClientDelegatingFuture<Void>(future, getSerializationService(), clientMessage -> null);
+        } catch (Exception e) {
+            throw rethrow(e);
+        }
+    }
+
+    protected ClientInvocationFuture setAsyncInternal2(Object key, Object value) {
+        try {
+            Data keyData = toData(key);
+            Data valueData = toData(value);
+            ClientMessage request = MapSetCodec.encodeRequest(name, keyData, valueData, getThreadId(), -1);
+            return invokeOnKeyOwner(request, keyData);
         } catch (Exception e) {
             throw rethrow(e);
         }
@@ -1184,7 +1206,62 @@ public class ClientMapProxy<K, V> extends ClientProxy
     }
 
     @Override
-    public Map<K, V> getAll(@Nullable Set<K> keys) {
+    public Map<K, V> getAll(Set<K> keys) {
+        switch (IMPL) {
+            case "p":
+                return getAllWithPipeline(keys);
+            case "o":
+                return getAllOld(keys);
+            case "s":
+                return getAllStream(keys);
+            default:
+                throw new IllegalArgumentException("type=" + IMPL);
+        }
+    }
+
+    private Map<K, V> getAllWithPipeline(Set<K> keys) {
+        int numOfKeys = keys.size();
+        Pipelining<ClientMessage> getAllPipeline = new Pipelining<>(DEPTH);
+        List resultingKeyValuePairs = new ArrayList(2 * numOfKeys);
+        try {
+            for (K key : keys) {
+                ClientInvocationFuture asyncInternal = getAsyncInternal(key);
+                getAllPipeline.add(((ICompletableFuture) asyncInternal));
+                resultingKeyValuePairs.add(key);
+            }
+
+            List<ClientMessage> responseMessages = getAllPipeline.results();
+            for (ClientMessage clientMessage : responseMessages) {
+                Data response = MapGetCodec.decodeResponse(clientMessage).response;
+                resultingKeyValuePairs.add(response);
+            }
+        } catch (Exception e) {
+            throw ExceptionUtil.rethrow(e);
+        }
+
+        Map<K, V> result = createHashMap(numOfKeys);
+        for (int i = 0; i < numOfKeys; i++) {
+            K key = toObject(resultingKeyValuePairs.get(i));
+            V value = toObject(resultingKeyValuePairs.get(i + numOfKeys));
+            if (value != null) {
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    @Nonnull
+    private Map<K, V> getAllStream(Set<K> keys) {
+        AsyncMapStreamer<K, V> streamer = new AsyncMapStreamer<>(DEPTH, this);
+        for (K key : keys) {
+            streamer.fetch(key);
+        }
+        streamer.await();
+        return null;
+    }
+
+    @Nonnull
+    protected Map<K, V> getAllOld(Set<K> keys) {
         if (CollectionUtil.isEmpty(keys)) {
             // Wrap emptyMap() into unmodifiableMap to make sure put/putAll methods throw UnsupportedOperationException
             return Collections.unmodifiableMap(emptyMap());
@@ -1690,11 +1767,70 @@ public class ClientMapProxy<K, V> extends ClientProxy
     }
 
     @Override
-    public void putAll(@Nonnull Map<? extends K, ? extends V> map) {
-        checkNotNull(map, "Null argument map is not allowed");
+    public void putAll(Map<? extends K, ? extends V> map) {
+        assertNew();
+
+        String type = IMPL;
+        switch (type) {
+            case "s":
+                putAllWithStream(map);
+                break;
+            case "p":
+                putAllWithPipeline(map);
+                break;
+            case "o":
+                putAllOld(map);
+                break;
+            case "on":
+                putAllOldNew(map);
+                break;
+            default:
+                throw new IllegalArgumentException("illegal=" + type);
+        }
+    }
+
+    private void assertNew() {
+//        if (NEW_IMPL) {
+//            throw new AssertionError("NEW_IMPL=" + NEW_IMPL);
+//        }
+//
+//        if (!NEW_IMPL) {
+//            throw new AssertionError("NEW_IMPL=" + NEW_IMPL);
+//        }
+    }
+
+    private void putAllWithStream(Map<? extends K, ? extends V> map) {
+        AsyncMapStreamer<K, V> streamer = new AsyncMapStreamer<>(DEPTH, this);
+
+        for (Entry<? extends K, ? extends V> entry : map.entrySet()) {
+            streamer.storeAsync(entry.getKey(), entry.getValue());
+        }
+
+        streamer.await();
+    }
+
+    private void putAllWithPipeline(Map<? extends K, ? extends V> map) {
+        Pipelining<V> pipeline = new Pipelining<>(DEPTH);
+        for (Entry<? extends K, ? extends V> entry : map.entrySet()) {
+            ICompletableFuture future = setAsyncInternal2(entry.getKey(), entry.getValue());
+            try {
+                pipeline.add(future);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            pipeline.results();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void putAllOldNew(Map<? extends K, ? extends V> map) {
         ClientPartitionService partitionService = getContext().getPartitionService();
         int partitionCount = partitionService.getPartitionCount();
-        Map<Integer, List<Map.Entry<Data, Data>>> entryMap = new HashMap<>(partitionCount);
+        Map<Integer, List<Data>> entryMap = new Int2ObjectHashMap<>(partitionCount);
 
         for (Entry<? extends K, ? extends V> entry : map.entrySet()) {
             checkNotNull(entry.getKey(), NULL_KEY_IS_NOT_ALLOWED);
@@ -1702,7 +1838,47 @@ public class ClientMapProxy<K, V> extends ClientProxy
 
             Data keyData = toData(entry.getKey());
             int partitionId = partitionService.getPartitionId(keyData);
-            List<Map.Entry<Data, Data>> partition = entryMap.get(partitionId);
+            List<Data> partition = entryMap.get(partitionId);
+            if (partition == null) {
+                partition = new ArrayList<>();
+                entryMap.put(partitionId, partition);
+            }
+            partition.add(keyData);
+            partition.add(toData(entry.getValue()));
+        }
+        putAllInternalOldNew(map, entryMap);
+    }
+
+    protected void putAllInternalOldNew(Map<? extends K, ? extends V> map, Map<Integer, List<Data>> entryMap) {
+        List<Future<?>> futures = new ArrayList<Future<?>>(entryMap.size());
+        for (Entry<Integer, List<Data>> entry : entryMap.entrySet()) {
+            Integer partitionId = entry.getKey();
+            // if there is only one entry, consider how we can use MapPutRequest
+            // without having to get back the return value
+            ClientMessage request = MapPutAllCodec2.encodeRequest(name, entry.getValue());
+            futures.add(new ClientInvocation(getClient(), request, getName(), partitionId).invoke());
+        }
+        try {
+            for (Future<?> future : futures) {
+                future.get();
+            }
+        } catch (Exception e) {
+            throw rethrow(e);
+        }
+    }
+
+    private void putAllOld(Map<? extends K, ? extends V> map) {
+        ClientPartitionService partitionService = getContext().getPartitionService();
+        int partitionCount = partitionService.getPartitionCount();
+        Map<Integer, List<Entry<Data, Data>>> entryMap = new HashMap<>(partitionCount);
+
+        for (Entry<? extends K, ? extends V> entry : map.entrySet()) {
+            checkNotNull(entry.getKey(), NULL_KEY_IS_NOT_ALLOWED);
+            checkNotNull(entry.getValue(), NULL_VALUE_IS_NOT_ALLOWED);
+
+            Data keyData = toData(entry.getKey());
+            int partitionId = partitionService.getPartitionId(keyData);
+            List<Entry<Data, Data>> partition = entryMap.get(partitionId);
             if (partition == null) {
                 partition = new ArrayList<>();
                 entryMap.put(partitionId, partition);
@@ -1712,8 +1888,9 @@ public class ClientMapProxy<K, V> extends ClientProxy
         putAllInternal(map, entryMap);
     }
 
-    protected void putAllInternal(Map<? extends K, ? extends V> map, Map<Integer, List<Map.Entry<Data, Data>>> entryMap) {
-        List<Future<?>> futures = new ArrayList<>(entryMap.size());
+    protected void putAllInternal(Map<? extends K, ? extends V> map, Map<Integer,
+            List<Map.Entry<Data, Data>>> entryMap) {
+        List<Future<?>> futures = new ArrayList<Future<?>>(entryMap.size());
         for (Entry<Integer, List<Map.Entry<Data, Data>>> entry : entryMap.entrySet()) {
             Integer partitionId = entry.getKey();
             // if there is only one entry, consider how we can use MapPutRequest

@@ -379,7 +379,7 @@ abstract class MapProxySupport<K, V>
 
         MapOperation operation = operationProvider.createGetOperation(name, keyData);
         try {
-            long startTimeNanos = System.nanoTime();
+            long startTimeNanos = statisticsEnabled ? System.nanoTime() : -1;
             InternalCompletableFuture<Data> future = operationService
                     .createInvocationBuilder(SERVICE_NAME, operation, partitionId)
                     .setResultDeserialized(false)
@@ -801,34 +801,7 @@ abstract class MapProxySupport<K, V>
         }
     }
 
-    protected void getAllInternal(Set<K> keys, List<Data> dataKeys, List<Object> resultingKeyValuePairs) {
-        if (keys == null || keys.isEmpty()) {
-            return;
-        }
-        if (dataKeys.isEmpty()) {
-            toDataCollectionWithNonNullKeyValidation(keys, dataKeys);
-        }
-        Collection<Integer> partitions = getPartitionsForKeys(dataKeys);
-        Map<Integer, Object> responses;
-        try {
-            OperationFactory operationFactory = operationProvider.createGetAllOperationFactory(name, dataKeys);
-            long startTimeNanos = System.nanoTime();
-
-            responses = operationService.invokeOnPartitions(SERVICE_NAME, operationFactory, partitions);
-            for (Object response : responses.values()) {
-                MapEntries entries = toObject(response);
-                for (int i = 0; i < entries.size(); i++) {
-                    resultingKeyValuePairs.add(entries.getKey(i));
-                    resultingKeyValuePairs.add(entries.getValue(i));
-                }
-            }
-            localMapStats.incrementGetLatencyNanos(dataKeys.size(), System.nanoTime() - startTimeNanos);
-        } catch (Exception e) {
-            throw rethrow(e);
-        }
-    }
-
-    private Collection<Integer> getPartitionsForKeys(Collection<Data> keys) {
+    protected Collection<Integer> getPartitionsForKeys(Collection<Data> keys) {
         int partitions = partitionService.getPartitionCount();
         // TODO: is there better way to estimate the size?
         int capacity = min(partitions, keys.size());

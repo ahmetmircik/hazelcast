@@ -22,14 +22,16 @@ import com.hazelcast.core.EntryListener;
 import com.hazelcast.core.EntryView;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.map.IMap;
 import com.hazelcast.core.ManagedContext;
+import com.hazelcast.core.Pipelining;
 import com.hazelcast.internal.journal.EventJournalInitialSubscriberState;
 import com.hazelcast.internal.journal.EventJournalReader;
 import com.hazelcast.internal.util.SimpleCompletedFuture;
 import com.hazelcast.map.EntryProcessor;
+import com.hazelcast.map.IMap;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.QueryCache;
+import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.SimpleEntryView;
 import com.hazelcast.map.impl.iterator.MapPartitionIterator;
@@ -55,7 +57,9 @@ import com.hazelcast.ringbuffer.ReadResultSet;
 import com.hazelcast.spi.InternalCompletableFuture;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.spi.impl.operationservice.OperationFactory;
 import com.hazelcast.util.CollectionUtil;
+import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.IterationType;
 import com.hazelcast.util.executor.DelegatingFuture;
 
@@ -94,7 +98,10 @@ import static java.util.Collections.emptyMap;
  * @param <V> the value type of map.
  */
 @SuppressWarnings("checkstyle:classfanoutcomplexity")
-public class MapProxyImpl<K, V> extends MapProxySupport<K, V> implements EventJournalReader<EventJournalMapEvent<K, V>> {
+public class MapProxyImpl<K, V> extends MapProxySupport<K, V>
+        implements EventJournalReader<EventJournalMapEvent<K, V>> {
+
+    private final boolean NEW_IMPL = Boolean.getBoolean("new_impl");
 
     public MapProxyImpl(String name, MapService mapService, NodeEngine nodeEngine, MapConfig mapConfig) {
         super(name, mapService, nodeEngine, mapConfig);
@@ -417,8 +424,7 @@ public class MapProxyImpl<K, V> extends MapProxySupport<K, V> implements EventJo
         return new DelegatingFuture<>(removeAsyncInternal(key), serializationService);
     }
 
-    @Override
-    public Map<K, V> getAll(@Nullable Set<K> keys) {
+    public Map<K, V> getAllEx(Set<K> keys) {
         if (CollectionUtil.isEmpty(keys)) {
             // Wrap emptyMap() into unmodifiableMap to make sure put/putAll methods throw UnsupportedOperationException
             return Collections.unmodifiableMap(emptyMap());
@@ -439,10 +445,70 @@ public class MapProxyImpl<K, V> extends MapProxySupport<K, V> implements EventJo
     }
 
     @Override
-    public boolean setTtl(@Nonnull K key, long ttl, @Nonnull TimeUnit timeunit) {
-        checkNotNull(key, NULL_KEY_IS_NOT_ALLOWED);
-        checkNotNull(timeunit, NULL_TIMEUNIT_IS_NOT_ALLOWED);
+    public Map<K, V> getAll(Set<K> keys) {
+        return NEW_IMPL ? getAllNew(keys) : getAllEx(keys);
+    }
 
+    private Map<K, V> getAllNew(Set<K> keys) {
+        int numOfKeys = keys.size();
+        Pipelining<Data> getAllPipeline = new Pipelining<>(numOfKeys);
+        List resultingKeyValuePairs = new ArrayList(2 * numOfKeys);
+        try {
+            for (K key : keys) {
+                getAllPipeline.add(getAsyncInternal(key));
+                resultingKeyValuePairs.add(key);
+            }
+
+            List<Data> dataValues = getAllPipeline.results();
+            for (Data dataValue : dataValues) {
+                resultingKeyValuePairs.add(dataValue);
+            }
+        } catch (Exception e) {
+            throw ExceptionUtil.rethrow(e);
+        }
+
+        Map<K, V> result = createHashMap(numOfKeys);
+        for (int i = 0; i < numOfKeys; i++) {
+            K key = toObject(resultingKeyValuePairs.get(i));
+            V value = toObject(resultingKeyValuePairs.get(i + numOfKeys));
+            if (value != null) {
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    protected void getAllInternal(Set<K> keys, List<Data> dataKeys, List<Object> resultingKeyValuePairs) {
+        if (keys == null || keys.isEmpty()) {
+            return;
+        }
+        if (dataKeys.isEmpty()) {
+            toDataCollectionWithNonNullKeyValidation(keys, dataKeys);
+        }
+        Collection<Integer> partitions = getPartitionsForKeys(dataKeys);
+        Map<Integer, Object> responses;
+        try {
+            OperationFactory operationFactory = operationProvider.createGetAllOperationFactory(name, dataKeys);
+            long startTimeNanos = System.nanoTime();
+
+            responses = operationService.invokeOnPartitions(SERVICE_NAME, operationFactory, partitions);
+            for (Object response : responses.values()) {
+                MapEntries entries = toObject(response);
+                for (int i = 0; i < entries.size(); i++) {
+                    resultingKeyValuePairs.add(entries.getKey(i));
+                    resultingKeyValuePairs.add(entries.getValue(i));
+                }
+            }
+            localMapStats.incrementGetLatencyNanos(dataKeys.size(), System.nanoTime() - startTimeNanos);
+        } catch (Exception e) {
+            throw rethrow(e);
+        }
+    }
+
+    @Override
+    public boolean setTtl(K key, long ttl, TimeUnit timeunit) {
+        checkNotNull(key);
+        checkNotNull(timeunit);
         return setTtlInternal(key, ttl, timeunit);
     }
 
