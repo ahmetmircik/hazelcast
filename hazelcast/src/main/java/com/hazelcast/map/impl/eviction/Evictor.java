@@ -54,7 +54,7 @@ public interface Evictor {
 
     String SYSTEM_PROPERTY_SAMPLE_COUNT = "hazelcast.map.eviction.sample.count";
 
-    int DEFAULT_SAMPLE_COUNT = 15;
+    int DEFAULT_SAMPLE_COUNT = 10;
 
     int SAMPLE_COUNT = getInteger(SYSTEM_PROPERTY_SAMPLE_COUNT, DEFAULT_SAMPLE_COUNT);
 
