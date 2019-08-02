@@ -31,18 +31,20 @@ import java.io.IOException;
 public class TxnUnlockBackupOperation extends KeyBasedMapOperation implements BackupOperation {
 
     private String ownerUuid;
+    private long lockThreadId;
 
     public TxnUnlockBackupOperation() {
     }
 
-    public TxnUnlockBackupOperation(String name, Data dataKey, String ownerUuid) {
-        super(name, dataKey, -1, -1);
+    public TxnUnlockBackupOperation(String name, Data dataKey, String ownerUuid, long lockThreadId) {
+        super(name, dataKey);
         this.ownerUuid = ownerUuid;
+        this.lockThreadId = lockThreadId;
     }
 
     @Override
     protected void runInternal() {
-        recordStore.unlock(dataKey, ownerUuid, getThreadId(), getCallId());
+        recordStore.unlock(dataKey, ownerUuid, lockThreadId, getCallId());
     }
 
     @Override
@@ -54,12 +56,14 @@ public class TxnUnlockBackupOperation extends KeyBasedMapOperation implements Ba
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
         out.writeUTF(ownerUuid);
+        out.writeLong(lockThreadId);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
         ownerUuid = in.readUTF();
+        lockThreadId = in.readLong();
     }
 
     @Override

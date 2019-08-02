@@ -21,7 +21,9 @@ import com.hazelcast.client.impl.protocol.codec.MapPutTransientCodec;
 import com.hazelcast.instance.impl.Node;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
+import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.Connection;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.concurrent.TimeUnit;
@@ -37,11 +39,21 @@ public class MapPutTransientMessageTask
 
     @Override
     protected Operation prepareOperation() {
-        MapOperationProvider operationProvider = getMapOperationProvider(parameters.name);
-        MapOperation op = operationProvider.createPutTransientOperation(parameters.name, parameters.key,
-                parameters.value, parameters.ttl, DEFAULT_MAX_IDLE);
+        MapOperation op = newOperation(parameters.name, parameters.key,
+                parameters.value, parameters.ttl);
         op.setThreadId(parameters.threadId);
         return op;
+    }
+
+    private MapOperation newOperation(String name, Data keyData, Data valueData, long ttl) {
+        MapOperationProvider operationProvider = getMapOperationProvider(name);
+
+        if (ttl == RecordStore.DEFAULT_TTL) {
+            return operationProvider.createPutTransientOperation(name, keyData, valueData);
+        }
+
+        return operationProvider.createPutTransientWithExpiryOperation(name, keyData, valueData,
+                ttl, DEFAULT_MAX_IDLE);
     }
 
     @Override

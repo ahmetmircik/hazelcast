@@ -36,15 +36,23 @@ import java.util.Set;
  */
 public interface MapOperationProvider {
 
-    MapOperation createPutOperation(String name, Data key, Data value, long ttl, long maxIdle);
+    MapOperation createPutOperation(String name, Data key, Data value);
+
+    MapOperation createPutWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle);
 
     MapOperation createTryPutOperation(String name, Data dataKey, Data value, long timeout);
 
-    MapOperation createSetOperation(String name, Data dataKey, Data value, long ttl, long maxIdle);
+    MapOperation createSetOperation(String name, Data dataKey, Data value);
 
-    MapOperation createPutIfAbsentOperation(String name, Data key, Data value, long ttl, long maxIdle);
+    MapOperation createSetWithExpiryOperation(String name, Data dataKey, Data value, long ttl, long maxIdle);
 
-    MapOperation createPutTransientOperation(String name, Data key, Data value, long ttl, long maxIdle);
+    MapOperation createPutIfAbsentOperation(String name, Data key, Data value);
+
+    MapOperation createPutIfAbsentWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle);
+
+    MapOperation createPutTransientOperation(String name, Data key, Data value);
+
+    MapOperation createPutTransientWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle);
 
     MapOperation createSetTtlOperation(String name, Data key, long ttl);
 
@@ -56,7 +64,7 @@ public interface MapOperationProvider {
 
     MapOperation createReplaceIfSameOperation(String name, Data dataKey, Data expect, Data update);
 
-    MapOperation createRemoveOperation(String name, Data key, boolean disableWanReplicationEvent);
+    MapOperation createRemoveOperation(String name, Data key);
 
     /**
      * Creates a delete operation for an entry with key equal to {@code key} from the map named {@code name}.

@@ -45,7 +45,7 @@ public class MapPutWithMaxIdleMessageTask
 
     protected Operation prepareOperation() {
         MapOperationProvider operationProvider = getMapOperationProvider(parameters.name);
-        MapOperation op = operationProvider.createPutOperation(parameters.name, parameters.key,
+        MapOperation op = operationProvider.createPutWithExpiryOperation(parameters.name, parameters.key,
                 parameters.value, parameters.ttl, parameters.maxIdle);
         op.setThreadId(parameters.threadId);
         return op;

@@ -50,8 +50,13 @@ public class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public MapOperation createPutOperation(String name, Data key, Data value, long ttl, long maxIdle) {
-        return new PutOperation(name, key, value, ttl, maxIdle);
+    public MapOperation createPutOperation(String name, Data key, Data value) {
+        return new PutOperation(name, key, value);
+    }
+
+    @Override
+    public MapOperation createPutWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle) {
+        return new PutWithExpiryOperation(name, key, value, ttl, maxIdle);
     }
 
     @Override
@@ -60,23 +65,38 @@ public class DefaultMapOperationProvider implements MapOperationProvider {
     }
 
     @Override
-    public MapOperation createSetOperation(String name, Data dataKey, Data value, long ttl, long maxIdle) {
-        return new SetOperation(name, dataKey, value, ttl, maxIdle);
+    public MapOperation createSetOperation(String name, Data dataKey, Data value) {
+        return new SetOperation(name, dataKey, value);
     }
 
     @Override
-    public MapOperation createPutIfAbsentOperation(String name, Data key, Data value, long ttl, long maxIdle) {
-        return new PutIfAbsentOperation(name, key, value, ttl, maxIdle);
+    public MapOperation createSetWithExpiryOperation(String name, Data dataKey, Data value, long ttl, long maxIdle) {
+        return new SetWithExpiryOperation(name, dataKey, value, ttl, maxIdle);
     }
 
     @Override
-    public MapOperation createPutTransientOperation(String name, Data key, Data value, long ttl, long maxIdle) {
-        return new PutTransientOperation(name, key, value, ttl, maxIdle);
+    public MapOperation createPutIfAbsentOperation(String name, Data key, Data value) {
+        return new PutIfAbsentOperation(name, key, value);
     }
 
     @Override
-    public MapOperation createRemoveOperation(String name, Data key, boolean disableWanReplicationEvent) {
-        return new RemoveOperation(name, key, disableWanReplicationEvent);
+    public MapOperation createPutIfAbsentWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle) {
+        return new PutIfAbsentWithExpiryOperation(name, key, value, ttl, maxIdle);
+    }
+
+    @Override
+    public MapOperation createPutTransientOperation(String name, Data key, Data value) {
+        return new PutTransientOperation(name, key, value);
+    }
+
+    @Override
+    public MapOperation createPutTransientWithExpiryOperation(String name, Data key, Data value, long ttl, long maxIdle) {
+        return new PutTransientWithExpiryOperation(name, key, value, ttl, maxIdle);
+    }
+
+    @Override
+    public MapOperation createRemoveOperation(String name, Data key) {
+        return new RemoveOperation(name, key);
     }
 
     @Override

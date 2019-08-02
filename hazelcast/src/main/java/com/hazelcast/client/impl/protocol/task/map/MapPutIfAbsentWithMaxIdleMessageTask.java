@@ -45,7 +45,7 @@ public class MapPutIfAbsentWithMaxIdleMessageTask
 
     protected Operation prepareOperation() {
         MapOperationProvider operationProvider = getMapOperationProvider(parameters.name);
-        MapOperation op = operationProvider.createPutIfAbsentOperation(parameters.name, parameters.key,
+        MapOperation op = operationProvider.createPutIfAbsentWithExpiryOperation(parameters.name, parameters.key,
                 parameters.value, parameters.ttl, parameters.maxIdle);
         op.setThreadId(parameters.threadId);
         return op;
