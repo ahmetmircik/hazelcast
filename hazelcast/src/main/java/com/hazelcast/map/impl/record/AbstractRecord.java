@@ -16,9 +16,15 @@
 
 package com.hazelcast.map.impl.record;
 
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.query.Metadata;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+import java.io.IOException;
 
 import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
 import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
@@ -30,8 +36,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 /**
  * @param <V> the type of the value of Record.
  */
-@SuppressWarnings({ "checkstyle:methodcount", "VolatileLongOrDoubleField" })
-public abstract class AbstractRecord<V> implements Record<V> {
+@SuppressWarnings({"checkstyle:methodcount", "VolatileLongOrDoubleField"})
+public abstract class AbstractRecord<V> implements Record<V>, IdentifiedDataSerializable {
 
     /**
      * Base time to be used for storing time values as diffs (int) rather than full blown epoch based vals (long)
@@ -59,7 +65,7 @@ public abstract class AbstractRecord<V> implements Record<V> {
     private volatile int lastAccessTime = NOT_AVAILABLE;
     private volatile int lastUpdateTime = NOT_AVAILABLE;
     private int creationTime = NOT_AVAILABLE;
-    private Metadata metadata;
+    private transient Metadata metadata;
 
     AbstractRecord() {
     }
@@ -96,7 +102,7 @@ public abstract class AbstractRecord<V> implements Record<V> {
             ttlSeconds = 1;
         }
 
-        this.ttl =  ttlSeconds > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ttlSeconds;
+        this.ttl = ttlSeconds > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ttlSeconds;
     }
 
     @Override
@@ -292,4 +298,32 @@ public abstract class AbstractRecord<V> implements Record<V> {
         return diff;
     }
 
+    @Override
+    public int getFactoryId() {
+        return MapDataSerializerHook.F_ID;
+    }
+
+    @Override
+    public void writeData(ObjectDataOutput out) throws IOException {
+        out.writeData(key);
+        out.writeInt(ttl);
+        out.writeInt(maxIdle);
+        out.writeInt(creationTime);
+        out.writeInt(lastAccessTime);
+        out.writeInt(lastUpdateTime);
+        out.writeLong(hits);
+        out.writeLong(version);
+    }
+
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+        key = in.readData();
+        ttl = in.readInt();
+        maxIdle = in.readInt();
+        creationTime = in.readInt();
+        lastAccessTime = in.readInt();
+        lastUpdateTime = in.readInt();
+        hits = in.readLong();
+        version = in.readLong();
+    }
 }

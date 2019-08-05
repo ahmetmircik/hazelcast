@@ -238,11 +238,10 @@ public interface RecordStore<R extends Record> {
      * Puts a data key and a record value to record-store.
      * Used in replication operations.
      *
-     * @param key    the data key to put record store.
      * @param record the value for record store.
      * @see com.hazelcast.map.impl.operation.MapReplicationOperation
      */
-    void putRecord(Data key, R record);
+    void putRecord(R record);
 
     /**
      * Iterates over record store entries.
@@ -411,6 +410,8 @@ public interface RecordStore<R extends Record> {
     Storage createStorage(RecordFactory<R> recordFactory, InMemoryFormat memoryFormat);
 
     Record createRecord(Data key, Object value, long ttlMillis, long maxIdle, long now);
+
+    Record createRecord(Record record);
 
     Record loadRecordOrNull(Data key, boolean backup, Address callerAddress);
 

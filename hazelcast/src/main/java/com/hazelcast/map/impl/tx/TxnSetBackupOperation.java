@@ -18,23 +18,22 @@ package com.hazelcast.map.impl.tx;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.PutBackupOperation;
-import com.hazelcast.map.impl.record.RecordInfo;
-import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.map.impl.record.Record;
 
 public class TxnSetBackupOperation extends PutBackupOperation {
 
     public TxnSetBackupOperation() {
     }
 
-    public TxnSetBackupOperation(String name, Data dataKey, Data dataValue, RecordInfo recordInfo) {
-        super(name, dataKey, dataValue, recordInfo);
+    public TxnSetBackupOperation(String name, Record recordInfo) {
+        super(name, recordInfo);
     }
 
     @Override
     protected void runInternal() {
         super.runInternal();
 
-        recordStore.forceUnlock(dataKey);
+        recordStore.forceUnlock(recordInfo.getKey());
     }
 
     @Override

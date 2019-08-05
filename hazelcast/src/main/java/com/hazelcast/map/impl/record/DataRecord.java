@@ -16,19 +16,24 @@
 
 package com.hazelcast.map.impl.record;
 
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
+
+import java.io.IOException;
 
 import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 
-class DataRecord extends AbstractRecord<Data> {
+public class DataRecord extends AbstractRecord<Data> {
 
     protected volatile Data value;
 
-    DataRecord(Data value) {
+    public DataRecord(Data value) {
         this.value = value;
     }
 
-    DataRecord() {
+    public DataRecord() {
     }
 
     @Override
@@ -71,5 +76,24 @@ class DataRecord extends AbstractRecord<Data> {
         int result = super.hashCode();
         result = 31 * result + value.hashCode();
         return result;
+    }
+
+    @Override
+    public int getClassId() {
+        return MapDataSerializerHook.DATA_RECORD;
+    }
+
+    @Override
+    public void writeData(ObjectDataOutput out) throws IOException {
+        super.writeData(out);
+
+        out.writeData(value);
+    }
+
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+        super.readData(in);
+
+        value = in.readData();
     }
 }

@@ -16,16 +16,16 @@
 
 package com.hazelcast.map.impl.recordstore;
 
+import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.cp.internal.datastructures.unsafe.lock.LockService;
 import com.hazelcast.cp.internal.datastructures.unsafe.lock.LockStore;
-import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.StoreAdapter;
 import com.hazelcast.map.impl.MapStoreWrapper;
+import com.hazelcast.map.impl.StoreAdapter;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
 import com.hazelcast.map.impl.record.Record;
@@ -46,6 +46,7 @@ import javax.annotation.Nonnull;
 import java.util.Collection;
 
 import static com.hazelcast.map.impl.ExpirationTimeSetter.setExpirationTimes;
+import static com.hazelcast.map.impl.record.Records.applyRecordInfo;
 
 /**
  * Contains record store common parts.
@@ -118,6 +119,14 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         setExpirationTimes(ttlMillis, maxIdle, record, mapContainer.getMapConfig(), true);
         updateStatsOnPut(false, now);
         return record;
+    }
+
+    @Override
+    public Record createRecord(Record fromRecord) {
+        Record newRecord = recordFactory.newRecord(fromRecord.getKey(), fromRecord.getValue());
+        applyRecordInfo(fromRecord, newRecord);
+        updateStatsOnPut(false, Clock.currentTimeMillis());
+        return newRecord;
     }
 
     @Override

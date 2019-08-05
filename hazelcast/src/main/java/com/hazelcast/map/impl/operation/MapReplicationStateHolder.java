@@ -17,14 +17,13 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.map.impl.StoreAdapter;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.PartitionContainer;
+import com.hazelcast.map.impl.StoreAdapter;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordReplicationInfo;
-import com.hazelcast.map.impl.recordstore.RecordStoreAdapter;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.map.impl.recordstore.RecordStoreAdapter;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -38,7 +37,6 @@ import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespace;
 import com.hazelcast.spi.serialization.SerializationService;
-import com.hazelcast.util.Clock;
 import com.hazelcast.util.ThreadUtil;
 
 import java.io.IOException;
@@ -50,10 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.hazelcast.map.impl.record.Records.applyRecordInfo;
 import static com.hazelcast.map.impl.record.Records.getValueOrCachedValue;
-import static com.hazelcast.map.impl.recordstore.RecordStore.DEFAULT_MAX_IDLE;
-import static com.hazelcast.map.impl.recordstore.RecordStore.DEFAULT_TTL;
 import static com.hazelcast.util.MapUtil.createHashMap;
 
 /**
@@ -66,7 +61,7 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
     protected transient Map<String, RecordStore<Record>> storesByMapName;
 
     // data for each map
-    protected transient Map<String, Collection<RecordReplicationInfo>> data;
+    protected transient Map<String, Collection<Record<Data>>> data;
 
     // propagates the information if the given record store has been already loaded with map-loaded
     // if so, the loading won't be triggered again after a migration to avoid duplicate loading.
@@ -143,8 +138,8 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
         applyIndexesState();
 
         if (data != null) {
-            for (Map.Entry<String, Collection<RecordReplicationInfo>> dataEntry : data.entrySet()) {
-                Collection<RecordReplicationInfo> recordReplicationInfos = dataEntry.getValue();
+            for (Map.Entry<String, Collection<Record<Data>>> dataEntry : data.entrySet()) {
+                Collection<Record<Data>> recordReplicationInfos = dataEntry.getValue();
                 final String mapName = dataEntry.getKey();
                 RecordStore recordStore = operation.getRecordStore(mapName);
                 recordStore.reset();
@@ -170,13 +165,9 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
                 }
 
                 final InternalIndex[] indexesSnapshot = indexes.getIndexes();
-                for (RecordReplicationInfo recordReplicationInfo : recordReplicationInfos) {
-                    Data key = recordReplicationInfo.getKey();
-                    final Data value = recordReplicationInfo.getValue();
-                    Record newRecord = recordStore.createRecord(key, value, DEFAULT_TTL, DEFAULT_MAX_IDLE,
-                            Clock.currentTimeMillis());
-                    applyRecordInfo(newRecord, recordReplicationInfo);
-                    recordStore.putRecord(key, newRecord);
+                for (Record<Data> recordReplicationInfo : recordReplicationInfos) {
+                    Record newRecord = recordStore.createRecord(recordReplicationInfo);
+                    recordStore.putRecord(newRecord);
 
                     if (indexesMustBePopulated) {
                         final Object valueToIndex = getValueOrCachedValue(newRecord, serializationService);
@@ -191,7 +182,7 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
                     if (recordStore.shouldEvict()) {
                         // No need to continue replicating records anymore.
                         // We are already over eviction threshold, each put record will cause another eviction.
-                        recordStore.evictEntries(key);
+                        recordStore.evictEntries(recordReplicationInfo.getKey());
                         break;
                     }
                     recordStore.disposeDeferredBlocks();
@@ -246,16 +237,13 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
             String mapName = entry.getKey();
             RecordStore recordStore = entry.getValue();
 
-            SerializationService ss = getSerializationService(recordStore);
-
             out.writeUTF(mapName);
             out.writeInt(recordStore.size());
 
             Iterator<Record> iterator = recordStore.iterator();
             while (iterator.hasNext()) {
                 Record record = iterator.next();
-                RecordReplicationInfo replicationInfo = operation.toReplicationInfo(record, ss);
-                out.writeObject(replicationInfo);
+                out.writeObject(record);
             }
         }
 
@@ -283,10 +271,10 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable {
         for (int i = 0; i < size; i++) {
             String name = in.readUTF();
             int recordStoreSize = in.readInt();
-            Collection<RecordReplicationInfo> recordReplicationInfos
+            Collection<Record<Data>> recordReplicationInfos
                     = new ArrayList<>(recordStoreSize);
             for (int j = 0; j < recordStoreSize; j++) {
-                RecordReplicationInfo recordReplicationInfo = in.readObject();
+                Record recordReplicationInfo = in.readObject();
                 recordReplicationInfos.add(recordReplicationInfo);
             }
             data.put(name, recordReplicationInfos);

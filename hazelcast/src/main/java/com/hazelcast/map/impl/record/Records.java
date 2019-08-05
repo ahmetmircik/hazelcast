@@ -29,37 +29,22 @@ public final class Records {
     private Records() {
     }
 
-    public static void applyRecordInfo(Record record, RecordInfo replicationInfo) {
-        record.setVersion(replicationInfo.getVersion());
-        record.setHits(replicationInfo.getHits());
-        record.setTtl(replicationInfo.getTtl());
-        record.setMaxIdle(replicationInfo.getMaxIdle());
-        record.setCreationTime(replicationInfo.getCreationTime());
-        record.setLastAccessTime(replicationInfo.getLastAccessTime());
-        record.setLastUpdateTime(replicationInfo.getLastUpdateTime());
-        record.setExpirationTime(replicationInfo.getExpirationTime());
-        record.setLastStoredTime(replicationInfo.getLastStoredTime());
-    }
-
-    public static RecordInfo buildRecordInfo(Record record) {
-        RecordInfo info = new RecordInfo();
-
-        info.setVersion(record.getVersion());
-        info.setHits(record.getHits());
-        info.setCreationTime(record.getCreationTime());
-        info.setLastAccessTime(record.getLastAccessTime());
-        info.setLastUpdateTime(record.getLastUpdateTime());
-        info.setTtl(record.getTtl());
-        info.setMaxIdle(record.getMaxIdle());
-        info.setExpirationTime(record.getExpirationTime());
-        info.setLastStoredTime(record.getLastStoredTime());
-
-        return info;
+    public static void applyRecordInfo(Record fromRecord, Record toRecord) {
+        toRecord.setVersion(fromRecord.getVersion());
+        toRecord.setCreationTime(fromRecord.getCreationTime());
+        toRecord.setLastUpdateTime(fromRecord.getLastUpdateTime());
+        toRecord.setLastAccessTime(fromRecord.getLastAccessTime());
+        toRecord.setLastStoredTime(fromRecord.getLastStoredTime());
+        toRecord.setTtl(fromRecord.getTtl());
+        toRecord.setMaxIdle(fromRecord.getMaxIdle());
+        toRecord.setExpirationTime(toRecord.getExpirationTime());
+        toRecord.setHits(fromRecord.getHits());
     }
 
     /**
      * Get current cached value from the record.
-     * This method protects you against accidental exposure of cached value mutex into rest of the code.
+     * This method protects you against accidental exposure
+     * of cached value mutex into rest of the code.
      * <p>
      * Use it instead of raw {@link Record#getCachedValueUnsafe()} See
      * {@link #getValueOrCachedValue(Record, SerializationService)}
@@ -83,22 +68,26 @@ public final class Records {
     }
 
     /**
-     * Return cached value where appropriate, otherwise return the actual value.
+     * Return cached value where appropriate,
+     * otherwise return the actual value.
      * Value caching makes sense when:
      * <ul>
      * <li>Portable serialization is not used</li>
      * <li>OBJECT InMemoryFormat is not used</li>
      * </ul>
      * <p>
-     * If Record does not contain cached value and is found appropriate (see above) then new cache value is created
+     * If Record does not contain cached value and is found
+     * appropriate (see above) then new cache value is created
      * by de-serializing the {@link Record#getValue()}
      * <p>
-     * The newly de-deserialized value may not be stored into the Record cache when the record has been modified
-     * while the method was running.
+     * The newly de-deserialized value may not be stored into the Record
+     * cache when the record has been modified while the method was running.
      * <p>
-     * WARNING: This method may temporarily set an arbitrary object into the Record cache - this object acts as mutex.
-     * The mutex should never be returned to the outside world. Use {@link #getCachedValue(Record)} instead of raw
-     * {@link Record#getCachedValueUnsafe()} to protect from accidental mutex exposure to the user-code.
+     * WARNING: This method may temporarily set an arbitrary object into the
+     * Record cache - this object acts as mutex. The mutex should never be
+     * returned to the outside world. Use {@link #getCachedValue(Record)}
+     * instead of raw {@link Record#getCachedValueUnsafe()} to
+     * protect from accidental mutex exposure to the user-code.
      *
      * @param record
      * @param serializationService

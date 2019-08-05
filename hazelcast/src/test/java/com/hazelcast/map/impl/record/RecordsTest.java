@@ -24,7 +24,6 @@ import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
-import com.hazelcast.util.Clock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -36,7 +35,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelJVMTest.class})
@@ -116,48 +114,31 @@ public class RecordsTest extends HazelcastTestSupport {
 
     @Test
     public void applyRecordInfo() {
-        // Shared key&value by referenceRecord and recordInfo-applied-recordInfoAppliedRecord
+        // Shared key&value by referenceRecord and fromRecord-applied-toRecord
         Data key = new HeapData();
         Data value = new HeapData();
 
-        // Create recordInfo from a reference record
+        // Create fromRecord from a reference record
         Record referenceRecord = new DataRecordWithStats();
         referenceRecord.setKey(key);
         referenceRecord.setValue(value);
         referenceRecord.setHits(123);
         referenceRecord.setVersion(12);
-        RecordInfo recordInfo = toRecordInfo(referenceRecord);
+        Record fromRecord = toRecordInfo(referenceRecord);
 
-        // Apply created recordInfo to recordInfoAppliedRecord
-        Record recordInfoAppliedRecord = new DataRecordWithStats();
-        recordInfoAppliedRecord.setKey(key);
-        recordInfoAppliedRecord.setValue(value);
+        // Apply created fromRecord to toRecord
+        Record toRecord = new DataRecordWithStats();
+        toRecord.setKey(key);
+        toRecord.setValue(value);
 
-        Records.applyRecordInfo(recordInfoAppliedRecord, recordInfo);
+        Records.applyRecordInfo(fromRecord, toRecord);
 
-        // Check recordInfo applied correctly to recordInfoAppliedRecord
-        assertEquals(referenceRecord, recordInfoAppliedRecord);
+        // Check fromRecord applied correctly to toRecord
+        assertEquals(referenceRecord, toRecord);
     }
 
-    @Test
-    public void buildRecordInfo() throws Exception {
-        long now = Clock.currentTimeMillis();
-
-        Record record = newRecord(now);
-
-        RecordInfo recordInfo = Records.buildRecordInfo(record);
-
-        assertEquals(now, recordInfo.getCreationTime());
-        assertEquals(now, recordInfo.getLastAccessTime());
-        assertEquals(now, recordInfo.getLastUpdateTime());
-        assertEquals(12, recordInfo.getHits());
-        assertEquals(123, recordInfo.getVersion());
-        assertEquals(now, recordInfo.getExpirationTime());
-        assertEquals(now, recordInfo.getLastStoredTime());
-    }
-
-    private static RecordInfo toRecordInfo(Record record) {
-        RecordInfo recordInfo = mock(RecordInfo.class);
+    private static Record toRecordInfo(Record record) {
+        Record recordInfo = mock(Record.class);
 
         when(recordInfo.getCreationTime()).thenReturn(record.getCreationTime());
         when(recordInfo.getLastAccessTime()).thenReturn(record.getLastAccessTime());
@@ -168,19 +149,6 @@ public class RecordsTest extends HazelcastTestSupport {
         when(recordInfo.getLastStoredTime()).thenReturn(record.getLastStoredTime());
 
         return recordInfo;
-    }
-
-    private static Record newRecord(long now) {
-        Record record = mock(Record.class, withSettings());
-
-        when(record.getCreationTime()).thenReturn(now);
-        when(record.getLastAccessTime()).thenReturn(now);
-        when(record.getLastUpdateTime()).thenReturn(now);
-        when(record.getHits()).thenReturn(12L);
-        when(record.getVersion()).thenReturn(123L);
-        when(record.getExpirationTime()).thenReturn(now);
-        when(record.getLastStoredTime()).thenReturn(now);
-        return record;
     }
 
     private static class SerializableThread extends Thread implements Serializable {

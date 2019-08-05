@@ -137,8 +137,11 @@ import com.hazelcast.map.impl.querycache.subscriber.operation.MadePublishableOpe
 import com.hazelcast.map.impl.querycache.subscriber.operation.PublisherCreateOperation;
 import com.hazelcast.map.impl.querycache.subscriber.operation.ReadAndResetAccumulatorOperation;
 import com.hazelcast.map.impl.querycache.subscriber.operation.SetReadCursorOperation;
-import com.hazelcast.map.impl.record.RecordInfo;
-import com.hazelcast.map.impl.record.RecordReplicationInfo;
+import com.hazelcast.map.impl.record.CachedDataRecordWithStats;
+import com.hazelcast.map.impl.record.DataRecord;
+import com.hazelcast.map.impl.record.DataRecordWithStats;
+import com.hazelcast.map.impl.record.ObjectRecord;
+import com.hazelcast.map.impl.record.ObjectRecordWithStats;
 import com.hazelcast.map.impl.tx.MapTransactionLogRecord;
 import com.hazelcast.map.impl.tx.TxnDeleteBackupOperation;
 import com.hazelcast.map.impl.tx.TxnDeleteOperation;
@@ -263,8 +266,6 @@ public final class MapDataSerializerHook implements DataSerializerHook {
     public static final int INTERCEPTOR_INFO = 95;
     public static final int REMOVE_INTERCEPTOR = 96;
     public static final int QUERY_EVENT_FILTER = 97;
-    public static final int RECORD_INFO = 98;
-    public static final int RECORD_REPLICATION_INFO = 99;
     public static final int UUID_FILTER = 100;
     public static final int MAP_TRANSACTION_LOG_RECORD = 101;
     public static final int VERSIONED_VALUE = 102;
@@ -313,8 +314,13 @@ public final class MapDataSerializerHook implements DataSerializerHook {
     public static final int PUT_TRANSIENT_WITH_EXPIRY = 145;
     public static final int PUT_IF_ABSENT_WITH_EXPIRY = 146;
     public static final int PUT_TRANSIENT_BACKUP = 147;
+    public static final int DATA_RECORD = 148;
+    public static final int DATA_RECORD_WITH_STATS = 149;
+    public static final int OBJECT_RECORD = 150;
+    public static final int OBJECT_RECORD_WITH_STATS = 151;
+    private static final int CACHED_DATA_RECORD_WITH_STATS = 152;
 
-    private static final int LEN = PUT_TRANSIENT_BACKUP + 1;
+    private static final int LEN = CACHED_DATA_RECORD_WITH_STATS + 1;
 
     @Override
     public int getFactoryId() {
@@ -423,8 +429,6 @@ public final class MapDataSerializerHook implements DataSerializerHook {
         constructors[INTERCEPTOR_INFO] = arg -> new PostJoinMapOperation.InterceptorInfo();
         constructors[REMOVE_INTERCEPTOR] = arg -> new RemoveInterceptorOperation();
         constructors[QUERY_EVENT_FILTER] = arg -> new QueryEventFilter();
-        constructors[RECORD_INFO] = arg -> new RecordInfo();
-        constructors[RECORD_REPLICATION_INFO] = arg -> new RecordReplicationInfo();
         constructors[UUID_FILTER] = arg -> new UuidFilter();
         constructors[MAP_TRANSACTION_LOG_RECORD] = arg -> new MapTransactionLogRecord();
         constructors[VERSIONED_VALUE] = arg -> new VersionedValue();
@@ -473,6 +477,11 @@ public final class MapDataSerializerHook implements DataSerializerHook {
         constructors[PUT_TRANSIENT_WITH_EXPIRY] = arg -> new PutTransientWithExpiryOperation();
         constructors[PUT_IF_ABSENT_WITH_EXPIRY] = arg -> new PutIfAbsentWithExpiryOperation();
         constructors[PUT_TRANSIENT_BACKUP] = arg -> new PutTransientBackupOperation();
+        constructors[DATA_RECORD] = arg -> new DataRecord();
+        constructors[DATA_RECORD_WITH_STATS] = arg -> new DataRecordWithStats();
+        constructors[OBJECT_RECORD] = arg -> new ObjectRecord();
+        constructors[OBJECT_RECORD_WITH_STATS] = arg -> new ObjectRecordWithStats();
+        constructors[CACHED_DATA_RECORD_WITH_STATS] = arg -> new CachedDataRecordWithStats();
 
         return new ArrayDataSerializableFactory(constructors);
     }

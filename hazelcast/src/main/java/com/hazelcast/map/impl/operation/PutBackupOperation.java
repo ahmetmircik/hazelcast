@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -30,15 +29,10 @@ import static com.hazelcast.map.impl.record.Records.applyRecordInfo;
 
 public class PutBackupOperation extends MapOperation implements BackupOperation {
 
-    protected Data dataKey;
-    protected Data dataValue;
-    protected RecordInfo recordInfo;
+    protected Record recordInfo;
 
-    public PutBackupOperation(String name, Data dataKey, Data dataValue,
-                              RecordInfo recordInfo) {
+    public PutBackupOperation(String name, Record<Data> recordInfo) {
         super(name);
-        this.dataKey = dataKey;
-        this.dataValue = dataValue;
         this.recordInfo = recordInfo;
     }
 
@@ -47,10 +41,10 @@ public class PutBackupOperation extends MapOperation implements BackupOperation 
 
     @Override
     protected void runInternal() {
-        Record record = recordStore.putBackup(dataKey, dataValue, recordInfo.getTtl(),
+        Record record = recordStore.putBackup(recordInfo.getKey(),
+                recordInfo.getValue(), recordInfo.getTtl(),
                 recordInfo.getMaxIdle(), isPutTransient(), getCallerProvenance());
-
-        applyRecordInfo(record, recordInfo);
+        applyRecordInfo(recordInfo, record);
     }
 
     protected boolean isPutTransient() {
@@ -59,8 +53,9 @@ public class PutBackupOperation extends MapOperation implements BackupOperation 
 
     @Override
     protected void afterRunInternal() {
-        evict(dataKey);
-        publishWanUpdate(dataKey, dataValue);
+        evict(recordInfo.getKey());
+        // TODO data object conversions of value
+        publishWanUpdate(recordInfo.getKey(), recordInfo.getValue());
 
         super.afterRunInternal();
     }
@@ -77,20 +72,13 @@ public class PutBackupOperation extends MapOperation implements BackupOperation 
 
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
-        super.writeInternal(out);
-
-        out.writeData(dataKey);
-        out.writeData(dataValue);
-        recordInfo.writeData(out);
+        out.writeUTF(name);
+        out.writeObject(recordInfo);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
-        super.readInternal(in);
-
-        dataKey = in.readData();
-        dataValue = in.readData();
-        recordInfo = new RecordInfo();
-        recordInfo.readData(in);
+        name = in.readUTF();
+        recordInfo = in.readObject();
     }
 }

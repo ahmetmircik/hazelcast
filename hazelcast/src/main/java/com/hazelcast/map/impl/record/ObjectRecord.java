@@ -16,15 +16,21 @@
 
 package com.hazelcast.map.impl.record;
 
-class ObjectRecord extends AbstractRecord<Object> implements Record<Object> {
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
+
+import java.io.IOException;
+
+public class ObjectRecord extends AbstractRecord<Object> implements Record<Object> {
 
     private volatile Object value;
 
-    ObjectRecord() {
+    public ObjectRecord() {
         super();
     }
 
-    ObjectRecord(Object value) {
+    public ObjectRecord(Object value) {
         super();
         this.value = value;
     }
@@ -70,5 +76,22 @@ class ObjectRecord extends AbstractRecord<Object> implements Record<Object> {
         int result = super.hashCode();
         result = 31 * result + value.hashCode();
         return result;
+    }
+
+    @Override
+    public int getClassId() {
+        return MapDataSerializerHook.OBJECT_RECORD;
+    }
+
+    @Override
+    public void writeData(ObjectDataOutput out) throws IOException {
+        super.writeData(out);
+        out.writeObject(value);
+    }
+
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+        super.readData(in);
+        value = in.readObject();
     }
 }

@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -34,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.hazelcast.core.EntryEventType.MERGED;
-import static com.hazelcast.map.impl.record.Records.buildRecordInfo;
 
 /**
  * Contains multiple merge entries for split-brain
@@ -55,7 +53,7 @@ public class MergeOperation extends MapOperation
     private transient boolean hasInvalidation;
 
     private transient MapEntries mapEntries;
-    private transient List<RecordInfo> backupRecordInfos;
+    private transient List<Record> backupRecordInfos;
     private transient List<Data> invalidationKeys;
     private transient boolean hasMergedValues;
 
@@ -113,7 +111,7 @@ public class MergeOperation extends MapOperation
             }
             if (hasBackups) {
                 mapEntries.add(dataKey, dataValue);
-                backupRecordInfos.add(buildRecordInfo(recordStore.getRecord(dataKey)));
+                backupRecordInfos.add(recordStore.getRecord(dataKey));
             }
             evict(dataKey);
             if (hasInvalidation) {
@@ -165,7 +163,7 @@ public class MergeOperation extends MapOperation
 
     @Override
     public Operation getBackupOperation() {
-        return new PutAllBackupOperation(name, mapEntries, backupRecordInfos, disableWanReplicationEvent);
+        return new PutAllBackupOperation(name, backupRecordInfos);
     }
 
     @Override

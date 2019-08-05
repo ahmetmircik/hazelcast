@@ -17,7 +17,7 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.record.RecordInfo;
+import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -40,8 +40,8 @@ public class PutTransientOperation extends BasePutOperation implements MutatingO
     }
 
     @Override
-    protected PutBackupOperation newBackupOperation(RecordInfo replicationInfo) {
-        return new PutTransientBackupOperation(name, dataKey, dataValue, replicationInfo);
+    protected PutBackupOperation newBackupOperation(Record record) {
+        return new PutTransientBackupOperation(name, record);
     }
 
     protected long getTtl() {

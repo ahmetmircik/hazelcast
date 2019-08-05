@@ -152,10 +152,10 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     @Override
-    public void putRecord(Data key, Record record) {
+    public void putRecord(Record record) {
         markRecordStoreExpirable(record.getTtl(), record.getMaxIdle());
-        storage.put(key, record);
-        mutationObserver.onReplicationPutRecord(key, record);
+        storage.put(record.getKey(), record);
+        mutationObserver.onReplicationPutRecord(record.getKey(), record);
         updateStatsOnPut(record.getHits());
     }
 

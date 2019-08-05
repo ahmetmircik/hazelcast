@@ -21,7 +21,6 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -33,8 +32,6 @@ import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 import com.hazelcast.transaction.TransactionException;
 
 import java.io.IOException;
-
-import static com.hazelcast.map.impl.record.Records.buildRecordInfo;
 
 /**
  * An operation to unlock and set (key,value) on the partition .
@@ -125,11 +122,10 @@ public class TxnSetOperation extends BasePutOperation
     @Override
     public Operation getBackupOperation() {
         Record record = recordStore.getRecord(dataKey);
-        RecordInfo replicationInfo = buildRecordInfo(record);
         if (isPostProcessing(recordStore)) {
             dataValue = mapServiceContext.toData(record.getValue());
         }
-        return new TxnSetBackupOperation(name, dataKey, dataValue, replicationInfo);
+        return new TxnSetBackupOperation(name, record);
     }
 
     @Override

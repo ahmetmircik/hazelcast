@@ -18,12 +18,9 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
-
-import static com.hazelcast.map.impl.record.Records.buildRecordInfo;
 
 public abstract class BasePutOperation
         extends LockAwareOperation implements BackupAwareOperation {
@@ -66,15 +63,14 @@ public abstract class BasePutOperation
     @Override
     public Operation getBackupOperation() {
         Record record = recordStore.getRecord(dataKey);
-        RecordInfo replicationInfo = buildRecordInfo(record);
         if (isPostProcessing(recordStore)) {
             dataValue = mapServiceContext.toData(record.getValue());
         }
-        return newBackupOperation(replicationInfo);
+        return newBackupOperation(record);
     }
 
-    protected PutBackupOperation newBackupOperation(RecordInfo replicationInfo) {
-        return new PutBackupOperation(name, dataKey, dataValue, replicationInfo);
+    protected PutBackupOperation newBackupOperation(Record record) {
+        return new PutBackupOperation(name, record);
     }
 
     @Override

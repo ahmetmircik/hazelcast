@@ -25,7 +25,7 @@ import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 /**
  * CachedDataRecordWithStats.
  */
-class CachedDataRecordWithStats extends DataRecordWithStats {
+public class CachedDataRecordWithStats extends DataRecordWithStats {
     private static final AtomicReferenceFieldUpdater<CachedDataRecordWithStats, Object> CACHED_VALUE =
             AtomicReferenceFieldUpdater.newUpdater(CachedDataRecordWithStats.class, Object.class, "cachedValue");
 
@@ -33,11 +33,11 @@ class CachedDataRecordWithStats extends DataRecordWithStats {
 
     private transient volatile Object cachedValue;
 
-    CachedDataRecordWithStats() {
+    public CachedDataRecordWithStats() {
         super();
     }
 
-    CachedDataRecordWithStats(Data value) {
+    public CachedDataRecordWithStats(Data value) {
         super(value);
     }
 

@@ -17,9 +17,7 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -35,16 +33,11 @@ import static com.hazelcast.map.impl.record.Records.applyRecordInfo;
 public class PutAllBackupOperation extends MapOperation
         implements PartitionAwareOperation, BackupOperation {
 
-    private boolean disableWanReplicationEvent;
-    private MapEntries entries;
-    private List<RecordInfo> recordInfos;
+    private List<Record> recordInfos;
 
-    public PutAllBackupOperation(String name, MapEntries entries,
-                                 List<RecordInfo> recordInfos, boolean disableWanReplicationEvent) {
+    public PutAllBackupOperation(String name, List<Record> recordInfos) {
         super(name);
-        this.entries = entries;
         this.recordInfos = recordInfos;
-        this.disableWanReplicationEvent = disableWanReplicationEvent;
     }
 
     public PutAllBackupOperation() {
@@ -52,52 +45,37 @@ public class PutAllBackupOperation extends MapOperation
 
     @Override
     protected void runInternal() {
-        for (int i = 0; i < entries.size(); i++) {
-            Data dataKey = entries.getKey(i);
-            Data dataValue = entries.getValue(i);
+        for (Record<Data> replicatedRecord : recordInfos) {
+            Data dataKey = replicatedRecord.getKey();
+            Data dataValue = replicatedRecord.getValue();
             Record record = recordStore.putBackup(dataKey, dataValue, getCallerProvenance());
-            applyRecordInfo(record, recordInfos.get(i));
+            applyRecordInfo(replicatedRecord, record);
 
             publishWanUpdate(dataKey, dataValue);
             evict(dataKey);
         }
     }
 
-    @Override
-    protected boolean disableWanReplicationEvent() {
-        return disableWanReplicationEvent;
-    }
-
-    @Override
-    public Object getResponse() {
-        return entries;
-    }
 
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
 
-        entries.writeData(out);
-        for (RecordInfo recordInfo : recordInfos) {
-            recordInfo.writeData(out);
+        out.writeInt(recordInfos.size());
+        for (Record recordInfo : recordInfos) {
+            out.writeObject(recordInfo);
         }
-        out.writeBoolean(disableWanReplicationEvent);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
 
-        entries = new MapEntries();
-        entries.readData(in);
-        int size = entries.size();
+        int size = in.readInt();
         recordInfos = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            RecordInfo recordInfo = new RecordInfo();
-            recordInfo.readData(in);
-            recordInfos.add(recordInfo);
+            recordInfos.add(in.readObject());
         }
-        disableWanReplicationEvent = in.readBoolean();
     }
 
     @Override

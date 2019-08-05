@@ -21,7 +21,6 @@ import com.hazelcast.map.IMap;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.record.RecordInfo;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -37,7 +36,6 @@ import java.util.Map;
 
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
-import static com.hazelcast.map.impl.record.Records.buildRecordInfo;
 import static com.hazelcast.map.impl.recordstore.RecordStore.DEFAULT_MAX_IDLE;
 import static com.hazelcast.map.impl.recordstore.RecordStore.DEFAULT_TTL;
 
@@ -57,8 +55,8 @@ public class PutAllOperation extends MapOperation
     private transient boolean hasBackups;
     private transient boolean hasInvalidation;
 
-    private List<RecordInfo> backupRecordInfos;
-    private List<Data> invalidationKeys;
+    private transient List<Record> backupRecordInfos;
+    private transient List<Data> invalidationKeys;
 
     public PutAllOperation() {
     }
@@ -116,8 +114,7 @@ public class PutAllOperation extends MapOperation
         }
         if (hasBackups) {
             Record record = recordStore.getRecord(dataKey);
-            RecordInfo replicationInfo = buildRecordInfo(record);
-            backupRecordInfos.add(replicationInfo);
+            backupRecordInfos.add(record);
         }
 
         evict(dataKey);
@@ -176,7 +173,7 @@ public class PutAllOperation extends MapOperation
 
     @Override
     public Operation getBackupOperation() {
-        return new PutAllBackupOperation(name, mapEntries, backupRecordInfos, false);
+        return new PutAllBackupOperation(name, backupRecordInfos);
     }
 
     @Override

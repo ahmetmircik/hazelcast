@@ -16,7 +16,11 @@
 
 package com.hazelcast.map.impl.record;
 
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.util.Clock;
+
+import java.io.IOException;
 
 import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
 
@@ -97,5 +101,19 @@ abstract class AbstractRecordWithStats<V>
         result = 31 * result + lastStoredTime;
         result = 31 * result + expirationTime;
         return result;
+    }
+
+    @Override
+    public void writeData(ObjectDataOutput out) throws IOException {
+        super.writeData(out);
+        out.writeInt(lastStoredTime);
+        out.writeInt(expirationTime);
+    }
+
+    @Override
+    public void readData(ObjectDataInput in) throws IOException {
+        super.readData(in);
+        lastStoredTime = in.readInt();
+        expirationTime = in.readInt();
     }
 }
