@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.config.EvictionConfig.MaxSizePolicy.ENTRY_COUNT;
 import static com.hazelcast.config.InMemoryFormat.BINARY;
-import static com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy.INVALIDATE;
+import static com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy.CACHE_ON_UPDATE;
 import static com.hazelcast.internal.nearcache.impl.invalidation.InvalidationUtils.NO_SEQUENCE;
 import static com.hazelcast.internal.nearcache.impl.invalidation.RepairingTask.MAX_TOLERATED_MISS_COUNT;
 import static com.hazelcast.internal.nearcache.impl.invalidation.RepairingTask.RECONCILIATION_INTERVAL_SECONDS;
@@ -78,19 +78,18 @@ import static org.junit.Assert.assertEquals;
 public class ClientCacheInvalidationMemberAddRemoveTest extends ClientNearCacheTestSupport {
 
     private static final int TEST_RUN_SECONDS = 30;
-    private static final int KEY_COUNT = 1000;
+    private static final int KEY_COUNT = 1;
     private static final int INVALIDATION_BATCH_SIZE = 100;
     private static final int RECONCILIATION_INTERVAL_SECS = 30;
-    private static final int NEAR_CACHE_POPULATE_THREAD_COUNT = 5;
+    private static final int NEAR_CACHE_POPULATE_THREAD_COUNT = 3;
+    private static final int PUT_OP_THREAD_COUNT = 3;
 
     private HazelcastInstance secondNode;
 
     @Parameters(name = "localUpdatePolicy:{0}")
     public static Collection<Object[]> parameters() {
         return asList(new Object[][]{
-                {INVALIDATE},
-                // TODO: "https://github.com/hazelcast/hazelcast/issues/12548"
-                // {CACHE_ON_UPDATE}
+                {CACHE_ON_UPDATE}
         });
     }
 
@@ -123,59 +122,32 @@ public class ClientCacheInvalidationMemberAddRemoveTest extends ClientNearCacheT
 
         ArrayList<Thread> threads = new ArrayList<Thread>();
 
-        // continuously adds and removes member
-        Thread shadowMember = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while (!stopTest.get()) {
-                    HazelcastInstance member = hazelcastFactory.newHazelcastInstance(config);
-                    sleepSeconds(5);
-                    member.getLifecycleService().terminate();
-                }
-            }
-        });
-
-        threads.add(shadowMember);
-
         for (int i = 0; i < NEAR_CACHE_POPULATE_THREAD_COUNT; i++) {
             // populates client Near Cache
             Thread populateClientNearCache = new Thread(new Runnable() {
                 public void run() {
-                    int i = 0;
                     while (!stopTest.get()) {
-                        clientCache.get(i++);
-                        if (i == KEY_COUNT) {
-                            i = 0;
-                        }
+                        clientCache.get(getInt(0, KEY_COUNT));
                     }
                 }
             });
             threads.add(populateClientNearCache);
         }
 
-        // updates data from member
-        Thread putFromMember = new Thread(new Runnable() {
-            public void run() {
-                while (!stopTest.get()) {
-                    int key = getInt(KEY_COUNT);
-                    int value = getInt(Integer.MAX_VALUE);
-                    memberCache.put(key, value);
-
-                    sleepAtLeastMillis(2);
+        for (int i = 0; i < PUT_OP_THREAD_COUNT; i++) {
+            Thread putFromMember = new Thread(new Runnable() {
+                public void run() {
+                    while (!stopTest.get()) {
+                        int key = getInt(KEY_COUNT);
+                        int value = getInt(Integer.MAX_VALUE);
+                        clientCache.put(key, value);
+                    }
                 }
-            }
-        });
-        threads.add(putFromMember);
+            });
 
-        Thread clearFromMember = new Thread(new Runnable() {
-            public void run() {
-                while (!stopTest.get()) {
-                    memberCache.clear();
-                    sleepSeconds(3);
-                }
-            }
-        });
-        threads.add(clearFromMember);
+            // updates data from member
+            threads.add(putFromMember);
+        }
 
         // start threads
         for (Thread thread : threads) {
