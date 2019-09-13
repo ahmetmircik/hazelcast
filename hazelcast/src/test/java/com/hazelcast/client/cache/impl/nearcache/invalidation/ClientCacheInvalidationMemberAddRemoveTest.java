@@ -42,6 +42,7 @@ import com.hazelcast.internal.nearcache.impl.store.AbstractNearCacheRecordStore;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
 import com.hazelcast.test.annotation.NightlyTest;
+import com.hazelcast.util.StringUtil;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -78,11 +79,11 @@ import static org.junit.Assert.assertEquals;
 public class ClientCacheInvalidationMemberAddRemoveTest extends ClientNearCacheTestSupport {
 
     private static final int TEST_RUN_SECONDS = 30;
-    private static final int KEY_COUNT = 1;
+    private static final int KEY_COUNT = 10;
     private static final int INVALIDATION_BATCH_SIZE = 100;
     private static final int RECONCILIATION_INTERVAL_SECS = 30;
-    private static final int NEAR_CACHE_POPULATE_THREAD_COUNT = 3;
-    private static final int PUT_OP_THREAD_COUNT = 3;
+    private static final int NEAR_CACHE_POPULATE_THREAD_COUNT = 10;
+    private static final int PUT_OP_THREAD_COUNT = 10;
 
     private HazelcastInstance secondNode;
 
@@ -170,8 +171,11 @@ public class ClientCacheInvalidationMemberAddRemoveTest extends ClientNearCacheT
                     Integer valueSeenFromMember = memberCache.get(i);
                     Integer valueSeenFromClient = clientCache.get(i);
 
+                    String pre = "valueSeenFromClient = " + valueSeenFromClient
+                            + "valueSeenFromMember = " + valueSeenFromMember;
+
                     String msg = createFailureMessage(i);
-                    assertEquals(msg, valueSeenFromMember, valueSeenFromClient);
+                    assertEquals(String.join(StringUtil.LINE_SEPARATOR, pre, msg), valueSeenFromMember, valueSeenFromClient);
                 }
             }
 
