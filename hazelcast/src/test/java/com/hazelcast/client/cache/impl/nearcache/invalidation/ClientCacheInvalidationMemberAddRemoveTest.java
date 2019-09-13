@@ -172,7 +172,7 @@ public class ClientCacheInvalidationMemberAddRemoveTest extends ClientNearCacheT
                     Integer valueSeenFromClient = clientCache.get(i);
 
                     String pre = "valueSeenFromClient = " + valueSeenFromClient
-                            + "valueSeenFromMember = " + valueSeenFromMember;
+                            + ", valueSeenFromMember = " + valueSeenFromMember;
 
                     String msg = createFailureMessage(i);
                     assertEquals(String.join(StringUtil.LINE_SEPARATOR, pre, msg), valueSeenFromMember, valueSeenFromClient);
