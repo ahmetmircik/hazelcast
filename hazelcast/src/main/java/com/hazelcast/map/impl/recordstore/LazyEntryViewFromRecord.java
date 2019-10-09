@@ -17,9 +17,9 @@
 package com.hazelcast.map.impl.recordstore;
 
 import com.hazelcast.core.EntryView;
-import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.SampleableConcurrentHashMap;
+import com.hazelcast.map.impl.record.Record;
 
 
 /**
@@ -31,7 +31,8 @@ import com.hazelcast.internal.util.SampleableConcurrentHashMap;
  *
  * @param <R> Type of record to construct {@link EntryView} over it.
  */
-public class LazyEntryViewFromRecord<R extends Record> extends SampleableConcurrentHashMap.SamplingEntry implements EntryView {
+public class LazyEntryViewFromRecord<R extends Record>
+        extends SampleableConcurrentHashMap.SamplingEntry implements EntryView {
 
     private Object key;
     private Object value;

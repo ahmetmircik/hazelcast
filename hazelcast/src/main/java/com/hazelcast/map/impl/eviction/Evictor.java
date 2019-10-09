@@ -19,8 +19,6 @@ package com.hazelcast.map.impl.eviction;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.nio.serialization.Data;
 
-import static java.lang.Integer.getInteger;
-
 /**
  * Evicts a {@link RecordStore}.
  * <p>
@@ -51,12 +49,6 @@ public interface Evictor {
             return "Null Evictor implementation";
         }
     };
-
-    String SYSTEM_PROPERTY_SAMPLE_COUNT = "hazelcast.map.eviction.sample.count";
-
-    int DEFAULT_SAMPLE_COUNT = 15;
-
-    int SAMPLE_COUNT = getInteger(SYSTEM_PROPERTY_SAMPLE_COUNT, DEFAULT_SAMPLE_COUNT);
 
     /**
      * Evict supplied record-store.

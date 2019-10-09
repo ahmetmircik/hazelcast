@@ -205,7 +205,8 @@ public class SampleableConcurrentHashMap<K, V> extends ConcurrentReferenceHashMa
     /**
      * Not thread safe
      */
-    private final class LazySamplingEntryIterableIterator<E extends SamplingEntry> implements Iterable<E>, Iterator<E> {
+    private final class LazySamplingEntryIterableIterator<E extends SamplingEntry>
+            implements Iterable<E>, Iterator<E> {
 
         private final int maxEntryCount;
         private final int randomNumber;
