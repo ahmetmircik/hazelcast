@@ -18,8 +18,8 @@ package com.hazelcast.map.impl.eviction;
 
 import com.hazelcast.core.EntryView;
 import com.hazelcast.internal.util.Clock;
-import com.hazelcast.internal.util.MutableInteger;
 import com.hazelcast.map.eviction.MapEvictionPolicy;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.LazyEntryViewFromRecord;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -27,75 +27,151 @@ import com.hazelcast.map.impl.recordstore.Storage;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.partition.IPartition;
 import com.hazelcast.spi.partition.IPartitionService;
+import com.hazelcast.spi.properties.HazelcastProperties;
+import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+import static com.hazelcast.spi.properties.GroupProperty.MAP_EVICTION_BATCH_SIZE;
 
 /**
  * Evictor helper methods.
  */
 public class EvictorImpl implements Evictor {
+
+    public static final int DEFAULT_SAMPLE_COUNT = 15;
+    public static final int DEFAULT_POOL_SIZE = 5;
+    public static final HazelcastProperty NEW_SAMPLING
+            = new HazelcastProperty("hazelcast.map.eviction.new.sampling", false);
+    public static final HazelcastProperty NEW_SAMPLING_POOL_SIZE
+            = new HazelcastProperty("hazelcast.map.eviction.new.sampling.pool.size", DEFAULT_POOL_SIZE);
+    public static final HazelcastProperty SAMPLE_COUNT
+            = new HazelcastProperty("hazelcast.map.eviction.sample.count", DEFAULT_SAMPLE_COUNT);
+
     protected final EvictionChecker evictionChecker;
     protected final IPartitionService partitionService;
     protected final MapEvictionPolicy mapEvictionPolicy;
 
     private final int batchSize;
 
-    private final int poolSize = 5;
-    private final ArrayList<EntryView> pool = new ArrayList<>(poolSize);
+    private final int poolSize;
+    private final int sampleCount;
+    private final boolean newSampling;
+    private final List<EntryView> pool;
 
     public EvictorImpl(MapEvictionPolicy mapEvictionPolicy,
                        EvictionChecker evictionChecker,
-                       IPartitionService partitionService, int batchSize) {
+                       IPartitionService partitionService, HazelcastProperties properties) {
         this.evictionChecker = checkNotNull(evictionChecker);
         this.partitionService = checkNotNull(partitionService);
         this.mapEvictionPolicy = checkNotNull(mapEvictionPolicy);
-        this.batchSize = batchSize;
+        this.batchSize = properties.getInteger(MAP_EVICTION_BATCH_SIZE);
+        this.sampleCount = properties.getInteger(SAMPLE_COUNT);
+        this.newSampling = properties.getBoolean(NEW_SAMPLING);
+        this.poolSize = properties.getInteger(NEW_SAMPLING_POOL_SIZE);
+        this.pool = new ArrayList<>(poolSize);
     }
 
     @Override
     public void evict(RecordStore recordStore, Data excludedKey) {
+        if (newSampling) {
+            evictWithNewSampling(recordStore, excludedKey);
+        } else {
+            evictWithOldSampling(recordStore, excludedKey);
+        }
+    }
+
+    private void evictWithOldSampling(RecordStore recordStore, Data excludedKey) {
         assertRunningOnPartitionThread();
 
-        do {
-            Iterable<EntryView> samples = getSamples(recordStore);
-            EntryView<Data, Object> evictableEntry = selectEvictableEntry(samples);
-            if (evictEntry(recordStore, evictableEntry)) {
+        for (int i = 0; i < batchSize; i++) {
+            EntryView evictableEntry = selectEvictableEntry(recordStore, excludedKey);
+            if (evictableEntry == null) {
                 return;
             }
+            evictEntry(recordStore, evictableEntry);
+        }
+    }
 
-            Iterator<EntryView> iterator = pool.iterator();
+    private EntryView selectEvictableEntry(RecordStore recordStore, Data excludedKey) {
+        Iterable<EntryView> samples = getSamples(recordStore);
+        EntryView excluded = null;
+        EntryView selected = null;
+
+        for (EntryView candidate : samples) {
+            if (excludedKey != null && excluded == null && getDataKey(candidate).equals(excludedKey)) {
+                excluded = candidate;
+                continue;
+            }
+
+            if (selected == null) {
+                selected = candidate;
+            } else if (mapEvictionPolicy.compare(candidate, selected) < 0) {
+                selected = candidate;
+            }
+        }
+
+        return selected == null ? excluded : selected;
+    }
+
+    private static Data getDataKey(EntryView candidate) {
+        return getRecordFromEntryView(candidate).getKey();
+    }
+
+    private void evictWithNewSampling(RecordStore recordStore, Data excludedKey) {
+        assertRunningOnPartitionThread();
+
+        Iterable<EntryView> samples = getSamples(recordStore);
+        EntryView<Data, Object> evictableEntry = selectEvictableEntryNew(recordStore, samples);
+        evictEntry(recordStore, evictableEntry);
+    }
+
+    private EntryView selectEvictableEntryNew(RecordStore recordStore,
+                                              Iterable<EntryView> samples) {
+        if (pool.size() == 0 && poolSize > 0) {
+            Iterator<Record> iterator = recordStore.iterator();
             while (iterator.hasNext()) {
-                EntryView nextPooled = iterator.next();
-                iterator.remove();
-
-                if (evictEntry(recordStore, nextPooled)) {
-                    return;
+                pool.add(getEntryView(recordStore, iterator.next().getKey()));
+                if (pool.size() == poolSize) {
+                    break;
                 }
             }
-        } while (recordStore.size() > 0);
-    }
-
-    @Override
-    public void forceEvict(RecordStore recordStore) {
-
-    }
-
-    private EntryView selectEvictableEntry(Iterable<EntryView> samples) {
-        for (EntryView<Data, Object> candidate : samples) {
-
-            pool.add(candidate);
-            Collections.sort(pool, mapEvictionPolicy);
-            while (pool.size() > poolSize) {
-                pool.remove(pool.size() - 1);
-            }
-
         }
-        return pool.remove(0);
+
+        for (EntryView sample : samples) {
+            pool.add(sample);
+        }
+
+        Collections.sort(pool, mapEvictionPolicy);
+
+        EntryView removed;
+        do {
+            removed = pool.remove(0);
+        } while (recordStore.getRecord(getRecordFromEntryView(removed).getKey()) == null);
+
+        while (pool.size() > poolSize) {
+            pool.remove(pool.size() - 1);
+        }
+
+        assert poolSize >= pool.size() : pool.size();
+
+        return removed;
+    }
+
+    private EntryView getEntryView(RecordStore recordStore, Object key) {
+        MapServiceContext mapServiceContext = recordStore.getMapContainer().getMapServiceContext();
+        Data dataKey = mapServiceContext.toData(key);
+        Record record = recordStore.getRecordOrNull(dataKey);
+        if (record == null) {
+            return null;
+        }
+        return new LazyEntryViewFromRecord(record,
+                mapServiceContext.getNodeEngine().getSerializationService());
     }
 
     private boolean evictEntry(RecordStore recordStore, EntryView selectedEntry) {
@@ -120,6 +196,11 @@ public class EvictorImpl implements Evictor {
     }
 
     @Override
+    public void forceEvict(RecordStore recordStore) {
+
+    }
+
+    @Override
     public boolean checkEvictable(RecordStore recordStore) {
         assertRunningOnPartitionThread();
 
@@ -127,7 +208,7 @@ public class EvictorImpl implements Evictor {
     }
 
     // this method is overridden in another context.
-    protected Record getRecordFromEntryView(EntryView selectedEntry) {
+    protected static Record getRecordFromEntryView(EntryView selectedEntry) {
         return ((LazyEntryViewFromRecord) selectedEntry).getRecord();
     }
 
@@ -139,7 +220,7 @@ public class EvictorImpl implements Evictor {
 
     protected Iterable<EntryView> getSamples(RecordStore recordStore) {
         Storage storage = recordStore.getStorage();
-        return storage.getRandomSamples(SAMPLE_COUNT);
+        return storage.getRandomSamples(sampleCount);
     }
 
     protected static long getNow() {
@@ -152,103 +233,5 @@ public class EvictorImpl implements Evictor {
                 + ", mapEvictionPolicy=" + mapEvictionPolicy
                 + ", batchSize=" + batchSize
                 + '}';
-    }
-
-    public static void main(String[] args) {
-        int keySpace = 12;
-        int poolMax = 16;
-
-        ArrayList<Integer> shuffled = new ArrayList<>();
-        for (int i = 0; i < keySpace; i++) {
-            shuffled.add(i);
-        }
-        Collections.shuffle(shuffled);
-
-        ArrayList<Integer> pool = new ArrayList<>();
-        for (Integer key : shuffled) {
-            customAdd(key, pool, poolMax);
-        }
-
-        System.err.println("Custom");
-        System.err.println(pool);
-
-        ArrayList<Integer> control = new ArrayList<>(poolMax);
-        for (Integer key : shuffled) {
-            control.add(key);
-        }
-        Collections.sort(control);
-
-        System.err.println("Control");
-        System.err.println(control);
-
-        System.err.println(control.equals(pool));
-    }
-
-    static void customAdd(Integer candidate, ArrayList<Integer> pool, int poolMax) {
-        if (pool.isEmpty()) {
-            pool.add(candidate);
-            return;
-        }
-
-        int scanIndex = 0;
-        int insertAt = -1;
-        for (Integer pooledEntry : pool) {
-            if (candidate < pooledEntry) {
-                insertAt = scanIndex;
-                break;
-            }
-            scanIndex++;
-        }
-
-        if (insertAt == -1) {
-            if (scanIndex < poolMax - 1) {
-                pool.add(candidate);
-            }
-            return;
-        }
-
-        if (pool.size() < poolMax) {
-            pool.add(candidate);
-        } else {
-            pool.remove(poolMax - 1);
-        }
-        Collections.sort(pool);
-    }
-
-    static void customAdd2(Integer candidate, Integer[] pool, MutableInteger poolSize, int poolMax) {
-        if (poolSize.value == 0) {
-            pool[0] = candidate;
-            poolSize.value++;
-            return;
-        }
-
-        int scanIndex = 0;
-        int insertAt = -1;
-        for (int i = 0; i < poolSize.value; i++) {
-            if (candidate < pool[i]) {
-                insertAt = scanIndex;
-                break;
-            }
-            scanIndex++;
-        }
-
-        if (insertAt == -1) {
-            if (scanIndex < poolMax - 1) {
-                pool[poolSize.value] = candidate;
-                poolSize.value++;
-            }
-            return;
-        }
-
-        if (poolSize.value < poolMax) {
-            poolSize.value++;
-        }
-
-        for (int i = poolSize.value - 1; i > insertAt; i--) {
-            Integer prev = pool[i - 1];
-            pool[i] = prev;
-        }
-        pool[insertAt] = candidate;
-        return;
     }
 }

@@ -16,11 +16,13 @@
 
 package com.hazelcast.map;
 
+import com.hazelcast.cluster.Address;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MaxSizeConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.MemoryInfoAccessor;
 import com.hazelcast.map.eviction.MapEvictionPolicy;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.MapContainer;
@@ -34,17 +36,16 @@ import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.monitor.LocalMapStats;
-import com.hazelcast.cluster.Address;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
+import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
-import com.hazelcast.internal.util.MemoryInfoAccessor;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -359,15 +360,19 @@ public class EvictionMaxSizePolicyTest extends HazelcastTestSupport {
 
         MapEvictionPolicy mapEvictionPolicy = mapContainer.getMapEvictionPolicy();
         EvictionChecker evictionChecker = new EvictionChecker(memoryInfoAccessor, mapServiceContext);
-        IPartitionService partitionService = mapServiceContext.getNodeEngine().getPartitionService();
-        Evictor evictor = new TestEvictor(mapEvictionPolicy, evictionChecker, partitionService);
+        NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
+        IPartitionService partitionService = nodeEngine.getPartitionService();
+        Evictor evictor = new TestEvictor(mapEvictionPolicy, evictionChecker,
+                partitionService, nodeEngine.getProperties());
         mapContainer.setEvictor(evictor);
     }
 
     private static final class TestEvictor extends EvictorImpl {
 
-        TestEvictor(MapEvictionPolicy mapEvictionPolicy, EvictionChecker evictionChecker, IPartitionService partitionService) {
-            super(mapEvictionPolicy, evictionChecker, partitionService, 1);
+        TestEvictor(MapEvictionPolicy mapEvictionPolicy,
+                    EvictionChecker evictionChecker,
+                    IPartitionService partitionService, HazelcastProperties properties) {
+            super(mapEvictionPolicy, evictionChecker, partitionService, properties);
         }
 
         @Override

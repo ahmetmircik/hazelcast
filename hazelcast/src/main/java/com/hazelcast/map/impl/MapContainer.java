@@ -27,10 +27,15 @@ import com.hazelcast.config.WanConsumerConfig;
 import com.hazelcast.config.WanReplicationConfig;
 import com.hazelcast.config.WanReplicationRef;
 import com.hazelcast.config.WanSyncConfig;
+import com.hazelcast.internal.nio.ClassLoaderUtil;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.PostJoinAwareService;
+import com.hazelcast.internal.util.ConstructorFunction;
+import com.hazelcast.internal.util.ExceptionUtil;
+import com.hazelcast.internal.util.MemoryInfoAccessor;
+import com.hazelcast.internal.util.RuntimeMemoryInfoAccessor;
 import com.hazelcast.map.eviction.LFUEvictionPolicy;
 import com.hazelcast.map.eviction.LRUEvictionPolicy;
 import com.hazelcast.map.eviction.MapEvictionPolicy;
@@ -44,7 +49,6 @@ import com.hazelcast.map.impl.query.QueryEntryFactory;
 import com.hazelcast.map.impl.record.DataRecordFactory;
 import com.hazelcast.map.impl.record.ObjectRecordFactory;
 import com.hazelcast.map.impl.record.RecordFactory;
-import com.hazelcast.internal.nio.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.PartitioningStrategy;
 import com.hazelcast.query.impl.Index;
@@ -54,10 +58,7 @@ import com.hazelcast.query.impl.getters.Extractors;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.partition.IPartitionService;
-import com.hazelcast.internal.util.ConstructorFunction;
-import com.hazelcast.internal.util.ExceptionUtil;
-import com.hazelcast.internal.util.MemoryInfoAccessor;
-import com.hazelcast.internal.util.RuntimeMemoryInfoAccessor;
+import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.wan.impl.DelegatingWanReplicationScheme;
 import com.hazelcast.wan.impl.WanReplicationService;
 
@@ -71,7 +72,6 @@ import static com.hazelcast.config.InMemoryFormat.NATIVE;
 import static com.hazelcast.config.InMemoryFormat.OBJECT;
 import static com.hazelcast.map.impl.eviction.Evictor.NULL_EVICTOR;
 import static com.hazelcast.map.impl.mapstore.MapStoreContextFactory.createMapStoreContext;
-import static com.hazelcast.spi.properties.GroupProperty.MAP_EVICTION_BATCH_SIZE;
 import static java.lang.System.getProperty;
 
 /**
@@ -171,8 +171,9 @@ public class MapContainer {
             EvictionChecker evictionChecker = new EvictionChecker(memoryInfoAccessor, mapServiceContext);
             NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
             IPartitionService partitionService = nodeEngine.getPartitionService();
-            int batchSize = nodeEngine.getProperties().getInteger(MAP_EVICTION_BATCH_SIZE);
-            evictor = new EvictorImpl(mapEvictionPolicy, evictionChecker, partitionService, batchSize);
+            HazelcastProperties properties = nodeEngine.getProperties();
+            evictor = new EvictorImpl(mapEvictionPolicy, evictionChecker,
+                    partitionService, properties);
         }
     }
 

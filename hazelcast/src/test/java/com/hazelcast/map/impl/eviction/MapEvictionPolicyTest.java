@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 
 import static com.hazelcast.config.MaxSizeConfig.MaxSizePolicy.PER_PARTITION;
-import static com.hazelcast.map.impl.eviction.Evictor.SAMPLE_COUNT;
+import static com.hazelcast.map.impl.eviction.EvictorImpl.DEFAULT_SAMPLE_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_COUNT;
 import static java.lang.String.format;
 import static junit.framework.Assert.assertNotNull;
@@ -51,7 +51,7 @@ public class MapEvictionPolicyTest extends HazelcastTestSupport {
 
     @Test
     public void testMapEvictionPolicy() throws Exception {
-        int sampleCount = SAMPLE_COUNT;
+        int sampleCount = DEFAULT_SAMPLE_COUNT;
 
         Config config = getConfig();
         config.setProperty(PARTITION_COUNT.getName(), "1");
