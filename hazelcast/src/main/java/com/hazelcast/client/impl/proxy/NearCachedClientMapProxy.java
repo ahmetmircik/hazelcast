@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 
 import static com.hazelcast.core.EntryEventType.INVALIDATION;
 import static com.hazelcast.internal.nearcache.NearCache.CACHED_AS_NULL;
@@ -394,7 +395,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
     }
 
     @Override
-    protected void getAllInternal(Set<K> keys, Map<Integer, List<Data>> partitionToKeyData, List<Object> resultingKeyValuePairs) {
+    protected void getAllInternal(Set<K> keys, Map<Integer, List<Data>> partitionToKeyData, BiConsumer<Data, Data> biConsumer) {
         Map<Object, Data> keyMap = createHashMap(keys.size());
         if (serializeKeys) {
             fillPartitionToKeyData(keys, partitionToKeyData, keyMap, null);
@@ -415,7 +416,7 @@ public class NearCachedClientMapProxy<K, V> extends ClientMapProxy<K, V> {
         Map<Object, Long> reservations = getNearCacheReservations(ncKeys, keyMap);
         try {
             int currentSize = resultingKeyValuePairs.size();
-            super.getAllInternal(keys, partitionToKeyData, resultingKeyValuePairs);
+            super.getAllInternal(keys, partitionToKeyData, resultingKeyValuePairs, biConsumer);
             populateResultFromRemote(currentSize, resultingKeyValuePairs, reservations, reverseKeyMap);
         } finally {
             releaseRemainingReservedKeys(reservations);

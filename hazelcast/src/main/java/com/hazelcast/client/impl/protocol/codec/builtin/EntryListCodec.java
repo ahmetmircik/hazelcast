@@ -74,6 +74,21 @@ public final class EntryListCodec {
         return result;
     }
 
+    public static <K, V> void decode(ClientMessage.ForwardFrameIterator iterator,
+                                     Function<ClientMessage.ForwardFrameIterator, K> decodeKeyFunc,
+                                     Function<ClientMessage.ForwardFrameIterator, V> decodeValueFunc,
+                                     BiConsumer<K, V> biConsumer) {
+        //begin frame, map
+        iterator.next();
+        while (!nextFrameIsDataStructureEndFrame(iterator)) {
+            K key = decodeKeyFunc.apply(iterator);
+            V value = decodeValueFunc.apply(iterator);
+            biConsumer.accept(key, value);
+        }
+        //end frame, map
+        iterator.next();
+    }
+
     public static <K, V> List<Map.Entry<K, V>> decodeNullable(ClientMessage.ForwardFrameIterator iterator,
                                                               Function<ClientMessage.ForwardFrameIterator, K> decodeKeyFunc,
                                                               Function<ClientMessage.ForwardFrameIterator, V> decodeValueFunc) {
