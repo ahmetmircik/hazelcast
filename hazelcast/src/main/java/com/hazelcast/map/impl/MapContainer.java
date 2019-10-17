@@ -227,7 +227,7 @@ public class MapContainer {
         return notUsedArg -> {
             switch (mapConfig.getInMemoryFormat()) {
                 case BINARY:
-                    return new DataRecordFactory(mapConfig, serializationService, partitioningStrategy);
+                    return new DataRecordFactory(this, serializationService, partitioningStrategy);
                 case OBJECT:
                     return new ObjectRecordFactory(mapConfig, serializationService);
                 default:

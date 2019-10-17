@@ -17,8 +17,8 @@
 package com.hazelcast.map.impl.record;
 
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.nio.serialization.Data;
 
 public class ObjectRecordFactory implements RecordFactory<Object> {
 
@@ -36,7 +36,9 @@ public class ObjectRecordFactory implements RecordFactory<Object> {
         assert value != null : "value can not be null";
 
         Object objectValue = serializationService.toObject(value);
-        Record<Object> record = statisticsEnabled ? new ObjectRecordWithStats(objectValue) : new ObjectRecord(objectValue);
+        Record<Object> record = statisticsEnabled
+                ? new ObjectRecordWithStats(objectValue)
+                : new ObjectRecord(objectValue);
         record.setKey(key);
         return record;
     }

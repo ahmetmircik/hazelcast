@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.record;
 
 import com.hazelcast.config.CacheDeserializedValues;
-import com.hazelcast.config.MapConfig;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelJVMTest;
@@ -31,11 +30,12 @@ public class DataRecordFactoryTest extends AbstractRecordFactoryTest<Data> {
 
     @Override
     void newRecordFactory(boolean isStatisticsEnabled, CacheDeserializedValues cacheDeserializedValues) {
-        MapConfig mapConfig = new MapConfig()
-                .setStatisticsEnabled(isStatisticsEnabled)
-                .setCacheDeserializedValues(cacheDeserializedValues);
-
-        factory = new DataRecordFactory(mapConfig, serializationService, partitioningStrategy);
+//        MapConfig mapConfig = new MapConfig()
+//                .setStatisticsEnabled(isStatisticsEnabled)
+//                .setCacheDeserializedValues(cacheDeserializedValues);
+//
+//        MapContainer mapContainer = new MapContainer();
+//        factory = new DataRecordFactory(mapContainer, serializationService, partitioningStrategy);
     }
 
     @Override

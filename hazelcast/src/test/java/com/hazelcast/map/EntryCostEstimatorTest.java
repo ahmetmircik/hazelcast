@@ -16,8 +16,12 @@
 
 package com.hazelcast.map;
 
+import com.hazelcast.config.CacheDeserializedValues;
 import com.hazelcast.config.Config;
+import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.InMemoryFormat;
+import com.hazelcast.config.MapConfig;
+import com.hazelcast.config.MetadataPolicy;
 import com.hazelcast.config.NearCacheConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.test.HazelcastParallelClassRunner;
@@ -50,6 +54,28 @@ public class EntryCostEstimatorTest
         SizeEstimatorTestMapBuilder<Long, Long> testMapBuilder = new SizeEstimatorTestMapBuilder<Long, Long>(factory);
         testMapBuilder.withNodeCount(1).withBackupCount(0).build(getConfig());
         assertEquals(0, testMapBuilder.totalHeapCost());
+    }
+
+    @Test
+    public void testMinimalData() {
+        String mapName = "test-minimal";
+
+        MapConfig mapConfig = new MapConfig();
+        mapConfig.setName(mapName);
+        mapConfig.setEvictionPolicy(EvictionPolicy.NONE);
+        mapConfig.setStatisticsEnabled(false);
+        mapConfig.setInMemoryFormat(InMemoryFormat.BINARY);
+        mapConfig.setCacheDeserializedValues(CacheDeserializedValues.NEVER);
+        mapConfig.getHotRestartConfig().setEnabled(false);
+        mapConfig.setMetadataPolicy(MetadataPolicy.OFF);
+
+        Config config = getConfig().addMapConfig(mapConfig);
+        HazelcastInstance node = factory.newHazelcastInstance(config);
+
+        IMap<Integer, Long> map = node.getMap(mapName);
+        map.put(0, 10L);
+
+        assertEquals(100, map.getLocalMapStats().getHeapCost());
     }
 
     @Test

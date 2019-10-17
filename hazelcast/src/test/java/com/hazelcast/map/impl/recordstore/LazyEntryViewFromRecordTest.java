@@ -18,12 +18,13 @@ package com.hazelcast.map.impl.recordstore;
 
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.EntryView;
-import com.hazelcast.partition.PartitioningStrategy;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.record.DataRecordFactory;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.partition.PartitioningStrategy;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
@@ -60,10 +61,11 @@ public class LazyEntryViewFromRecordTest {
      */
     private EntryView createDefaultEntryView() {
         PartitioningStrategy mockPartitioningStrategy = mock(PartitioningStrategy.class);
+        MapContainer mapContainer = mock(MapContainer.class);
         MapConfig mapConfig = new MapConfig();
         SerializationService serializationService = new DefaultSerializationServiceBuilder().build();
         DataRecordFactory dataRecordFactory
-                = new DataRecordFactory(mapConfig, serializationService, mockPartitioningStrategy);
+                = new DataRecordFactory(mapContainer, serializationService, mockPartitioningStrategy);
         recordInstance = dataRecordFactory.newRecord(serializationService.toData(key), value);
         return new LazyEntryViewFromRecord(recordInstance, serializationService);
     }

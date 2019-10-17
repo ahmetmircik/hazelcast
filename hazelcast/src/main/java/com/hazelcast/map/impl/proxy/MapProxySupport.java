@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.proxy;
 
 import com.hazelcast.aggregation.Aggregator;
+import com.hazelcast.cluster.Address;
 import com.hazelcast.config.EntryListenerConfig;
 import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.ListenerConfig;
@@ -69,7 +70,6 @@ import com.hazelcast.map.listener.MapListener;
 import com.hazelcast.map.listener.MapPartitionLostListener;
 import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.monitor.impl.LocalMapStatsImpl;
-import com.hazelcast.cluster.Address;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.PartitioningStrategy;
 import com.hazelcast.projection.Projection;
@@ -124,7 +124,6 @@ import static com.hazelcast.internal.util.SetUtil.createHashSet;
 import static com.hazelcast.internal.util.ThreadUtil.getThreadId;
 import static com.hazelcast.internal.util.TimeUtil.timeInMsOrOneIfResultIsZero;
 import static com.hazelcast.map.impl.EntryRemovingProcessor.ENTRY_REMOVING_PROCESSOR;
-import static com.hazelcast.map.impl.LocalMapStatsProvider.EMPTY_LOCAL_MAP_STATS;
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
 import static com.hazelcast.map.impl.query.Target.createPartitionTarget;
 import static com.hazelcast.spi.impl.InternalCompletableFuture.newCompletedFuture;
@@ -1331,9 +1330,9 @@ abstract class MapProxySupport<K, V>
 
     @Override
     public LocalMapStats getLocalMapStats() {
-        if (!mapConfig.isStatisticsEnabled()) {
-            return EMPTY_LOCAL_MAP_STATS;
-        }
+//        if (!mapConfig.isStatisticsEnabled()) {
+//            return EMPTY_LOCAL_MAP_STATS;
+//        }
         return mapServiceContext.getLocalMapStatsProvider().createLocalMapStats(name);
     }
 

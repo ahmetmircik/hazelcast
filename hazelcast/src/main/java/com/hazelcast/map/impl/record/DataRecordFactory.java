@@ -18,37 +18,59 @@ package com.hazelcast.map.impl.record;
 
 import com.hazelcast.config.CacheDeserializedValues;
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.partition.PartitioningStrategy;
-import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.config.MetadataPolicy;
 import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.map.impl.MapContainer;
+import com.hazelcast.map.impl.eviction.Evictor;
+import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.partition.PartitioningStrategy;
 
 public class DataRecordFactory implements RecordFactory<Data> {
 
+    private final MapContainer mapContainer;
     private final SerializationService serializationService;
     private final PartitioningStrategy partitionStrategy;
-    private final CacheDeserializedValues cacheDeserializedValues;
-    private final boolean statisticsEnabled;
 
-    public DataRecordFactory(MapConfig config, SerializationService serializationService,
+    public DataRecordFactory(MapContainer mapContainer, SerializationService serializationService,
                              PartitioningStrategy partitionStrategy) {
+        this.mapContainer = mapContainer;
         this.serializationService = serializationService;
         this.partitionStrategy = partitionStrategy;
-        this.statisticsEnabled = config.isStatisticsEnabled();
-        this.cacheDeserializedValues = config.getCacheDeserializedValues();
+
     }
 
     @Override
     public Record<Data> newRecord(Data key, Object value) {
         assert value != null : "value can not be null";
 
+        MapConfig mapConfig = mapContainer.getMapConfig();
+        boolean statisticsEnabled = mapConfig.isStatisticsEnabled();
+        CacheDeserializedValues cacheDeserializedValues = mapConfig.getCacheDeserializedValues();
+
+        // TODO maxIdle, ttl?
+        boolean minimal = !statisticsEnabled
+                && !mapConfig.getHotRestartConfig().isEnabled()
+                && mapContainer.getEvictor() == Evictor.NULL_EVICTOR
+                && mapConfig.getMetadataPolicy() != MetadataPolicy.CREATE_ON_UPDATE;
+
         final Data valueData = serializationService.toData(value, partitionStrategy);
         Record<Data> record;
         switch (cacheDeserializedValues) {
             case NEVER:
-                record = statisticsEnabled ? new DataRecordWithStats(valueData) : new DataRecord(valueData);
+                if (minimal) {
+                    record = new MinimalDataRecord();
+                    record.setKey(key);
+                    record.setValue(valueData);
+                } else {
+                    record = statisticsEnabled
+                            ? new DataRecordWithStats(valueData)
+                            : new DataRecord(valueData);
+                }
                 break;
             default:
-                record = statisticsEnabled ? new CachedDataRecordWithStats(valueData) : new CachedDataRecord(valueData);
+                record = statisticsEnabled
+                        ? new CachedDataRecordWithStats(valueData)
+                        : new CachedDataRecord(valueData);
         }
         record.setKey(key);
         return record;

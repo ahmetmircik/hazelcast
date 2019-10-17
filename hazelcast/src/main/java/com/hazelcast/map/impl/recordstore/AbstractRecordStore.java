@@ -116,13 +116,13 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     @Override
-    public Record createRecord(Data key, Object value, long ttlMillis, long maxIdle, long now) {
+    public Record createRecord(Data key, Object value, long ttlMillis, long maxIdle, long nowInMillis) {
         Record record = recordFactory.newRecord(key, value);
-        record.setCreationTime(now);
-        record.setLastUpdateTime(now);
+        record.setCreationTime(nowInMillis);
+        record.setLastUpdateTime(nowInMillis);
 
         setExpirationTimes(ttlMillis, maxIdle, record, mapContainer.getMapConfig(), true);
-        updateStatsOnPut(false, now);
+        updateStatsOnPut(false, nowInMillis);
         return record;
     }
 

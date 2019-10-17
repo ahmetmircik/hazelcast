@@ -18,7 +18,6 @@ package com.hazelcast.query.impl;
 
 import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.IndexType;
-import com.hazelcast.config.MapConfig;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
 import com.hazelcast.map.impl.record.DataRecordFactory;
@@ -89,7 +88,8 @@ public class IndexTest {
 
     private PartitioningStrategy partitionStrategy = new DefaultPartitioningStrategy();
 
-    final DataRecordFactory recordFactory = new DataRecordFactory(new MapConfig(), ss, partitionStrategy);
+    final DataRecordFactory recordFactory = null;
+            //= new DataRecordFactory(new MapConfig(), ss, partitionStrategy);
 
     @Test
     public void testBasics() {
