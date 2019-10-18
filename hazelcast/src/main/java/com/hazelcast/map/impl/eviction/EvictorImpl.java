@@ -52,13 +52,16 @@ public class EvictorImpl implements Evictor {
     public void evict(RecordStore recordStore, Data excludedKey) {
         assertRunningOnPartitionThread();
 
-        for (int i = 0; i < batchSize; i++) {
-            EntryView evictableEntry = selectEvictableEntry(recordStore, excludedKey);
-            if (evictableEntry == null) {
-                return;
+        do {
+            for (int i = 0; i < batchSize; i++) {
+                EntryView evictableEntry = selectEvictableEntry(recordStore, excludedKey);
+                if (evictableEntry == null) {
+                    return;
+                }
+                evictEntry(recordStore, evictableEntry);
             }
-            evictEntry(recordStore, evictableEntry);
-        }
+        } while (recordStore.shouldEvict());
+
     }
 
     private EntryView selectEvictableEntry(RecordStore recordStore, Data excludedKey) {
