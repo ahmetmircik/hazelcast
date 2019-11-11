@@ -32,7 +32,6 @@ import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.spi.properties.GroupProperty;
-import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.SlowTest;
@@ -381,7 +380,7 @@ public class ClientMapStoreTest extends HazelcastTestSupport {
                 + "    <map name=\"" + mapNameWithStore + "\">\n"
                 + "        <map-store enabled=\"true\">\n"
                 + "            <class-name>com.will.cause.problem.if.used</class-name>\n"
-                + "            <write-delay-seconds>5</write-delay-seconds>\n"
+                + "            <write-delay-seconds>1</write-delay-seconds>\n"
                 + "        </map-store>\n"
                 + "    </map>\n"
                 + "\n"
@@ -390,11 +389,11 @@ public class ClientMapStoreTest extends HazelcastTestSupport {
                 + "        <backup-count>1</backup-count>\n"
                 + "        <async-backup-count>0</async-backup-count>\n"
                 + "        <max-idle-seconds>0</max-idle-seconds>\n"
-                + "        <eviction size=\"10\" max-size policy=\"PER_NODE\" eviction-policy=\"LRU\" />\n"
+                + "        <eviction size=\"10\" max-size-policy=\"PER_NODE\" eviction-policy=\"LRU\" />\n"
                 + "        <merge-policy>PassThroughMergePolicy</merge-policy>\n"
                 + "        <map-store enabled=\"true\">\n"
                 + "            <class-name>com.hazelcast.client.map.helpers.AMapStore</class-name>\n"
-                + "            <write-delay-seconds>5</write-delay-seconds>\n"
+                + "            <write-delay-seconds>1</write-delay-seconds>\n"
                 + "        </map-store>\n"
                 + "    </map>\n"
                 + "\n"
@@ -409,12 +408,7 @@ public class ClientMapStoreTest extends HazelcastTestSupport {
 
         final AMapStore store = getMapStoreInstance(hz, mapNameWithStoreAndSize + "1");
 
-        assertTrueEventually(new AssertTask() {
-            @Override
-            public void run() {
-                assertEquals(1, store.store.get(1));
-            }
-        });
+        assertTrueEventually(() -> assertEquals(1, store.store.get(1)));
     }
 
     private Config buildConfig(String xml) {
