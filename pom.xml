@@ -288,7 +288,7 @@
                         com.hazelcast.test.annotation.NightlyTest
                     </excludedGroups>
                     <systemPropertyVariables>
-                        <profileId>${project.activeProfiles[0].id}</profileId>
+                        <profileId>SHARED</profileId>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -474,9 +474,6 @@
 
         <profile>
             <id>LOCAL</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <properties>
                 <vmHeapSettings>-Xms128m -Xmx1G -XX:MaxPermSize=128M</vmHeapSettings>
             </properties>
