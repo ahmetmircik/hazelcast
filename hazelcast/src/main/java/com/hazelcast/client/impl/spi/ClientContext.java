@@ -30,11 +30,11 @@ import com.hazelcast.internal.nearcache.NearCacheManager;
 import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationMetaDataFetcher;
 import com.hazelcast.internal.nearcache.impl.invalidation.MinimalPartitionService;
 import com.hazelcast.internal.nearcache.impl.invalidation.RepairingTask;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.impl.MapService;
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.spi.properties.HazelcastProperties;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,10 +87,17 @@ public class ClientContext {
         this.queryCacheContext = client.getQueryCacheContext();
         this.clientExtension = client.getClientExtension();
 
+        registerTasksTo(client);
+    }
+
+    private void registerTasksTo(HazelcastClientInstanceImpl client) {
         client.getClientStatisticsService().watchNearCacheManagers(nearCacheManagers);
         client.disposeOnClusterChange(() -> {
             //reset near caches, clears all near cache data
             nearCacheManagers.values().forEach(NearCacheManager::clearAllNearCaches);
+        });
+        client.disposeOnClientShutdown(() -> {
+            nearCacheManagers.values().forEach(NearCacheManager::destroyAllNearCaches);
         });
     }
 
