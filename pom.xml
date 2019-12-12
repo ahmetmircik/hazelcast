@@ -287,6 +287,9 @@
                         com.hazelcast.test.annotation.SlowTest,
                         com.hazelcast.test.annotation.NightlyTest
                     </excludedGroups>
+                    <systemPropertyVariables>
+                        <profileId>${project.activeProfiles[0].id}</profileId>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 
@@ -424,6 +427,7 @@
                                     </excludedGroups>
                                     <systemPropertyVariables>
                                         <multipleJVM>true</multipleJVM>
+                                        <profileId>parallelTest</profileId>
                                     </systemPropertyVariables>
                                 </configuration>
                             </execution>
@@ -503,6 +507,9 @@
                                 com.hazelcast.test.annotation.SlowTest,
                                 com.hazelcast.test.annotation.NightlyTest
                             </excludedGroups>
+                            <systemPropertyVariables>
+                                <profileId>LOCAL</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
 
@@ -590,6 +597,9 @@
                             <includes>
                                 <include>**/YourTestFileHear.java</include>
                             </includes>
+                            <systemPropertyVariables>
+                                <profileId>test-coverage-Local</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>
@@ -667,6 +677,9 @@
                             <excludedGroups>
                                 com.hazelcast.test.annotation.NightlyTest
                             </excludedGroups>
+                            <systemPropertyVariables>
+                                <profileId>test-coverage</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
 
@@ -910,6 +923,9 @@
                                 com.hazelcast.test.annotation.NightlyTest,
                                 com.hazelcast.test.annotation.SlowTest
                             </groups>
+                            <systemPropertyVariables>
+                                <profileId>nightly-build</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -981,6 +997,9 @@
                                 com.hazelcast.test.annotation.SlowTest,
                                 com.hazelcast.test.annotation.NightlyTest
                             </groups>
+                            <systemPropertyVariables>
+                                <profileId>all-tests</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -1105,6 +1124,9 @@
                                 com.hazelcast.test.annotation.NightlyTest,
                                 com.hazelcast.test.annotation.SerializationSamplesExcluded
                             </excludedGroups>
+                            <systemPropertyVariables>
+                                <profileId>generate-compatibility-samples</profileId>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>
