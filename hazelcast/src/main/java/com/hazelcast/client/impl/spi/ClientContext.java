@@ -91,9 +91,7 @@ public class ClientContext {
     }
 
     private void registerTasksTo(HazelcastClientInstanceImpl client) {
-        client.getClientStatisticsService().watchNearCacheManagers(nearCacheManagers);
         client.disposeOnClusterChange(() -> {
-            //reset near caches, clears all near cache data
             nearCacheManagers.values().forEach(NearCacheManager::clearAllNearCaches);
         });
         client.disposeOnClientShutdown(() -> {
@@ -108,6 +106,10 @@ public class ClientContext {
     public NearCacheManager getNearCacheManager(String serviceName) {
         return getOrPutIfAbsent(nearCacheManagers, serviceName,
                 anyArg -> clientExtension.createNearCacheManager());
+    }
+
+    public ConcurrentMap<String, NearCacheManager> getNearCacheManagers() {
+        return nearCacheManagers;
     }
 
     public RepairingTask getRepairingTask(String serviceName) {
