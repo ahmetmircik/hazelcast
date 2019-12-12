@@ -119,7 +119,7 @@
         <atomikos.version>3.9.3</atomikos.version>
         <!-- Additional JVM system arguments -->
         <extraVmArgs/>
-        <vmHeapSettings>-Xms512m -Xmx2G -XX:MaxPermSize=1024M</vmHeapSettings>
+        <vmHeapSettings>-Xms10G -Xmx10G -XX:MaxPermSize=1024M</vmHeapSettings>
         <!-- Java 9+ module system args to be appended during surefire/failsafe executions. -->
         <javaModuleArgs/>
     </properties>
