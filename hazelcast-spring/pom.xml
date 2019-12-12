@@ -159,6 +159,9 @@
                     <scope>test</scope>
                 </dependency>
             </dependencies>
+            <properties>
+                <profileId>hibernate-5</profileId>
+            </properties>
         </profile>
     </profiles>
 
