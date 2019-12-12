@@ -339,7 +339,7 @@ public abstract class AbstractNearCachePreloaderTest<NK, NV> extends HazelcastTe
 
     @Test(timeout = 10 * MINUTE)
     public void testCreateAndDestroyDataStructure_withSameName() {
-        String name = randomMapName("createDestroyNearCache");
+        String name = randomMapName("createDestroyNearCache-" + getClass());
         nearCacheConfig.setName(name);
 
         NearCacheTestContext<Object, String, NK, NV> context = createContext(true);
@@ -354,7 +354,7 @@ public abstract class AbstractNearCachePreloaderTest<NK, NV> extends HazelcastTe
 
     @Test(timeout = 10 * MINUTE)
     public void testCreateAndDestroyDataStructure_withDifferentNames() {
-        String name = randomMapName("createDestroyNearCache");
+        String name = randomMapName("createDestroyNearCache-" + getClass());
         nearCacheConfig.setName(name + "*");
 
         NearCacheTestContext<Object, String, NK, NV> context = createContext(true);
