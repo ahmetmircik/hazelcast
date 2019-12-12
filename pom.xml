@@ -474,6 +474,9 @@
 
         <profile>
             <id>LOCAL</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
             <properties>
                 <vmHeapSettings>-Xms128m -Xmx1G -XX:MaxPermSize=128M</vmHeapSettings>
             </properties>

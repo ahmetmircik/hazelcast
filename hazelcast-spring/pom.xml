@@ -141,9 +141,6 @@
     <profiles>
         <profile>
             <id>hibernate-5</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
             <dependencies>
                 <!--TEST DEPENDENCIES-->
                 <dependency>
