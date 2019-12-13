@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.OperationService;
 
@@ -46,12 +47,24 @@ interface ForcedEviction {
             new MultipleRecordStoreForcedEviction()};
 
     static void runWithForcedEvictionStrategies(MapOperation operation) {
+        NativeOutOfMemoryError error = null;
+
+        // run each strategy for each forced eviction percentage
         for (double evictionPercentage : EVICTION_PERCENTAGES) {
             for (ForcedEviction evictionStrategy : EVICTION_STRATEGIES) {
-                if (evictionStrategy.forceEvictAndRun(operation, evictionPercentage)) {
+                try {
+                    evictionStrategy.forceEvictAndRun(evictionPercentage, operation);
                     return;
+                } catch (NativeOutOfMemoryError e) {
+                    error = e;
                 }
             }
+        }
+
+        // after run of force evictions
+        // if we still get error, throw it.
+        if (error != null) {
+            throw error;
         }
     }
 
@@ -59,14 +72,11 @@ interface ForcedEviction {
      * First does forced eviction by deleting a percentage
      * of entries then tries to run provided map operation.
      *
-     * @param mapOperation       the map operation which got Native OOME during its run
      * @param evictionPercentage percentage of the entries to evict from record store.
-     * @return {@code true} if run is succeeded after forced eviction,
-     * otherwise return {@code false}
+     * @param mapOperation       the map operation which got Native OOME during its run
      * @throws com.hazelcast.memory.NativeOutOfMemoryError
      */
-    boolean forceEvictAndRun(MapOperation mapOperation,
-                             double evictionPercentage);
+    void forceEvictAndRun(double evictionPercentage, MapOperation mapOperation);
 
     /**
      * @return {@code true} if supplied record store is valid

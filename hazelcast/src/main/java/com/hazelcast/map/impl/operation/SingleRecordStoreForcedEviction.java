@@ -19,9 +19,7 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.memory.NativeOutOfMemoryError;
 
-import static com.hazelcast.internal.util.EmptyStatement.ignore;
 import static java.lang.String.format;
 
 /**
@@ -34,12 +32,12 @@ import static java.lang.String.format;
 class SingleRecordStoreForcedEviction implements ForcedEviction {
 
     @Override
-    public boolean forceEvictAndRun(MapOperation mapOperation, double evictionPercentage) {
+    public void forceEvictAndRun(double evictionPercentage, MapOperation mapOperation) {
         assert evictionPercentage > 0 && evictionPercentage <= 1;
 
         RecordStore recordStore = mapOperation.recordStore;
         if (!ForcedEviction.isValid(recordStore)) {
-            return false;
+            return;
         }
 
         ILogger logger = mapOperation.logger();
@@ -55,15 +53,9 @@ class SingleRecordStoreForcedEviction implements ForcedEviction {
                 }
             }
 
-            try {
-                Evictor evictor = recordStore.getMapContainer().getEvictor();
-                evictor.forceEvictByPercentage(recordStore, evictionPercentage);
-                mapOperation.runInternal();
-                return true;
-            } catch (NativeOutOfMemoryError e) {
-                ignore(e);
-            }
+            Evictor evictor = recordStore.getMapContainer().getEvictor();
+            evictor.forceEvictByPercentage(recordStore, evictionPercentage);
+            mapOperation.runInternal();
         }
-        return false;
     }
 }

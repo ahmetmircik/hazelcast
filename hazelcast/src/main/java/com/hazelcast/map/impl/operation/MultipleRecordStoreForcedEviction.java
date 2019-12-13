@@ -20,11 +20,9 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.memory.NativeOutOfMemoryError;
 
 import java.util.Collection;
 
-import static com.hazelcast.internal.util.EmptyStatement.ignore;
 import static java.lang.String.format;
 
 /**
@@ -38,7 +36,7 @@ import static java.lang.String.format;
 class MultipleRecordStoreForcedEviction implements ForcedEviction {
 
     @Override
-    public boolean forceEvictAndRun(MapOperation mapOperation, double evictionPercentage) {
+    public void forceEvictAndRun(double evictionPercentage, MapOperation mapOperation) {
         assert evictionPercentage > 0 && evictionPercentage <= 1;
 
         int partitionCount = numberOfPartitions(mapOperation);
@@ -48,40 +46,28 @@ class MultipleRecordStoreForcedEviction implements ForcedEviction {
 
         int evictionRetryTimes = retryCount(evictionPercentage);
         for (int i = 0; i < evictionRetryTimes; i++) {
-            try {
-                for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                    if ((partitionId % threadCount) != mod) {
-                        continue;
-                    }
-
-                    Collection<RecordStore> recordStores = partitionMaps(mapOperation, partitionId).values();
-                    for (RecordStore recordStore : recordStores) {
-                        // used for logging
-                        int sizeBeforeEviction = recordStore.size();
-
-                        MapContainer mapContainer = recordStore.getMapContainer();
-                        Evictor evictor = mapContainer.getEvictor();
-                        evictor.forceEvictByPercentage(recordStore, evictionPercentage);
-
-                        if (logger.isFineEnabled()) {
-                            logForcedEviction(logger, mapOperation, recordStore,
-                                    evictionPercentage, (i + 1), sizeBeforeEviction);
-                        }
-                    }
+            for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                if ((partitionId % threadCount) != mod) {
+                    continue;
                 }
-                mapOperation.runInternal();
-                return true;
-            } catch (NativeOutOfMemoryError e) {
-                // see #retryCount javaDoc
-                if (evictionPercentage == 1D) {
-                    throw e;
-                } else {
-                    ignore(e);
+
+                Collection<RecordStore> recordStores = partitionMaps(mapOperation, partitionId).values();
+                for (RecordStore recordStore : recordStores) {
+                    // used for logging
+                    int sizeBeforeEviction = recordStore.size();
+
+                    MapContainer mapContainer = recordStore.getMapContainer();
+                    Evictor evictor = mapContainer.getEvictor();
+                    evictor.forceEvictByPercentage(recordStore, evictionPercentage);
+
+                    if (logger.isFineEnabled()) {
+                        logForcedEviction(logger, mapOperation, recordStore,
+                                evictionPercentage, (i + 1), sizeBeforeEviction);
+                    }
                 }
             }
+            mapOperation.runInternal();
         }
-
-        return false;
     }
 
     private static void logForcedEviction(ILogger logger, MapOperation mapOperation,
