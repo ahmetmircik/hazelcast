@@ -17,9 +17,9 @@
 package com.hazelcast.wan.impl;
 
 import com.hazelcast.config.AbstractWanPublisherConfig;
+import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.config.WanBatchPublisherConfig;
 import com.hazelcast.config.WanCustomPublisherConfig;
-import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.config.WanReplicationConfig;
 import com.hazelcast.instance.impl.Node;
 import com.hazelcast.internal.management.events.AddWanConfigIgnoredEvent;

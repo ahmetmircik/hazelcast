@@ -79,6 +79,8 @@ public class WanEventContainerReplicationOperation extends Operation implements 
         // then ingest replication data
         forAllReplicationContainers((publisher, eventContainer) -> {
             if (publisher instanceof WanMigrationAwarePublisher) {
+                getNodeEngine().getLogger(getClass()).severe(getNodeEngine().getLocalMember().getAddress()
+                        + ", eventContainers size=" + eventContainers.size());
                 ((WanMigrationAwarePublisher) publisher)
                         .processEventContainerReplicationData(partitionId, eventContainer);
             }
