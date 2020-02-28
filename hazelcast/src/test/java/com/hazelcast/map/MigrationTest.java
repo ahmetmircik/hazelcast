@@ -16,10 +16,11 @@
 
 package com.hazelcast.map;
 
+import com.hazelcast.cluster.Address;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.cluster.Address;
+import com.hazelcast.spi.properties.ClusterProperty;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
@@ -49,6 +50,7 @@ public class MigrationTest extends HazelcastTestSupport {
         int size = 1000;
         String name = randomString();
         Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "2");
         TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(3);
         HazelcastInstance instance1 = nodeFactory.newHazelcastInstance(config);
 

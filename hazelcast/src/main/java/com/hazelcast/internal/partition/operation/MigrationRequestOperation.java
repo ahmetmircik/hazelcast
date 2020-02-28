@@ -27,12 +27,14 @@ import com.hazelcast.internal.partition.PartitionMigrationEvent;
 import com.hazelcast.internal.partition.PartitionReplica;
 import com.hazelcast.internal.partition.PartitionReplicaVersionManager;
 import com.hazelcast.internal.partition.PartitionReplicationEvent;
+import com.hazelcast.internal.partition.RemainingPartitionReplicationEvent;
 import com.hazelcast.internal.partition.ReplicaFragmentMigrationState;
 import com.hazelcast.internal.partition.impl.InternalPartitionServiceImpl;
 import com.hazelcast.internal.partition.impl.MigrationInterceptor.MigrationParticipant;
 import com.hazelcast.internal.partition.impl.MigrationManager;
 import com.hazelcast.internal.partition.impl.PartitionDataSerializerHook;
 import com.hazelcast.internal.services.ServiceNamespace;
+import com.hazelcast.internal.util.CollectionUtil;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -78,7 +80,7 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
     }
 
     public MigrationRequestOperation(MigrationInfo migrationInfo, List<MigrationInfo> completedMigrations,
-            int partitionStateVersion, boolean fragmentedMigrationEnabled) {
+                                     int partitionStateVersion, boolean fragmentedMigrationEnabled) {
         super(migrationInfo, completedMigrations, partitionStateVersion);
         this.fragmentedMigrationEnabled = fragmentedMigrationEnabled;
     }
@@ -174,10 +176,18 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
             ReplicaFragmentMigrationState migrationState = createNextReplicaFragmentMigrationState();
             if (migrationState != null) {
                 invokeMigrationOperation(migrationState, false);
-            } else {
-                getLogger().finest("All migration fragments done for " + migrationInfo);
-                completeMigration(true);
+                return;
             }
+
+            // TODO now retry operations during migration
+            ReplicaFragmentMigrationState remainingState = createChangesDuringReplicaMigrationState();
+            if (remainingState != null) {
+                invokeMigrationOperation(remainingState, false);
+                return;
+            }
+
+            getLogger().finest("All migration fragments done for " + migrationInfo);
+            completeMigration(true);
         } catch (Throwable e) {
             logThrowable(e);
             completeMigration(false);
@@ -198,19 +208,24 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
             return null;
         }
 
-        if (!fragmentedMigrationEnabled) {
+        if (fragmentedMigrationEnabled) {
+            ServiceNamespace namespace = namespacesContext.next();
+            if (namespace.equals(NonFragmentedServiceNamespace.INSTANCE)) {
+                return createNonFragmentedReplicaFragmentMigrationState();
+            } else {
+                return createReplicaFragmentMigrationStateFor(namespace);
+            }
+        } else {
             // Drain the iterator completely.
             while (namespacesContext.hasNext()) {
                 namespacesContext.next();
             }
             return createAllReplicaFragmentsMigrationState();
         }
+    }
 
-        ServiceNamespace namespace = namespacesContext.next();
-        if (namespace.equals(NonFragmentedServiceNamespace.INSTANCE)) {
-            return createNonFragmentedReplicaFragmentMigrationState();
-        }
-        return createReplicaFragmentMigrationStateFor(namespace);
+    private ReplicaFragmentMigrationState createChangesDuringReplicaMigrationState() {
+        return createAllChangesDuringReplicaMigrationState();
     }
 
     private ReplicaFragmentMigrationState createNonFragmentedReplicaFragmentMigrationState() {
@@ -232,6 +247,15 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
     private ReplicaFragmentMigrationState createAllReplicaFragmentsMigrationState() {
         PartitionReplicationEvent event = getPartitionReplicationEvent();
         Collection<Operation> operations = createAllReplicationOperations(event);
+        return createReplicaFragmentMigrationState(namespacesContext.allNamespaces, operations);
+    }
+
+    private ReplicaFragmentMigrationState createAllChangesDuringReplicaMigrationState() {
+        PartitionReplicationEvent event = new RemainingPartitionReplicationEvent(getPartitionReplicationEvent());
+        Collection<Operation> operations = createChangesReplicationOperations(event);
+        if (CollectionUtil.isEmpty(operations)) {
+            return null;
+        }
         return createReplicaFragmentMigrationState(namespacesContext.allNamespaces, operations);
     }
 
@@ -345,7 +369,7 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
         final Collection<ServiceNamespace> allNamespaces = new HashSet<>();
         final Map<ServiceNamespace, Collection<String>> namespaceToServices = new HashMap<>();
 
-        final Iterator<ServiceNamespace> namespaceIterator;
+        Iterator<ServiceNamespace> namespaceIterator;
 
         ServiceNamespacesContext(NodeEngineImpl nodeEngine, PartitionReplicationEvent event) {
             Collection<ServiceInfo> services = nodeEngine.getServiceInfos(FragmentedMigrationAwareService.class);
@@ -390,6 +414,13 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
 
         Collection<String> getServiceNames(ServiceNamespace ns) {
             return namespaceToServices.get(ns);
+        }
+
+        @Override
+        public String toString() {
+            return "ServiceNamespacesContext{" +
+                    "allNamespaces=" + allNamespaces +
+                    '}';
         }
     }
 }

@@ -36,6 +36,11 @@ public class PartitionReplicationEvent {
         this.replicaIndex = replicaIndex;
     }
 
+    public PartitionReplicationEvent(PartitionReplicationEvent event) {
+        this.partitionId = event.getPartitionId();
+        this.replicaIndex = event.getReplicaIndex();
+    }
+
     /**
      * Gets the ID of the partition.
      *

@@ -57,6 +57,7 @@ import com.hazelcast.spi.impl.operationservice.Notifier;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.OperationResponseHandler;
+import com.hazelcast.spi.impl.operationservice.Operations;
 import com.hazelcast.spi.impl.operationservice.ReadonlyOperation;
 import com.hazelcast.spi.impl.operationservice.impl.operations.Backup;
 import com.hazelcast.spi.impl.operationservice.impl.responses.CallTimeoutResponse;
@@ -154,15 +155,15 @@ class OperationRunnerImpl extends OperationRunner implements StaticMetricsProvid
     public void provideStaticMetrics(MetricsRegistry registry) {
         if (partitionId >= 0) {
             MetricDescriptor descriptor = registry.newMetricDescriptor()
-                                                  .withPrefix(OPERATION_PREFIX_PARTITION)
-                                                  .withDiscriminator(OPERATION_DISCRIMINATOR_PARTITIONID,
-                                                          String.valueOf(partitionId));
+                    .withPrefix(OPERATION_PREFIX_PARTITION)
+                    .withDiscriminator(OPERATION_DISCRIMINATOR_PARTITIONID,
+                            String.valueOf(partitionId));
             registry.registerStaticMetrics(descriptor, this);
         } else if (partitionId == -1) {
             MetricDescriptor descriptor = registry.newMetricDescriptor()
-                                                  .withPrefix(OPERATION_PREFIX_GENERIC)
-                                                  .withDiscriminator(OPERATION_DISCRIMINATOR_GENERICID,
-                                                          String.valueOf(genericId));
+                    .withPrefix(OPERATION_PREFIX_GENERIC)
+                    .withDiscriminator(OPERATION_DISCRIMINATOR_GENERICID,
+                            String.valueOf(genericId));
             registry.registerStaticMetrics(descriptor, this);
         } else {
             registry.registerStaticMetrics(this, OPERATION_PREFIX_ADHOC);
@@ -296,7 +297,7 @@ class OperationRunnerImpl extends OperationRunner implements StaticMetricsProvid
      *
      * @param op the operation for which the minimum cluster size property must satisfy
      * @throws SplitBrainProtectionException if the operation requires a split brain protection and
-     * the the minimum cluster size property is not satisfied
+     *                                       the the minimum cluster size property is not satisfied
      */
     private void ensureNoSplitBrain(Operation op) {
         SplitBrainProtectionServiceImpl splitBrainProtectionService =
@@ -359,7 +360,9 @@ class OperationRunnerImpl extends OperationRunner implements StaticMetricsProvid
     }
 
     private boolean isAllowedToRetryDuringMigration(Operation op) {
-        return (op instanceof ReadonlyOperation && staleReadOnMigrationEnabled) || isMigrationOperation(op);
+        return (op instanceof ReadonlyOperation && staleReadOnMigrationEnabled)
+                || Operations.isUpdateOnMigrationOperation(op,internalPartition.isMigrating())
+                || isMigrationOperation(op);
     }
 
     private void handleOperationError(Operation operation, Throwable e) {

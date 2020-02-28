@@ -21,15 +21,19 @@ import com.hazelcast.internal.partition.FragmentedMigrationAwareService;
 import com.hazelcast.internal.partition.MigrationEndpoint;
 import com.hazelcast.internal.partition.PartitionMigrationEvent;
 import com.hazelcast.internal.partition.PartitionReplicationEvent;
+import com.hazelcast.internal.partition.RemainingPartitionReplicationEvent;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespace;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.impl.operation.MapRemainingReplicationOperation;
 import com.hazelcast.map.impl.operation.MapReplicationOperation;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStoreAdapter;
 import com.hazelcast.query.impl.Index;
@@ -39,6 +43,8 @@ import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
 
 import static com.hazelcast.internal.partition.MigrationEndpoint.DESTINATION;
@@ -115,6 +121,27 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
 
     @Override
     public Operation prepareReplicationOperation(PartitionReplicationEvent event) {
+        int partitionId = event.getPartitionId();
+
+        if (event instanceof RemainingPartitionReplicationEvent) {
+            int count = 0;
+            ConcurrentMap<String, RecordStore> maps = containers[partitionId].getMaps();
+            for (RecordStore recordStore : maps.values()) {
+                Map<Data, Record> state = ((DefaultRecordStore) recordStore)
+                        .getMigrationMutationObserver().getState();
+                count += state.size();
+            }
+
+            if (count == 0) {
+                return null;
+            }
+
+            return new MapRemainingReplicationOperation(containers[partitionId],
+                    partitionId, event.getReplicaIndex())
+                    .setService(mapServiceContext.getService())
+                    .setNodeEngine(mapServiceContext.getNodeEngine());
+        }
+
         return prepareReplicationOperation(event,
                 containers[event.getPartitionId()].getAllNamespaces(event.getReplicaIndex()));
     }

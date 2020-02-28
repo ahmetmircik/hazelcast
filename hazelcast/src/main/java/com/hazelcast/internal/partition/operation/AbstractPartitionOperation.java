@@ -16,15 +16,16 @@
 
 package com.hazelcast.internal.partition.operation;
 
-import com.hazelcast.internal.partition.NonFragmentedServiceNamespace;
-import com.hazelcast.internal.partition.impl.PartitionDataSerializerHook;
-import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.internal.partition.FragmentedMigrationAwareService;
 import com.hazelcast.internal.partition.MigrationAwareService;
+import com.hazelcast.internal.partition.NonFragmentedServiceNamespace;
 import com.hazelcast.internal.partition.PartitionReplicationEvent;
-import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.internal.partition.impl.PartitionDataSerializerHook;
 import com.hazelcast.internal.services.ServiceNamespace;
+import com.hazelcast.map.impl.ChangeableDuringMigration;
+import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.servicemanager.ServiceInfo;
 
 import java.util.ArrayList;
@@ -69,8 +70,25 @@ abstract class AbstractPartitionOperation extends Operation implements Identifie
         return operations;
     }
 
-    final Collection<Operation> createFragmentReplicationOperations(PartitionReplicationEvent event, ServiceNamespace ns,
-            Collection<String> serviceNames) {
+    public Collection<Operation> createChangesReplicationOperations(PartitionReplicationEvent event) {
+        Collection<Operation> operations = new ArrayList<>();
+        NodeEngineImpl nodeEngine = (NodeEngineImpl) getNodeEngine();
+        Collection<ServiceInfo> services = nodeEngine.getServiceInfos(ChangeableDuringMigration.class);
+
+        for (ServiceInfo serviceInfo : services) {
+            MigrationAwareService service = serviceInfo.getService();
+            Operation op = service.prepareReplicationOperation(event);
+            if (op != null) {
+                op.setServiceName(serviceInfo.getName());
+                operations.add(op);
+            }
+        }
+        return operations;
+    }
+
+    final Collection<Operation> createFragmentReplicationOperations(PartitionReplicationEvent event,
+                                                                    ServiceNamespace ns,
+                                                                    Collection<String> serviceNames) {
         assert !(ns instanceof NonFragmentedServiceNamespace) : ns + " should be used only for non-fragmented services!";
 
         Collection<Operation> operations = emptySet();

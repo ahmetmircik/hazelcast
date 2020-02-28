@@ -24,6 +24,7 @@ import com.hazelcast.internal.locksupport.LockStore;
 import com.hazelcast.internal.locksupport.LockSupportService;
 import com.hazelcast.internal.monitor.LocalRecordStoreStats;
 import com.hazelcast.internal.monitor.impl.LocalRecordStoreStatsImpl;
+import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.Clock;
@@ -68,6 +69,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
 
     protected Storage<Data, Record> storage;
     protected IndexingMutationObserver<Record> indexingObserver;
+    protected MigrationMutationObserver migrationMutationObserver;
 
     protected AbstractRecordStore(MapContainer mapContainer, int partitionId) {
         this.name = mapContainer.getName();
@@ -108,6 +110,11 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         // Add observer for indexing
         indexingObserver = new IndexingMutationObserver<>(this, serializationService);
         mutationObserver.add(indexingObserver);
+
+        // Add observer for migration to hold changes during migration
+        InternalPartitionService partitionService = (InternalPartitionService) mapServiceContext.getNodeEngine().getPartitionService();
+        migrationMutationObserver = new MigrationMutationObserver(partitionService, partitionId);
+        mutationObserver.add(migrationMutationObserver);
     }
 
     // Overridden in EE.
@@ -118,6 +125,10 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
 
     public IndexingMutationObserver<Record> getIndexingObserver() {
         return indexingObserver;
+    }
+
+    public MigrationMutationObserver getMigrationMutationObserver() {
+        return migrationMutationObserver;
     }
 
     @Override

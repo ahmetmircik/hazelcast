@@ -19,6 +19,7 @@ package com.hazelcast.spi.impl.operationservice;
 import com.hazelcast.internal.cluster.impl.operations.JoinOperation;
 import com.hazelcast.internal.cluster.impl.operations.WanOperation;
 import com.hazelcast.internal.partition.MigrationCycleOperation;
+import com.hazelcast.map.impl.operation.UpdateOnMigration;
 
 /**
  * Utility class that contains helper methods related to {@link Operation}
@@ -41,10 +42,18 @@ public final class Operations {
     }
 
     /**
-     *  Checks if the given operation is an instance of {@link WanOperation}
+     * Checks if the given operation is an instance of {@link WanOperation}
      */
     public static boolean isWanReplicationOperation(Operation op) {
         return op instanceof WanOperation
                 && op.getClass().getClassLoader() == THIS_CLASS_LOADER;
+    }
+
+    public static boolean isUpdateOnMigrationOperation(Operation op, boolean migrating) {
+        if (op instanceof UpdateOnMigration) {
+            ((UpdateOnMigration) op).setMigrating(migrating);
+            return true;
+        }
+        return false;
     }
 }

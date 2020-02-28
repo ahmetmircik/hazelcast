@@ -52,7 +52,7 @@ import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvict
 
 @SuppressWarnings("checkstyle:methodcount")
 public abstract class MapOperation extends AbstractNamedOperation
-        implements IdentifiedDataSerializable, ServiceNamespaceAware {
+        implements IdentifiedDataSerializable, ServiceNamespaceAware, UpdateOnMigration {
 
     private static final boolean ASSERTION_ENABLED = MapOperation.class.desiredAssertionStatus();
 
@@ -66,6 +66,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient boolean disposeDeferredBlocks = true;
 
     private transient boolean canPublishWanEvent;
+    private transient boolean migrating;
 
     public MapOperation() {
     }
@@ -359,5 +360,15 @@ public abstract class MapOperation extends AbstractNamedOperation
             return dataValue;
         }
         return mapServiceContext.toData(record.getValue());
+    }
+
+    @Override
+    public void setMigrating(boolean migrating) {
+        this.migrating = migrating;
+    }
+
+    @Override
+    public boolean isMigrating() {
+        return migrating;
     }
 }

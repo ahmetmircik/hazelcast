@@ -94,7 +94,7 @@ public class MapService implements ManagedService, FragmentedMigrationAwareServi
                                    SplitBrainHandlerService, WanSupportingService, StatisticsAwareService<LocalMapStats>,
                                    PartitionAwareService, ClientAwareService, SplitBrainProtectionAwareService,
                                    NotifiableEventListener, ClusterStateListener, LockInterceptorService<Data>,
-                                   DynamicMetricsProvider {
+                                   DynamicMetricsProvider,ChangeableDuringMigration {
 
     public static final String SERVICE_NAME = "hz:impl:mapService";
 
