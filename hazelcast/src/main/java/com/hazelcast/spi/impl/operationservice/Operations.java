@@ -49,10 +49,9 @@ public final class Operations {
                 && op.getClass().getClassLoader() == THIS_CLASS_LOADER;
     }
 
-    public static boolean isUpdateOnMigrationOperation(Operation op, boolean migrating) {
+    public static boolean canUpdateOnMigrationOperation(Operation op) {
         if (op instanceof UpdateOnMigration) {
-            ((UpdateOnMigration) op).setMigrating(migrating);
-            return true;
+            return !((UpdateOnMigration) op).isUpdateBufferFull();
         }
         return false;
     }

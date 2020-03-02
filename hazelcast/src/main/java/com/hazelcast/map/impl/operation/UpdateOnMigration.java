@@ -18,7 +18,5 @@ package com.hazelcast.map.impl.operation;
 
 public interface UpdateOnMigration {
 
-    void setMigrating(boolean migrating);
-
-    boolean isMigrating();
+    boolean isUpdateBufferFull();
 }

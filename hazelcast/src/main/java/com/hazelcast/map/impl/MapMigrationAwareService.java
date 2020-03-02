@@ -34,6 +34,7 @@ import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+import com.hazelcast.map.impl.recordstore.MigrationMutationObserver;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStoreAdapter;
 import com.hazelcast.query.impl.Index;
@@ -127,8 +128,10 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
             int count = 0;
             ConcurrentMap<String, RecordStore> maps = containers[partitionId].getMaps();
             for (RecordStore recordStore : maps.values()) {
-                Map<Data, Record> state = ((DefaultRecordStore) recordStore)
-                        .getMigrationMutationObserver().getState();
+                MigrationMutationObserver migrationMutationObserver = ((DefaultRecordStore) recordStore)
+                        .getMigrationMutationObserver();
+                migrationMutationObserver.increaseConsumeCounter();
+                Map<Data, Record> state = migrationMutationObserver.getState();
                 count += state.size();
             }
 

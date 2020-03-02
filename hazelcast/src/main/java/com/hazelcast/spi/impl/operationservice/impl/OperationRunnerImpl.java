@@ -361,7 +361,7 @@ class OperationRunnerImpl extends OperationRunner implements StaticMetricsProvid
 
     private boolean isAllowedToRetryDuringMigration(Operation op) {
         return (op instanceof ReadonlyOperation && staleReadOnMigrationEnabled)
-                || Operations.isUpdateOnMigrationOperation(op,internalPartition.isMigrating())
+                || Operations.canUpdateOnMigrationOperation(op)
                 || isMigrationOperation(op);
     }
 

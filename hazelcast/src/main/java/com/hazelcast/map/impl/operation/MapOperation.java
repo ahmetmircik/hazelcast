@@ -31,6 +31,7 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.wan.WanMapEntryView;
 import com.hazelcast.memory.NativeOutOfMemoryError;
@@ -66,7 +67,6 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient boolean disposeDeferredBlocks = true;
 
     private transient boolean canPublishWanEvent;
-    private transient boolean migrating;
 
     public MapOperation() {
     }
@@ -79,9 +79,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     public final void beforeRun() throws Exception {
         super.beforeRun();
 
-        mapService = getService();
-        mapServiceContext = mapService.getMapServiceContext();
-        mapEventPublisher = mapServiceContext.getMapEventPublisher();
+        init();
 
         try {
             recordStore = getRecordStoreOrNull();
@@ -100,6 +98,12 @@ public abstract class MapOperation extends AbstractNamedOperation
         assertNativeMapOnPartitionThread();
 
         innerBeforeRun();
+    }
+
+    private void init() {
+        mapService = getService();
+        mapServiceContext = mapService.getMapServiceContext();
+        mapEventPublisher = mapServiceContext.getMapEventPublisher();
     }
 
     protected void innerBeforeRun() throws Exception {
@@ -363,12 +367,14 @@ public abstract class MapOperation extends AbstractNamedOperation
     }
 
     @Override
-    public void setMigrating(boolean migrating) {
-        this.migrating = migrating;
-    }
+    public boolean isUpdateBufferFull() {
+        init();
 
-    @Override
-    public boolean isMigrating() {
-        return migrating;
+        RecordStore recordStore = getRecordStoreOrNull();
+        if (recordStore != null) {
+            return ((DefaultRecordStore) recordStore).getMigrationMutationObserver().isUpdateBufferFull();
+        } else {
+            return true;
+        }
     }
 }

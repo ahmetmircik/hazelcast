@@ -74,14 +74,6 @@ public class MapRemainingReplicationOperation extends Operation
 
                 }
             }
-
-            if (states.isEmpty()) {
-                System.err.println("Empty state object");
-            } else {
-                System.err.println("Applied all...");
-            }
-
-
         } catch (Throwable e) {
             getLogger().severe("map replication operation failed for partitionId="
                     + getPartitionId(), e);
