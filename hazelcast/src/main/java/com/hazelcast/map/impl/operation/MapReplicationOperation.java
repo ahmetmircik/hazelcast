@@ -30,6 +30,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Replicates all IMap-states of this partition to a repReservedCapacityCounterTestlica partition.
@@ -67,6 +68,7 @@ public class MapReplicationOperation extends Operation
     @Override
     public void run() {
         try {
+            TimeUnit.SECONDS.sleep(10);
             mapReplicationStateHolder.applyState();
             writeBehindStateHolder.applyState();
             if (getReplicaIndex() == 0) {
