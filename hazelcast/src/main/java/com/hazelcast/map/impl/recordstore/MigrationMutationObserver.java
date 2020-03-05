@@ -31,7 +31,7 @@ import java.util.Map;
 // TODO who will clean state's map in this class after migration
 public class MigrationMutationObserver implements MutationObserver {
 
-    private static final int BUFFER_SIZE = 1 << 10;
+    private static final int BUFFER_SIZE = 1 << 18;
     private static final int MAX_CONSUME_COUNT = 3;
 
     private final InternalPartition partition;
