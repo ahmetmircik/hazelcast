@@ -24,6 +24,7 @@ import com.hazelcast.map.impl.record.Record;
 import javax.annotation.Nonnull;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // TODO all states should be kept in this class,
 //  for the whole state scope see MapReplicationOperation
@@ -36,7 +37,7 @@ public class MigrationMutationObserver implements MutationObserver {
 
     private final InternalPartition partition;
     private final LinkedHashMap<Data, Record> state = new LinkedHashMap<>();
-    private int consumeCounter;
+    private AtomicInteger consumeCounter = new AtomicInteger();
 
     public MigrationMutationObserver(InternalPartitionService partitionService, int partitionId) {
         this.partition = partitionService.getPartition(partitionId);
@@ -101,12 +102,11 @@ public class MigrationMutationObserver implements MutationObserver {
     }
 
     public boolean isUpdateBufferFull() {
-        return false;
-//        return consumeCounter > MAX_CONSUME_COUNT
-//                || state.size() >= BUFFER_SIZE;
+        return consumeCounter.get() > MAX_CONSUME_COUNT
+                || state.size() >= BUFFER_SIZE;
     }
 
     public void increaseConsumeCounter() {
-        consumeCounter++;
+        consumeCounter.incrementAndGet();
     }
 }
