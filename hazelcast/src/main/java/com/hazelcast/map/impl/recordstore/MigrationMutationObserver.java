@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.recordstore;
 import com.hazelcast.internal.partition.InternalPartition;
 import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.record.Record;
 
 import javax.annotation.Nonnull;
@@ -35,12 +36,19 @@ public class MigrationMutationObserver implements MutationObserver {
     private static final int BUFFER_SIZE = 1 << 18;
     private static final int MAX_CONSUME_COUNT = 3;
 
+    private final int partitionId;
+    private final String name;
+    private final ILogger logger;
     private final InternalPartition partition;
     private final LinkedHashMap<Data, Record> state = new LinkedHashMap<>();
     private AtomicInteger consumeCounter = new AtomicInteger();
 
-    public MigrationMutationObserver(InternalPartitionService partitionService, int partitionId) {
+    public MigrationMutationObserver(InternalPartitionService partitionService,
+                                     int partitionId, ILogger logger, String name) {
+        this.name = name;
         this.partition = partitionService.getPartition(partitionId);
+        this.logger = logger;
+        this.partitionId = partitionId;
     }
 
     @Override
@@ -95,6 +103,11 @@ public class MigrationMutationObserver implements MutationObserver {
         }
 
         state.put(key, record);
+
+        if (state.size() % 1000 == 0) {
+            logger.info(String.format("mapName=%s, partitionId=%d, " +
+                    "bufferSize=%d, consumeCounter=%d", name, partitionId, state.size(), consumeCounter.get()));
+        }
     }
 
     public Map<Data, Record> getState() {

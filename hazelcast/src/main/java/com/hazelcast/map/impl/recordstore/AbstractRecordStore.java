@@ -29,6 +29,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.comparators.ValueComparator;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.JsonMetadataInitializer;
 import com.hazelcast.map.impl.MapContainer;
@@ -112,8 +113,10 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         mutationObserver.add(indexingObserver);
 
         // Add observer for migration to hold changes during migration
-        InternalPartitionService partitionService = (InternalPartitionService) mapServiceContext.getNodeEngine().getPartitionService();
-        migrationMutationObserver = new MigrationMutationObserver(partitionService, partitionId);
+        NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
+        InternalPartitionService partitionService = (InternalPartitionService) nodeEngine.getPartitionService();
+        ILogger logger = nodeEngine.getLogger(MigrationMutationObserver.class);
+        migrationMutationObserver = new MigrationMutationObserver(partitionService, partitionId, logger, name);
         mutationObserver.add(migrationMutationObserver);
     }
 
