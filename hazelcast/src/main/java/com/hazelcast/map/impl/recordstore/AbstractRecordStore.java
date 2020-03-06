@@ -116,7 +116,8 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
         InternalPartitionService partitionService = (InternalPartitionService) nodeEngine.getPartitionService();
         ILogger logger = nodeEngine.getLogger(MigrationMutationObserver.class);
-        migrationMutationObserver = new MigrationMutationObserver(partitionService, partitionId, logger, name);
+        migrationMutationObserver = new MigrationMutationObserver(partitionService, partitionId,
+                logger, name, nodeEngine.getProperties());
         mutationObserver.add(migrationMutationObserver);
     }
 

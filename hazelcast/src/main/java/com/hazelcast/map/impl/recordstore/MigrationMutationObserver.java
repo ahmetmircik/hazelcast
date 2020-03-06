@@ -21,6 +21,8 @@ import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.spi.properties.HazelcastProperties;
+import com.hazelcast.spi.properties.HazelcastProperty;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedHashMap;
@@ -33,10 +35,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 // TODO who will clean state's map in this class after migration
 public class MigrationMutationObserver implements MutationObserver {
 
-    private static final int BUFFER_SIZE = 1 << 18;
+    public static final String PROP_DURING_MIGRATION_BUFFER_SIZE = "hazelcast.during.migration.buffer.size";
+    private static final HazelcastProperty DURING_MIGRATION_BUFFER_SIZE
+            = new HazelcastProperty(PROP_DURING_MIGRATION_BUFFER_SIZE, 1 << 10);
+
     private static final int MAX_CONSUME_COUNT = 3;
 
     private final int partitionId;
+    private final int bufferSize;
     private final String name;
     private final ILogger logger;
     private final InternalPartition partition;
@@ -44,11 +50,13 @@ public class MigrationMutationObserver implements MutationObserver {
     private AtomicInteger consumeCounter = new AtomicInteger();
 
     public MigrationMutationObserver(InternalPartitionService partitionService,
-                                     int partitionId, ILogger logger, String name) {
+                                     int partitionId, ILogger logger, String name,
+                                     HazelcastProperties properties) {
         this.name = name;
         this.partition = partitionService.getPartition(partitionId);
         this.logger = logger;
         this.partitionId = partitionId;
+        this.bufferSize = properties.getInteger(DURING_MIGRATION_BUFFER_SIZE);
     }
 
     @Override
@@ -116,7 +124,7 @@ public class MigrationMutationObserver implements MutationObserver {
 
     public boolean isUpdateBufferFull() {
         return consumeCounter.get() > MAX_CONSUME_COUNT
-                || state.size() >= BUFFER_SIZE;
+                || state.size() >= bufferSize;
     }
 
     public void increaseConsumeCounter() {
