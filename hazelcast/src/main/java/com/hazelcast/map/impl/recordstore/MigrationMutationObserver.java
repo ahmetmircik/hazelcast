@@ -36,13 +36,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MigrationMutationObserver implements MutationObserver {
 
     public static final String PROP_DURING_MIGRATION_BUFFER_SIZE = "hazelcast.during.migration.buffer.size";
+    public static final String PROP_DURING_MIGRATION_BUFFER_TRY_COUNT = "hazelcast.during.migration.buffer.try.count";
     private static final HazelcastProperty DURING_MIGRATION_BUFFER_SIZE
             = new HazelcastProperty(PROP_DURING_MIGRATION_BUFFER_SIZE, 1 << 10);
-
-    private static final int MAX_CONSUME_COUNT = 3;
+    private static final HazelcastProperty DURING_MIGRATION_BUFFER_TRY_COUNT
+            = new HazelcastProperty(PROP_DURING_MIGRATION_BUFFER_TRY_COUNT, 3);
 
     private final int partitionId;
     private final int bufferSize;
+    private final int bufferTryCount;
     private final String name;
     private final ILogger logger;
     private final InternalPartition partition;
@@ -57,6 +59,7 @@ public class MigrationMutationObserver implements MutationObserver {
         this.logger = logger;
         this.partitionId = partitionId;
         this.bufferSize = properties.getInteger(DURING_MIGRATION_BUFFER_SIZE);
+        this.bufferTryCount = properties.getInteger(DURING_MIGRATION_BUFFER_TRY_COUNT);
     }
 
     @Override
@@ -123,7 +126,7 @@ public class MigrationMutationObserver implements MutationObserver {
     }
 
     public boolean isUpdateBufferFull() {
-        return consumeCounter.get() > MAX_CONSUME_COUNT
+        return consumeCounter.get() > bufferTryCount
                 || state.size() >= bufferSize;
     }
 
