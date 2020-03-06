@@ -101,8 +101,9 @@ public class MigrationMutationObserver implements MutationObserver {
     }
 
     public boolean isUpdateBufferFull() {
-        return consumeCounter > MAX_CONSUME_COUNT
-                || state.size() >= BUFFER_SIZE;
+        return false;
+//        return consumeCounter > MAX_CONSUME_COUNT
+//                || state.size() >= BUFFER_SIZE;
     }
 
     public void increaseConsumeCounter() {
