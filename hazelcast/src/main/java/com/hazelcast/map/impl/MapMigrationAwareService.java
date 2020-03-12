@@ -130,7 +130,6 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
             for (RecordStore recordStore : maps.values()) {
                 MigrationMutationObserver migrationMutationObserver = ((DefaultRecordStore) recordStore)
                         .getMigrationMutationObserver();
-                migrationMutationObserver.increaseConsumeCounter();
                 Map<Data, Record> state = migrationMutationObserver.getState();
                 count += state.size();
             }

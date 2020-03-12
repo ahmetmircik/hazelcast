@@ -27,6 +27,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,6 +38,10 @@ import java.util.concurrent.TimeUnit;
  */
 public class MapReplicationOperation extends Operation
         implements IdentifiedDataSerializable {
+
+    public static final String PROP_SLEEP = "hazelcast.sleep.in.map.replication.operation";
+    private static final HazelcastProperty SLEEP
+            = new HazelcastProperty(PROP_SLEEP, 10);
 
     private MapReplicationStateHolder mapReplicationStateHolder;
     private WriteBehindStateHolder writeBehindStateHolder;
@@ -68,7 +73,7 @@ public class MapReplicationOperation extends Operation
     @Override
     public void run() {
         try {
-            TimeUnit.SECONDS.sleep(10);
+            TimeUnit.SECONDS.sleep(getNodeEngine().getProperties().getInteger(SLEEP));
             mapReplicationStateHolder.applyState();
             writeBehindStateHolder.applyState();
             if (getReplicaIndex() == 0) {

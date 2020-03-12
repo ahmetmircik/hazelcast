@@ -27,29 +27,23 @@ import com.hazelcast.spi.properties.HazelcastProperty;
 import javax.annotation.Nonnull;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
-// TODO all states should be kept in this class,
+// TODO all states (map-store?, near-cache?) should be kept in this class,
 //  for the whole state scope see MapReplicationOperation
 
 // TODO who will clean state's map in this class after migration
 public class MigrationMutationObserver implements MutationObserver {
 
     public static final String PROP_DURING_MIGRATION_BUFFER_SIZE = "hazelcast.during.migration.buffer.size";
-    public static final String PROP_DURING_MIGRATION_BUFFER_TRY_COUNT = "hazelcast.during.migration.buffer.try.count";
     private static final HazelcastProperty DURING_MIGRATION_BUFFER_SIZE
             = new HazelcastProperty(PROP_DURING_MIGRATION_BUFFER_SIZE, 1 << 10);
-    private static final HazelcastProperty DURING_MIGRATION_BUFFER_TRY_COUNT
-            = new HazelcastProperty(PROP_DURING_MIGRATION_BUFFER_TRY_COUNT, 3);
 
     private final int partitionId;
     private final int bufferSize;
-    private final int bufferTryCount;
     private final String name;
     private final ILogger logger;
     private final InternalPartition partition;
     private final LinkedHashMap<Data, Record> state = new LinkedHashMap<>();
-    private AtomicInteger consumeCounter = new AtomicInteger();
 
     public MigrationMutationObserver(InternalPartitionService partitionService,
                                      int partitionId, ILogger logger, String name,
@@ -59,7 +53,6 @@ public class MigrationMutationObserver implements MutationObserver {
         this.logger = logger;
         this.partitionId = partitionId;
         this.bufferSize = properties.getInteger(DURING_MIGRATION_BUFFER_SIZE);
-        this.bufferTryCount = properties.getInteger(DURING_MIGRATION_BUFFER_TRY_COUNT);
     }
 
     @Override
@@ -116,8 +109,8 @@ public class MigrationMutationObserver implements MutationObserver {
         state.put(key, record);
 
         if (state.size() % 1000 == 0) {
-            logger.info(String.format("mapName=%s, partitionId=%d, " +
-                    "bufferSize=%d, consumeCounter=%d", name, partitionId, state.size(), consumeCounter.get()));
+            logger.info(String.format("mapName=%s, partitionId=%d, "
+                    + "bufferSize=%d", name, partitionId, state.size()));
         }
     }
 
@@ -126,11 +119,6 @@ public class MigrationMutationObserver implements MutationObserver {
     }
 
     public boolean isUpdateBufferFull() {
-        return consumeCounter.get() > bufferTryCount
-                || state.size() >= bufferSize;
-    }
-
-    public void increaseConsumeCounter() {
-        consumeCounter.incrementAndGet();
+        return state.size() >= bufferSize;
     }
 }
