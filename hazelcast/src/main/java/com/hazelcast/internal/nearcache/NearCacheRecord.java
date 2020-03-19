@@ -177,9 +177,13 @@ public interface NearCacheRecord<V> extends Expirable, Evictable<V> {
         } else {
             flags &= ~bitmask;
         }
+
+        setFlags(flags);
     }
 
     byte getFlags();
+
+    void setFlags(byte flags);
 
     default int stripBaseTime(long timeInMillis) {
         if (timeInMillis > 0) {

@@ -188,9 +188,7 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
 
         @Override
         public R apply(K key, R existingRecord) {
-            R record = reserveForWriteUpdate(key, keyData, existingRecord, reservationId);
-            record.setReservedForReadUpdate(false);
-            return record;
+            return reserveForWriteUpdate(key, keyData, existingRecord, reservationId);
         }
     }
 

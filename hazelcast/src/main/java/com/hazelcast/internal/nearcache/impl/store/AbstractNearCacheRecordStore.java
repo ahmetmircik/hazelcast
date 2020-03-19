@@ -424,8 +424,10 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         }
 
         // 2. When there is a readable existingRecord, change its reservation id
-        if (existingRecord.getReservationId() == READ_PERMITTED) {
+        if (existingRecord.getReservationId() == READ_PERMITTED
+                || existingRecord.isReservedForReadUpdate()) {
             existingRecord.setReservationId(reservationId);
+            existingRecord.setReservedForReadUpdate(false);
             return existingRecord;
         }
 
@@ -443,6 +445,7 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
         // to near-cache if the source UUID of the invalidation
         // is same with the end's UUID which has near-cache on
         // it (client or server UUID which has near cache on it).
-        return existingRecord.isReservedForReadUpdate() ? existingRecord : null;
+
+        return null;
     }
 }

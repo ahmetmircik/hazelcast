@@ -67,6 +67,11 @@ public abstract class AbstractNearCacheRecord<V> implements NearCacheRecord<V> {
     }
 
     @Override
+    public void setFlags(byte flags) {
+        this.flags = flags;
+    }
+
+    @Override
     public V getValue() {
         return value;
     }
