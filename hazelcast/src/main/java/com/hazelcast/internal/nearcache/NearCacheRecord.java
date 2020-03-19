@@ -61,6 +61,9 @@ public interface NearCacheRecord<V> extends Expirable, Evictable<V> {
 
     long READ_PERMITTED = -2;
 
+    int BITMASK_CACHED_AS_NULL = 1;
+    int BITMASK_RESERVED_FOR_READ_UPDATE = 1 << 1;
+
     /**
      * Sets the value of this {@link NearCacheRecord}.
      *
@@ -97,7 +100,7 @@ public interface NearCacheRecord<V> extends Expirable, Evictable<V> {
     /**
      * It can have 2 different value:
      *
-     *  1. {@link #READ_PERMITTED} if no
+     * 1. {@link #READ_PERMITTED} if no
      * update is happening on this record.
      *
      * 2. A `long` reservation id to indicate
@@ -147,9 +150,36 @@ public interface NearCacheRecord<V> extends Expirable, Evictable<V> {
      */
     boolean hasSameUuid(UUID uuid);
 
-    boolean isCachedAsNull();
+    default boolean isCachedAsNull() {
+        return isFlagSet(BITMASK_CACHED_AS_NULL);
+    }
 
-    void setCachedAsNull(boolean valueCachedAsNull);
+    default void setCachedAsNull(boolean valueCachedAsNull) {
+        setFlag(valueCachedAsNull, BITMASK_CACHED_AS_NULL);
+    }
+
+    default boolean isReservedForReadUpdate() {
+        return isFlagSet(BITMASK_RESERVED_FOR_READ_UPDATE);
+    }
+
+    default void setReservedForReadUpdate(boolean reserved) {
+        setFlag(reserved, BITMASK_RESERVED_FOR_READ_UPDATE);
+    }
+
+    default boolean isFlagSet(int bitmask) {
+        return (getFlags() & bitmask) != 0;
+    }
+
+    default void setFlag(boolean value, int bitmask) {
+        byte flags = getFlags();
+        if (value) {
+            flags |= bitmask;
+        } else {
+            flags &= ~bitmask;
+        }
+    }
+
+    byte getFlags();
 
     default int stripBaseTime(long timeInMillis) {
         if (timeInMillis > 0) {

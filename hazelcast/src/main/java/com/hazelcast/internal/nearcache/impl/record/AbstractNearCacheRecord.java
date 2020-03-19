@@ -47,7 +47,7 @@ public abstract class AbstractNearCacheRecord<V> implements NearCacheRecord<V> {
 
     protected volatile V value;
     protected volatile UUID uuid;
-    protected volatile boolean cachedAsNull;
+    protected volatile byte flags;
     protected volatile int hits;
     protected volatile int partitionId;
     protected volatile int lastAccessTime = TIME_NOT_SET;
@@ -62,13 +62,8 @@ public abstract class AbstractNearCacheRecord<V> implements NearCacheRecord<V> {
     }
 
     @Override
-    public boolean isCachedAsNull() {
-        return cachedAsNull;
-    }
-
-    @Override
-    public void setCachedAsNull(boolean valueCachedAsNull) {
-        this.cachedAsNull = valueCachedAsNull;
+    public byte getFlags() {
+        return flags;
     }
 
     @Override
@@ -172,7 +167,7 @@ public abstract class AbstractNearCacheRecord<V> implements NearCacheRecord<V> {
                 + "creationTime=" + creationTime
                 + ", value=" + value
                 + ", uuid=" + uuid
-                + ", cachedAsNull=" + cachedAsNull
+                + ", cachedAsNull=" + isCachedAsNull()
                 + ", hits=" + hits
                 + ", partitionId=" + partitionId
                 + ", lastAccessTime=" + lastAccessTime
