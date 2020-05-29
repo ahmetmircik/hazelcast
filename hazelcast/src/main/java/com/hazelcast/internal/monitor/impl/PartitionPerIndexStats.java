@@ -17,8 +17,8 @@
 package com.hazelcast.internal.monitor.impl;
 
 import com.hazelcast.internal.memory.MemoryAllocator;
-import com.hazelcast.query.impl.Index;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.query.impl.Index;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
@@ -83,11 +83,11 @@ public class PartitionPerIndexStats implements PerIndexStats {
         this.creationTime = Clock.currentTimeMillis();
     }
 
-    private void updateMemoryCost(long delta) {
+    public void updateMemoryCost(long delta) {
         MEMORY_COST.lazySet(this, memoryCost + delta);
     }
 
-    private void resetMemoryCost() {
+    public void resetMemoryCost() {
         MEMORY_COST.lazySet(PartitionPerIndexStats.this, 0);
     }
 
@@ -241,11 +241,6 @@ public class PartitionPerIndexStats implements PerIndexStats {
     @Override
     public void resetPerQueryStats() {
         hasQueries = false;
-    }
-
-    @Override
-    public MemoryAllocator wrapMemoryAllocator(MemoryAllocator memoryAllocator) {
-        return new MemoryAllocatorWithStats(memoryAllocator);
     }
 
     @Override

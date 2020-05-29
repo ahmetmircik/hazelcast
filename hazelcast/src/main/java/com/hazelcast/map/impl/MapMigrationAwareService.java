@@ -25,6 +25,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespace;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.map.impl.operation.MapReplicationOperation;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
@@ -56,11 +57,11 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
 
     protected final PartitionContainer[] containers;
     protected final MapServiceContext mapServiceContext;
-    protected final SerializationService serializationService;
+    protected final SerializationService ss;
 
     MapMigrationAwareService(MapServiceContext mapServiceContext) {
         this.mapServiceContext = mapServiceContext;
-        this.serializationService = mapServiceContext.getNodeEngine().getSerializationService();
+        this.ss = mapServiceContext.getNodeEngine().getSerializationService();
         this.containers = mapServiceContext.getPartitionContainers();
     }
 
@@ -275,19 +276,31 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
                 continue;
             }
 
-            InternalIndex[] indexesSnapshot = indexes.getIndexes();
+            try {
+                new WithForcedEvictionRunner(recordStore.getName()) {
+                    @Override
+                    protected void runInternal() {
+                        InternalIndex[] indexesSnapshot = indexes.getIndexes();
 
-            recordStore.forEach((key, record) -> {
-                Object value = Records.getValueOrCachedValue(record, serializationService);
-                if (value != null) {
-                    QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
-                    queryEntry.setRecord(record);
-                    queryEntry.setStoreAdapter(storeAdapter);
-                    indexes.putEntry(queryEntry, null, Index.OperationSource.SYSTEM);
-                }
-            }, false);
+                        recordStore.forEach((key, record) -> {
+                            Object value = Records.getValueOrCachedValue(record, ss);
+                            if (value != null) {
+                                QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
+                                queryEntry.setRecord(record);
+                                queryEntry.setStoreAdapter(storeAdapter);
+                                indexes.putEntry(queryEntry, null, Index.OperationSource.SYSTEM);
+                            }
+                        }, false);
 
-            Indexes.markPartitionAsIndexed(event.getPartitionId(), indexesSnapshot);
+                        Indexes.markPartitionAsIndexed(event.getPartitionId(), indexesSnapshot);
+                    }
+
+                }.setServiceName(MapService.SERVICE_NAME)
+                        .setPartitionId(recordStore.getPartitionId())
+                        .run();
+            } catch (Throwable t) {
+                throw ExceptionUtil.rethrow(t);
+            }
         }
     }
 
@@ -313,7 +326,7 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
             InternalIndex[] indexesSnapshot = indexes.getIndexes();
 
             recordStore.forEach((key, record) -> {
-                Object value = Records.getValueOrCachedValue(record, serializationService);
+                Object value = Records.getValueOrCachedValue(record, ss);
                 indexes.removeEntry(key, value, Index.OperationSource.SYSTEM);
             }, false);
 

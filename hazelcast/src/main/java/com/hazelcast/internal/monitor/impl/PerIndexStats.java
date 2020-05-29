@@ -16,7 +16,6 @@
 
 package com.hazelcast.internal.monitor.impl;
 
-import com.hazelcast.internal.memory.MemoryAllocator;
 import com.hazelcast.query.impl.Comparison;
 import com.hazelcast.query.impl.Index;
 
@@ -130,11 +129,6 @@ public interface PerIndexStats {
         @Override
         public void resetPerQueryStats() {
             // do nothing
-        }
-
-        @Override
-        public MemoryAllocator wrapMemoryAllocator(MemoryAllocator memoryAllocator) {
-            return memoryAllocator;
         }
 
         @Override
@@ -310,20 +304,9 @@ public interface PerIndexStats {
     void resetPerQueryStats();
 
     /**
-     * Wraps the given memory allocator.
-     * <p>
-     * Used for the off-heap memory cost tracking.
-     *
-     * @param memoryAllocator the memory allocator to wrap.
-     * @return the wrapped memory allocator.
-     */
-    MemoryAllocator wrapMemoryAllocator(MemoryAllocator memoryAllocator);
-
-    /**
      * Creates a new per-operation stats instance.
      *
      * @return the created per-operation stats instance.
      */
     IndexOperationStats createOperationStats();
-
 }

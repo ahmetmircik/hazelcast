@@ -16,10 +16,9 @@
 
 package com.hazelcast.internal.monitor.impl;
 
-import com.hazelcast.internal.memory.MemoryAllocator;
+import com.hazelcast.internal.util.Clock;
 import com.hazelcast.query.impl.Index;
 import com.hazelcast.query.impl.IndexHeapMemoryCostUtil;
-import com.hazelcast.internal.util.Clock;
 
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
@@ -93,13 +92,13 @@ public class GlobalPerIndexStats implements PerIndexStats {
     /**
      * Constructs a new instance of global index stats.
      *
-     * @param ordered                   {@code true} if the stats are being created
-     *                                  for an ordered index, {@code false} otherwise.
-     *                                  Affects the on-heap memory cost calculation.
+     * @param ordered                    {@code true} if the stats are being created
+     *                                   for an ordered index, {@code false} otherwise.
+     *                                   Affects the on-heap memory cost calculation.
      * @param usesCachedQueryableEntries {@code true} if the stats are being created
-     *                                  for an index for which queryable entries are
-     *                                  cached, {@code false} otherwise. Affects the
-     *                                  on-heap memory cost calculation.
+     *                                   for an index for which queryable entries are
+     *                                   cached, {@code false} otherwise. Affects the
+     *                                   on-heap memory cost calculation.
      */
     public GlobalPerIndexStats(boolean ordered, boolean usesCachedQueryableEntries) {
         this.ordered = ordered;
@@ -249,11 +248,6 @@ public class GlobalPerIndexStats implements PerIndexStats {
     public void resetPerQueryStats() {
         // Do nothing, per-query stats are tracked in GlobalQueryContextWithStats
         // since this stats instance is shared among queries.
-    }
-
-    @Override
-    public MemoryAllocator wrapMemoryAllocator(MemoryAllocator memoryAllocator) {
-        throw new UnsupportedOperationException("global indexes are not supposed to use native memory allocators");
     }
 
     @Override
