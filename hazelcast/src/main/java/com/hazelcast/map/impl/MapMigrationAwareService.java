@@ -258,11 +258,11 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
         }
 
         final PartitionContainer container = mapServiceContext.getPartitionContainer(event.getPartitionId());
-        for (RecordStore<Record> recordStore : container.getMaps().values()) {
-            final MapContainer mapContainer = mapServiceContext.getMapContainer(recordStore.getName());
-            final StoreAdapter storeAdapter = new RecordStoreAdapter(recordStore);
+        for (RecordStore<Record> rs : container.getMaps().values()) {
+            final MapContainer mc = mapServiceContext.getMapContainer(rs.getName());
+            final StoreAdapter storeAdapter = new RecordStoreAdapter(rs);
 
-            final Indexes indexes = mapContainer.getIndexes(event.getPartitionId());
+            final Indexes indexes = mc.getIndexes(event.getPartitionId());
             indexes.createIndexesFromRecordedDefinitions(storeAdapter);
             if (!indexes.haveAtLeastOneIndex()) {
                 // no indexes to work with
@@ -277,15 +277,15 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
             }
 
             try {
-                new WithForcedEvictionRunner(recordStore.getName()) {
+                new WithForcedEvictionRunner(rs.getName()) {
                     @Override
                     protected void runInternal() {
                         InternalIndex[] indexesSnapshot = indexes.getIndexes();
 
-                        recordStore.forEach((key, record) -> {
+                         rs.forEach((key, record) -> {
                             Object value = Records.getValueOrCachedValue(record, ss);
                             if (value != null) {
-                                QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
+                                QueryableEntry queryEntry = mc.newQueryEntry(key, value);
                                 queryEntry.setRecord(record);
                                 queryEntry.setStoreAdapter(storeAdapter);
                                 indexes.putEntry(queryEntry, null, Index.OperationSource.SYSTEM);
@@ -296,7 +296,7 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
                     }
 
                 }.setServiceName(MapService.SERVICE_NAME)
-                        .setPartitionId(recordStore.getPartitionId())
+                        .setPartitionId(rs.getPartitionId())
                         .run();
             } catch (Throwable t) {
                 throw ExceptionUtil.rethrow(t);
