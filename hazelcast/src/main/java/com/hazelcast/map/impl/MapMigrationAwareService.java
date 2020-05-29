@@ -282,7 +282,7 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
                     protected void runInternal() {
                         InternalIndex[] indexesSnapshot = indexes.getIndexes();
 
-                         rs.forEach((key, record) -> {
+                        rs.forEach((key, record) -> {
                             Object value = Records.getValueOrCachedValue(record, ss);
                             if (value != null) {
                                 QueryableEntry queryEntry = mc.newQueryEntry(key, value);
