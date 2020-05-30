@@ -377,7 +377,7 @@ public class LocalIndexStatsTest extends HazelcastTestSupport {
     @Test
     public void testMemoryCostTracking() {
         addIndex(map, "__key", false);
-        addIndex(map, "this", true);
+        addIndex(map, "this", false);
         long keyEmptyCost = keyStats().getMemoryCost();
         long valueEmptyCost = valueStats().getMemoryCost();
 //        assertTrue(keyEmptyCost > 0);
