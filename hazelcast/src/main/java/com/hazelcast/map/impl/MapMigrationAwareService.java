@@ -297,6 +297,7 @@ class MapMigrationAwareService implements FragmentedMigrationAwareService {
 
                 }.setServiceName(MapService.SERVICE_NAME)
                         .setPartitionId(rs.getPartitionId())
+                        .setNodeEngine(rs.getMapContainer().getMapServiceContext().getNodeEngine())
                         .run();
             } catch (Throwable t) {
                 throw ExceptionUtil.rethrow(t);
