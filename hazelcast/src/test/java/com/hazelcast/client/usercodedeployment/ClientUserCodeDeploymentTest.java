@@ -27,6 +27,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.FilteringClassLoader;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.IMap;
+import com.hazelcast.test.FastParameterized;
 import com.hazelcast.test.HazelcastSerialParametersRunnerFactory;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.After;
@@ -52,7 +53,7 @@ import static com.hazelcast.query.Predicates.equal;
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 
-@RunWith(Parameterized.class)
+@RunWith(FastParameterized.class)
 @UseParametersRunnerFactory(HazelcastSerialParametersRunnerFactory.class)
 @Category({QuickTest.class})
 public class ClientUserCodeDeploymentTest extends ClientTestSupport {

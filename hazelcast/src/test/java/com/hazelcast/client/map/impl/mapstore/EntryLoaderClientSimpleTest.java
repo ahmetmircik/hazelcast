@@ -18,7 +18,8 @@ package com.hazelcast.client.map.impl.mapstore;
 
 import com.hazelcast.client.test.TestHazelcastFactory;
 import com.hazelcast.map.impl.mapstore.EntryLoaderSimpleTest;
-import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
+import com.hazelcast.test.FastParameterized;
+import com.hazelcast.test.HazelcastSerialParametersRunnerFactory;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.After;
@@ -27,8 +28,8 @@ import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-@RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(HazelcastParallelParametersRunnerFactory.class)
+@RunWith(FastParameterized.class)
+@Parameterized.UseParametersRunnerFactory(HazelcastSerialParametersRunnerFactory.class)
 @Category({QuickTest.class, ParallelJVMTest.class})
 public class EntryLoaderClientSimpleTest extends EntryLoaderSimpleTest {
 

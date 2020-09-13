@@ -16,10 +16,13 @@
 
 package com.hazelcast.sql.index;
 
+import com.hazelcast.config.Config;
 import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.IndexType;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.ConcurrencyUtil;
+import com.hazelcast.internal.util.ConstructorFunction;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
@@ -45,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
@@ -108,38 +112,47 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
             for (boolean composite : Arrays.asList(true, false)) {
                 for (ExpressionType<?> firstType : allTypes()) {
                     for (ExpressionType<?> secondType : allTypes()) {
-                        res.add(new Object[] { indexType, composite, firstType, secondType });
+                        res.add(new Object[]{indexType, composite, firstType, secondType});
                     }
                 }
             }
         }
-
         return res;
     }
 
+    static final ConcurrentHashMap<Integer,HazelcastInstance> MAP = new ConcurrentHashMap<>();
+
     @BeforeClass
     public static void beforeClass() {
-         factory = new TestHazelcastInstanceFactory(2);
+        factory = new TestHazelcastInstanceFactory(2);
+    }
+
+    @Override
+    protected Config getConfig() {
+        return smallInstanceConfig();
     }
 
     @Before
     public void before() {
-        // Start members if needed
-        if (members == null) {
-            members = new ArrayList<>();
+        ConcurrencyUtil.getOrPutSynchronized(MAP, 1, MAP, new ConstructorFunction<Integer, HazelcastInstance>() {
+            @Override
+            public HazelcastInstance createNew(Integer arg) {
+                // Start members if needed
+                members = new ArrayList<>();
 
-            assertTrue(getMemberCount() > 0);
+                for (int i = 0; i < 1; i++) {
+                    HazelcastInstance newMember = factory.newHazelcastInstance(getConfig());
 
-            for (int i = 0; i < getMemberCount(); i++) {
-                HazelcastInstance newMember = factory.newHazelcastInstance(getConfig());
+                    members.add(newMember);
 
-                members.add(newMember);
-
-                if (i == 0) {
-                    member = newMember;
+                    if (i == 0) {
+                        member = newMember;
+                    }
                 }
+                return member;
             }
-        }
+        });
+
 
         valueClass = ExpressionBiValue.createBiClass(f1, f2);
 
@@ -210,7 +223,8 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
         return config;
     }
 
-    @Test public void test() {
+    @Test
+    public void test() {
         checkFirstColumn();
         checkSecondColumn();
         checkBothColumns();
@@ -275,34 +289,34 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
         // Do not use literals here, because this is already tested with simple conditions
         // Do not exchange operand positions, because this is already tested with simple conditions
         check(
-            query("field1>? AND field1<?", f1.valueFrom(), f1.valueTo()),
-            c_sorted(),
-            and(gt(f1.valueFrom()), lt(f1.valueTo()))
+                query("field1>? AND field1<?", f1.valueFrom(), f1.valueTo()),
+                c_sorted(),
+                and(gt(f1.valueFrom()), lt(f1.valueTo()))
         );
 
         check(
-            query("field1>? AND field1<=?", f1.valueFrom(), f1.valueTo()),
-            c_sorted(),
-            and(gt(f1.valueFrom()), lte(f1.valueTo()))
+                query("field1>? AND field1<=?", f1.valueFrom(), f1.valueTo()),
+                c_sorted(),
+                and(gt(f1.valueFrom()), lte(f1.valueTo()))
         );
 
         check(
-            query("field1>=? AND field1<?", f1.valueFrom(), f1.valueTo()),
-            c_sorted(),
-            and(gte(f1.valueFrom()), lt(f1.valueTo()))
+                query("field1>=? AND field1<?", f1.valueFrom(), f1.valueTo()),
+                c_sorted(),
+                and(gte(f1.valueFrom()), lt(f1.valueTo()))
         );
 
         check(
-            query("field1>=? AND field1<=?", f1.valueFrom(), f1.valueTo()),
-            c_sorted(),
-            and(gte(f1.valueFrom()), lte(f1.valueTo()))
+                query("field1>=? AND field1<=?", f1.valueFrom(), f1.valueTo()),
+                c_sorted(),
+                and(gte(f1.valueFrom()), lte(f1.valueTo()))
         );
 
         // IN
         check(
-            query("field1=? OR field1=?", f1.valueFrom(), f1.valueTo()),
-            c_notHashComposite(),
-            or(eq(f1.valueFrom()), eq(f1.valueTo()))
+                query("field1=? OR field1=?", f1.valueFrom(), f1.valueTo()),
+                c_notHashComposite(),
+                or(eq(f1.valueFrom()), eq(f1.valueTo()))
         );
 
         // Special cases for boolean field
@@ -356,65 +370,65 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
     private void checkBothColumns() {
         // EQ + EQ
         check(
-            query("field1=? AND field2=?", f1.valueFrom(), f2.valueFrom()),
-            c_always(),
-            and(eq(f1.valueFrom()), eq_2(f2.valueFrom()))
+                query("field1=? AND field2=?", f1.valueFrom(), f2.valueFrom()),
+                c_always(),
+                and(eq(f1.valueFrom()), eq_2(f2.valueFrom()))
         );
 
         // EQ + IN
         check(
-            query("field1=? AND (field2=? OR field2=?)", f1.valueFrom(), f2.valueFrom(), f2.valueTo()),
-            c_always(),
-            and(eq(f1.valueFrom()), or(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
+                query("field1=? AND (field2=? OR field2=?)", f1.valueFrom(), f2.valueFrom(), f2.valueTo()),
+                c_always(),
+                and(eq(f1.valueFrom()), or(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
         );
 
         // EQ + RANGE
         check(
-            query("field1=? AND field2>? AND field2<?", f1.valueFrom(), f2.valueFrom(), f2.valueTo()),
-            c_sorted() || c_notComposite(),
-            and(eq(f1.valueFrom()), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
+                query("field1=? AND field2>? AND field2<?", f1.valueFrom(), f2.valueFrom(), f2.valueTo()),
+                c_sorted() || c_notComposite(),
+                and(eq(f1.valueFrom()), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
         );
 
         // IN + EQ
         check(
-            query("(field1=? OR field1=?) AND field2=?", f1.valueFrom(), f1.valueTo(), f2.valueFrom()),
-            c_sorted() || c_notComposite(),
-            and(or(eq(f1.valueFrom()), eq(f1.valueTo())), eq_2(f2.valueFrom()))
+                query("(field1=? OR field1=?) AND field2=?", f1.valueFrom(), f1.valueTo(), f2.valueFrom()),
+                c_sorted() || c_notComposite(),
+                and(or(eq(f1.valueFrom()), eq(f1.valueTo())), eq_2(f2.valueFrom()))
         );
 
         // IN + IN
         check(
-            query("(field1=? OR field1=?) AND (field2=? OR field2=?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
-            c_sorted() || c_notComposite(),
-            and(or(eq(f1.valueFrom()), eq(f1.valueTo())), or(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
+                query("(field1=? OR field1=?) AND (field2=? OR field2=?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
+                c_sorted() || c_notComposite(),
+                and(or(eq(f1.valueFrom()), eq(f1.valueTo())), or(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
         );
 
         // IN + RANGE
         check(
-            query("(field1=? OR field1=?) AND (field2>? AND field2<?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
-            c_sorted() || c_notComposite(),
-            and(or(eq(f1.valueFrom()), eq(f1.valueTo())), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
+                query("(field1=? OR field1=?) AND (field2>? AND field2<?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
+                c_sorted() || c_notComposite(),
+                and(or(eq(f1.valueFrom()), eq(f1.valueTo())), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
         );
 
         // RANGE + EQ
         check(
-            query("(field1>? AND field1<?) AND field2=?", f1.valueFrom(), f1.valueTo(), f2.valueFrom()),
-            c_sorted(),
-            and(and(gt(f1.valueFrom()), lt(f1.valueTo())), eq_2(f2.valueFrom()))
+                query("(field1>? AND field1<?) AND field2=?", f1.valueFrom(), f1.valueTo(), f2.valueFrom()),
+                c_sorted(),
+                and(and(gt(f1.valueFrom()), lt(f1.valueTo())), eq_2(f2.valueFrom()))
         );
 
         // RANGE + IN
         check(
-            query("(field1>? AND field1<?) AND (field2=? AND field2=?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
-            c_sorted(),
-            and(and(gt(f1.valueFrom()), lt(f1.valueTo())), and(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
+                query("(field1>? AND field1<?) AND (field2=? AND field2=?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
+                c_sorted(),
+                and(and(gt(f1.valueFrom()), lt(f1.valueTo())), and(eq_2(f2.valueFrom()), eq_2(f2.valueTo())))
         );
 
         // RANGE + RANGE
         check(
-            query("(field1>? AND field1<?) AND (field2>? AND field2<?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
-            c_sorted(),
-            and(and(gt(f1.valueFrom()), lt(f1.valueTo())), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
+                query("(field1>? AND field1<?) AND (field2>? AND field2<?)", f1.valueFrom(), f1.valueTo(), f2.valueFrom(), f2.valueTo()),
+                c_sorted(),
+                and(and(gt(f1.valueFrom()), lt(f1.valueTo())), and(gt_2(f2.valueFrom()), lt_2(f2.valueTo())))
         );
     }
 
@@ -474,10 +488,10 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
     }
 
     private void check0(
-        String sql,
-        List<Object> params,
-        boolean expectedUseIndex,
-        Predicate<ExpressionValue> expectedKeysPredicate
+            String sql,
+            List<Object> params,
+            boolean expectedUseIndex,
+            Predicate<ExpressionValue> expectedKeysPredicate
     ) {
         int runId = runIdGen++;
 
@@ -486,28 +500,28 @@ public abstract class SqlIndexAbstractTest extends SqlIndexTestSupport {
 
         if (!sqlKeys.equals(expectedMapKeys)) {
             failOnDifference(
-                runId,
-                sql,
-                params,
-                sqlKeys,
-                expectedMapKeys,
-                "actual SQL keys differ from expected map keys",
-                "actual SQL keys",
-                "expected map keys"
+                    runId,
+                    sql,
+                    params,
+                    sqlKeys,
+                    expectedMapKeys,
+                    "actual SQL keys differ from expected map keys",
+                    "actual SQL keys",
+                    "expected map keys"
             );
         }
     }
 
     @SuppressWarnings("StringConcatenationInsideStringBufferAppend")
     private void failOnDifference(
-        int runId,
-        String sql,
-        List<Object> params,
-        Set<Integer> first,
-        Set<Integer> second,
-        String mainMessage,
-        String firstCaption,
-        String secondCaption
+            int runId,
+            String sql,
+            List<Object> params,
+            Set<Integer> first,
+            Set<Integer> second,
+            String mainMessage,
+            String firstCaption,
+            String secondCaption
     ) {
         Set<Integer> firstOnly = new TreeSet<>(first);
         Set<Integer> secondOnly = new TreeSet<>(second);

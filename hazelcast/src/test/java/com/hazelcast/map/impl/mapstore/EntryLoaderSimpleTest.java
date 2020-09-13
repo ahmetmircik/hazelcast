@@ -36,7 +36,8 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.query.Predicates;
 import com.hazelcast.spi.impl.NodeEngineImpl;
-import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
+import com.hazelcast.test.FastParameterized;
+import com.hazelcast.test.HazelcastSerialParametersRunnerFactory;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
@@ -44,7 +45,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 import org.junit.runners.Parameterized.UseParametersRunnerFactory;
@@ -67,14 +67,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-@RunWith(Parameterized.class)
-@UseParametersRunnerFactory(HazelcastParallelParametersRunnerFactory.class)
+@RunWith(FastParameterized.class)
+@UseParametersRunnerFactory(HazelcastSerialParametersRunnerFactory.class)
 @Category({ParallelJVMTest.class, QuickTest.class})
 public class EntryLoaderSimpleTest extends HazelcastTestSupport {
 
     @Parameters(name = "inMemoryFormat: {0}")
     public static Collection<Object[]> parameters() {
-        return asList(new Object[][] {
+        return asList(new Object[][]{
                 {InMemoryFormat.BINARY},
                 {InMemoryFormat.OBJECT}
         });
@@ -207,61 +207,61 @@ public class EntryLoaderSimpleTest extends HazelcastTestSupport {
 
     @Test
     public void testPut_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.put("key", "val2"));
     }
 
     @Test
     public void testPutWithTtl() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.put("key", "val2", 10, TimeUnit.SECONDS));
     }
 
     @Test
     public void testPutWithMaxIdle_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.put("key", "val2", 10, TimeUnit.DAYS, 5, TimeUnit.DAYS));
     }
 
     @Test
     public void testPutAsync_returnValue() throws ExecutionException, InterruptedException {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.putAsync("key", "val2").toCompletableFuture().get());
     }
 
     @Test
     public void testPutIfAbsent_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.putIfAbsent("key", "val2"));
     }
 
     @Test
     public void testRemove_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.remove("key"));
     }
 
     @Test
     public void testRemoveIfSame_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertTrue(map.remove("key", "val"));
     }
 
     @Test
     public void testRemoveAsync_returnValue() throws ExecutionException, InterruptedException {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.removeAsync("key").toCompletableFuture().get());
     }
 
     @Test
     public void testReplace_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertEquals("val", map.replace("key", "val2"));
     }
 
     @Test
     public void testReplaceIfSame_returnValue() {
-        testEntryLoader.putExternally("key", "val", 5 , TimeUnit.DAYS);
+        testEntryLoader.putExternally("key", "val", 5, TimeUnit.DAYS);
         assertTrue(map.replace("key", "val", "val2"));
     }
 
