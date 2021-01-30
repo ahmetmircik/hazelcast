@@ -1317,6 +1317,7 @@ public class TestFullApplicationContext extends HazelcastTestSupport {
 
     @Test
     public void testMapEvictionPolicies() {
+        assertEquals(EvictionPolicy.FIFO, config.getMapConfig("fifoEvictionMap").getEvictionConfig().getEvictionPolicy());
         assertEquals(EvictionPolicy.LFU, config.getMapConfig("lfuEvictionMap").getEvictionConfig().getEvictionPolicy());
         assertEquals(EvictionPolicy.LRU, config.getMapConfig("lruEvictionMap").getEvictionConfig().getEvictionPolicy());
         assertEquals(EvictionPolicy.NONE, config.getMapConfig("noneEvictionMap").getEvictionConfig().getEvictionPolicy());
@@ -1325,6 +1326,7 @@ public class TestFullApplicationContext extends HazelcastTestSupport {
 
     @Test
     public void testMemberNearCacheEvictionPolicies() {
+        assertEquals(EvictionPolicy.FIFO, getNearCacheEvictionPolicy("fifoNearCacheEvictionMap", config));
         assertEquals(EvictionPolicy.LFU, getNearCacheEvictionPolicy("lfuNearCacheEvictionMap", config));
         assertEquals(EvictionPolicy.LRU, getNearCacheEvictionPolicy("lruNearCacheEvictionMap", config));
         assertEquals(EvictionPolicy.RANDOM, getNearCacheEvictionPolicy("randomNearCacheEvictionMap", config));
