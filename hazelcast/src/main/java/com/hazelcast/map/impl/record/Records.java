@@ -20,6 +20,7 @@ import com.hazelcast.internal.cluster.Versions;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
+import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadataImpl;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.version.Version;
@@ -32,6 +33,7 @@ import static com.hazelcast.map.impl.record.Record.NOT_CACHED;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.DATA_RECORD_READER_WRITER;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.DATA_RECORD_WITH_STATS_READER_WRITER;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_READER_WRITER;
+import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_READER_WRITER;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_READER_WRITER;
 import static com.hazelcast.map.impl.record.RecordReaderWriter.getById;
@@ -57,6 +59,7 @@ public final class Records {
         ruCompatMap.put(SIMPLE_DATA_RECORD_READER_WRITER, DATA_RECORD_READER_WRITER);
         ruCompatMap.put(SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_READER_WRITER, DATA_RECORD_READER_WRITER);
         ruCompatMap.put(SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_READER_WRITER, DATA_RECORD_READER_WRITER);
+        ruCompatMap.put(SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS, DATA_RECORD_WITH_STATS_READER_WRITER);
         ruCompatMap.put(DATA_RECORD_READER_WRITER, DATA_RECORD_READER_WRITER);
         ruCompatMap.put(DATA_RECORD_WITH_STATS_READER_WRITER, DATA_RECORD_WITH_STATS_READER_WRITER);
 
@@ -83,6 +86,30 @@ public final class Records {
                                     ExpiryMetadata expiryMetadata) throws IOException {
         byte matchingDataRecordId = in.readByte();
         return getById(matchingDataRecordId).readRecord(in, expiryMetadata);
+    }
+
+    public static void writeExpiryMetadata(ObjectDataOutput out,
+                                           ExpiryMetadata expiryMetadata) throws IOException {
+        boolean hasExpiry = expiryMetadata != ExpiryMetadata.NULL;
+        out.writeBoolean(hasExpiry);
+        if (hasExpiry) {
+            out.writeInt(expiryMetadata.getRawTtl());
+            out.writeInt(expiryMetadata.getRawMaxIdle());
+            out.writeInt(expiryMetadata.getRawExpirationTime());
+        }
+    }
+
+    public static ExpiryMetadata readExpiryMetadata(ObjectDataInput in) throws IOException {
+        boolean hasExpiry = in.readBoolean();
+        if (hasExpiry) {
+            ExpiryMetadataImpl expiryMetadata = new ExpiryMetadataImpl();
+            expiryMetadata.setRawTtl(in.readInt());
+            expiryMetadata.setRawMaxIdle(in.readInt());
+            expiryMetadata.setRawExpirationTime(in.readInt());
+            return expiryMetadata;
+        } else {
+            return ExpiryMetadata.NULL;
+        }
     }
 
     /**

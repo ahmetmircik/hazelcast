@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.internal.cluster.Versions;
 import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
@@ -87,6 +88,10 @@ public class PutBackupOperation
 
         IOUtil.writeData(out, dataKey);
         Records.writeRecord(out, record, dataValue, expiryMetadata);
+        // RU_COMPAT_4_1
+        if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            Records.writeExpiryMetadata(out, expiryMetadata);
+        }
     }
 
     @Override
@@ -94,7 +99,15 @@ public class PutBackupOperation
         super.readInternal(in);
 
         dataKey = IOUtil.readData(in);
-        expiryMetadata = new ExpiryMetadataImpl();
+
+        // RU_COMPAT_4_1
+        if (!in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            expiryMetadata = new ExpiryMetadataImpl();
+        }
         record = Records.readRecord(in, expiryMetadata);
+        // RU_COMPAT_4_1
+        if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            expiryMetadata = Records.readExpiryMetadata(in);
+        }
     }
 }

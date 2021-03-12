@@ -256,8 +256,12 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
             recordStore.forEach((dataKey, record) -> {
                 try {
                     IOUtil.writeData(out, dataKey);
-                    Records.writeRecord(out, record, ss.toData(record.getValue()),
-                            recordStore.getExpirySystem().getExpiredMetadata(dataKey));
+                    ExpiryMetadata expiryMetadata = recordStore.getExpirySystem().getExpiredMetadata(dataKey);
+                    // RU_COMPAT_4_1
+                    if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+                        Records.writeExpiryMetadata(out, expiryMetadata);
+                    }
+                    Records.writeRecord(out, record, ss.toData(record.getValue()), expiryMetadata);
                 } catch (IOException e) {
                     throw ExceptionUtil.rethrow(e);
                 }
@@ -297,13 +301,22 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
             List keyRecordExpiry = new ArrayList<>(numOfRecords * 3);
             for (int j = 0; j < numOfRecords; j++) {
                 Data dataKey = IOUtil.readData(in);
-                ExpiryMetadata expiryMetadata = new ExpiryMetadataImpl();
+
+                // RU_COMPAT_4_1
+                ExpiryMetadata expiryMetadata;
+                if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+                    expiryMetadata = Records.readExpiryMetadata(in);
+                } else {
+                    expiryMetadata = new ExpiryMetadataImpl();
+                }
+
                 Record record = Records.readRecord(in, expiryMetadata);
 
                 keyRecordExpiry.add(dataKey);
                 keyRecordExpiry.add(record);
                 keyRecordExpiry.add(expiryMetadata);
             }
+            // RU_COMPAT_4_1
             if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
                 LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
                 stats.readData(in);

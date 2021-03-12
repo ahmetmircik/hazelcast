@@ -64,6 +64,8 @@ public enum RecordReaderWriter {
         }
     },
 
+    // RU_COMPAT_4_1
+    // Remove enum DATA_RECORD_WITH_STATS_READER_WRITER in 4.3
     DATA_RECORD_WITH_STATS_READER_WRITER(TypeId.DATA_RECORD_WITH_STATS_TYPE_ID) {
         @Override
         void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
@@ -99,26 +101,50 @@ public enum RecordReaderWriter {
         }
     },
 
-    SIMPLE_DATA_RECORD_READER_WRITER(TypeId.SIMPLE_DATA_RECORD_TYPE_ID) {
+    SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS(TypeId.DATA_RECORD_WITH_STATS_TYPE_ID) {
         @Override
         void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
-                         ExpiryMetadata expiryMetadata) throws IOException {
+                         ExpiryMetadata ignored) throws IOException {
             writeData(out, dataValue);
-            out.writeInt(record.getVersion());
-            out.writeInt(expiryMetadata.getRawTtl());
-            out.writeInt(expiryMetadata.getRawMaxIdle());
-            out.writeInt(expiryMetadata.getRawExpirationTime());
+            out.writeLong(record.getVersion());
+            out.writeInt(record.getHits());
+            out.writeInt(record.getRawCreationTime());
+            out.writeInt(record.getRawLastAccessTime());
+            out.writeInt(record.getRawLastUpdateTime());
+            out.writeInt(record.getRawLastStoredTime());
         }
 
         @Override
         public Record readRecord(ObjectDataInput in,
-                                 ExpiryMetadata expiryMetadata) throws IOException {
+                                 ExpiryMetadata ignored) throws IOException {
+            Record record = new DataRecordWithStats();
+            record.setValue(readData(in));
+            record.setVersion(longToIntVersion(in.readLong()));
+            record.setHits(in.readInt());
+            record.setRawCreationTime(in.readInt());
+            record.setRawLastAccessTime(in.readInt());
+            record.setRawLastUpdateTime(in.readInt());
+            record.setRawLastStoredTime(in.readInt());
+
+            return record;
+        }
+    },
+
+
+    SIMPLE_DATA_RECORD_READER_WRITER(TypeId.SIMPLE_DATA_RECORD_TYPE_ID) {
+        @Override
+        void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
+                         ExpiryMetadata ignored) throws IOException {
+            writeData(out, dataValue);
+            out.writeInt(record.getVersion());
+        }
+
+        @Override
+        public Record readRecord(ObjectDataInput in,
+                                 ExpiryMetadata ignored) throws IOException {
             Record record = new SimpleRecord();
             record.setValue(readData(in));
             record.setVersion(in.readInt());
-            expiryMetadata.setRawTtl(in.readInt());
-            expiryMetadata.setRawMaxIdle(in.readInt());
-            expiryMetadata.setRawExpirationTime(in.readInt());
 
             return record;
         }
@@ -127,25 +153,19 @@ public enum RecordReaderWriter {
     SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_READER_WRITER(TypeId.SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_TYPE_ID) {
         @Override
         void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
-                         ExpiryMetadata expiryMetadata) throws IOException {
+                         ExpiryMetadata ignored) throws IOException {
             writeData(out, dataValue);
             out.writeInt(record.getVersion());
             out.writeInt(record.getRawLastAccessTime());
-            out.writeInt(expiryMetadata.getRawTtl());
-            out.writeInt(expiryMetadata.getRawMaxIdle());
-            out.writeInt(expiryMetadata.getRawExpirationTime());
         }
 
         @Override
         public Record readRecord(ObjectDataInput in,
-                                 ExpiryMetadata expiryMetadata) throws IOException {
+                                 ExpiryMetadata ignored) throws IOException {
             Record record = new SimpleRecordWithLRUEviction();
             record.setValue(readData(in));
             record.setVersion(in.readInt());
             record.setRawLastAccessTime(in.readInt());
-            expiryMetadata.setRawTtl(in.readInt());
-            expiryMetadata.setRawMaxIdle(in.readInt());
-            expiryMetadata.setRawExpirationTime(in.readInt());
 
             return record;
         }
@@ -154,25 +174,19 @@ public enum RecordReaderWriter {
     SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_READER_WRITER(TypeId.SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_TYPE_ID) {
         @Override
         void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
-                         ExpiryMetadata expiryMetadata) throws IOException {
+                         ExpiryMetadata ignored) throws IOException {
             writeData(out, dataValue);
             out.writeInt(record.getVersion());
             out.writeInt(record.getHits());
-            out.writeInt(expiryMetadata.getRawTtl());
-            out.writeInt(expiryMetadata.getRawMaxIdle());
-            out.writeInt(expiryMetadata.getRawExpirationTime());
         }
 
         @Override
         public Record readRecord(ObjectDataInput in,
-                                 ExpiryMetadata expiryMetadata) throws IOException {
+                                 ExpiryMetadata ignored) throws IOException {
             Record record = new SimpleRecordWithLFUEviction();
             record.setValue(readData(in));
             record.setVersion(in.readInt());
             record.setHits(in.readInt());
-            expiryMetadata.setRawTtl(in.readInt());
-            expiryMetadata.setRawMaxIdle(in.readInt());
-            expiryMetadata.setRawExpirationTime(in.readInt());
 
             return record;
         }
@@ -194,6 +208,7 @@ public enum RecordReaderWriter {
         private static final byte SIMPLE_DATA_RECORD_TYPE_ID = 3;
         private static final byte SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_TYPE_ID = 4;
         private static final byte SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_TYPE_ID = 5;
+        private static final byte SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS_TYPE_ID = 6;
     }
 
     public static RecordReaderWriter getById(int id) {
@@ -208,6 +223,8 @@ public enum RecordReaderWriter {
                 return SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_READER_WRITER;
             case TypeId.SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_TYPE_ID:
                 return SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_READER_WRITER;
+            case TypeId.SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS_TYPE_ID:
+                return SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS;
             default:
                 throw new IllegalArgumentException("Not known RecordReaderWriter type-id: " + id);
         }
