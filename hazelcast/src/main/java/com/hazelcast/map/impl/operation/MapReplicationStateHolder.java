@@ -245,6 +245,8 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
     public void writeData(ObjectDataOutput out) throws IOException {
         out.writeInt(storesByMapName.size());
 
+        boolean isLessThanV42 = out.getVersion().isUnknownOrLessThan(Versions.V4_2);
+
         for (Map.Entry<String, RecordStore<Record>> entry : storesByMapName.entrySet()) {
             String mapName = entry.getKey();
             out.writeString(mapName);
@@ -252,13 +254,14 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
             SerializationService ss = getSerializationService(operation.getRecordStore(mapName).getMapContainer());
             RecordStore<Record> recordStore = entry.getValue();
             out.writeInt(recordStore.size());
+
             // No expiration should be done in forEach, since we have serialized size before.
             recordStore.forEach((dataKey, record) -> {
                 try {
                     IOUtil.writeData(out, dataKey);
                     ExpiryMetadata expiryMetadata = recordStore.getExpirySystem().getExpiredMetadata(dataKey);
                     // RU_COMPAT_4_1
-                    if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+                    if (!isLessThanV42) {
                         Records.writeExpiryMetadata(out, expiryMetadata);
                     }
                     Records.writeRecord(out, record, ss.toData(record.getValue()), expiryMetadata);
@@ -267,7 +270,7 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
                 }
             }, operation.getReplicaIndex() != 0, true);
 
-            if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            if (!isLessThanV42) {
                 recordStore.getStats().writeData(out);
             }
         }
@@ -294,7 +297,7 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
         int size = in.readInt();
         data = createHashMap(size);
         recordStoreStatsPerMapName = createHashMap(size);
-
+        boolean isLessThanV42 = in.getVersion().isUnknownOrLessThan(Versions.V4_2);
         for (int i = 0; i < size; i++) {
             String name = in.readString();
             int numOfRecords = in.readInt();
@@ -303,12 +306,8 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
                 Data dataKey = IOUtil.readData(in);
 
                 // RU_COMPAT_4_1
-                ExpiryMetadata expiryMetadata;
-                if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
-                    expiryMetadata = Records.readExpiryMetadata(in);
-                } else {
-                    expiryMetadata = new ExpiryMetadataImpl();
-                }
+                ExpiryMetadata expiryMetadata = isLessThanV42
+                        ? new ExpiryMetadataImpl() : Records.readExpiryMetadata(in);
 
                 Record record = Records.readRecord(in, expiryMetadata);
 
@@ -317,7 +316,7 @@ public class MapReplicationStateHolder implements IdentifiedDataSerializable, Ve
                 keyRecordExpiry.add(expiryMetadata);
             }
             // RU_COMPAT_4_1
-            if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            if (!isLessThanV42) {
                 LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
                 stats.readData(in);
                 recordStoreStatsPerMapName.put(name, stats);

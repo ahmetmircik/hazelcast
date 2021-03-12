@@ -102,6 +102,8 @@ public class PutAllBackupOperation extends MapOperation
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
 
+        boolean isLessThanV42 = out.getVersion().isUnknownOrLessThan(Versions.V4_2);
+
         out.writeInt(keyValueRecordExpiry.size() / 4);
         for (int i = 0; i < keyValueRecordExpiry.size(); i += 4) {
             Data dataKey = (Data) keyValueRecordExpiry.get(i);
@@ -112,7 +114,7 @@ public class PutAllBackupOperation extends MapOperation
             IOUtil.writeData(out, dataKey);
             Records.writeRecord(out, record, dataValue, expiryMetadata);
             // RU_COMPAT_4_1
-            if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            if (!isLessThanV42) {
                 Records.writeExpiryMetadata(out, expiryMetadata);
             }
         }
@@ -123,18 +125,20 @@ public class PutAllBackupOperation extends MapOperation
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
 
+        boolean isLessThanV42 = in.getVersion().isUnknownOrLessThan(Versions.V4_2);
+
         int size = in.readInt();
         List keyRecordExpiry = new ArrayList<>(size * 3);
         for (int i = 0; i < size; i++) {
             keyRecordExpiry.add(IOUtil.readData(in));
             // RU_COMPAT_4_1
             ExpiryMetadata expiryMetadata = null;
-            if (!in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            if (isLessThanV42) {
                 expiryMetadata = new ExpiryMetadataImpl();
             }
             keyRecordExpiry.add(Records.readRecord(in, expiryMetadata));
             // RU_COMPAT_4_1
-            if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+            if (!isLessThanV42) {
                 expiryMetadata = Records.readExpiryMetadata(in);
             }
             keyRecordExpiry.add(expiryMetadata);

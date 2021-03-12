@@ -101,7 +101,7 @@ public enum RecordReaderWriter {
         }
     },
 
-    SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS(TypeId.DATA_RECORD_WITH_STATS_TYPE_ID) {
+    SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER(TypeId.SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER_TYPE_ID) {
         @Override
         void writeRecord(ObjectDataOutput out, Record record, Data dataValue,
                          ExpiryMetadata ignored) throws IOException {
@@ -208,7 +208,7 @@ public enum RecordReaderWriter {
         private static final byte SIMPLE_DATA_RECORD_TYPE_ID = 3;
         private static final byte SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_TYPE_ID = 4;
         private static final byte SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_TYPE_ID = 5;
-        private static final byte SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS_TYPE_ID = 6;
+        private static final byte SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER_TYPE_ID = 6;
     }
 
     public static RecordReaderWriter getById(int id) {
@@ -223,8 +223,8 @@ public enum RecordReaderWriter {
                 return SIMPLE_DATA_RECORD_WITH_LRU_EVICTION_READER_WRITER;
             case TypeId.SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_TYPE_ID:
                 return SIMPLE_DATA_RECORD_WITH_LFU_EVICTION_READER_WRITER;
-            case TypeId.SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS_TYPE_ID:
-                return SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS;
+            case TypeId.SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER_TYPE_ID:
+                return SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER;
             default:
                 throw new IllegalArgumentException("Not known RecordReaderWriter type-id: " + id);
         }

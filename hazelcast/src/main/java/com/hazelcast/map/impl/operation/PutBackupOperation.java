@@ -89,7 +89,7 @@ public class PutBackupOperation
         IOUtil.writeData(out, dataKey);
         Records.writeRecord(out, record, dataValue, expiryMetadata);
         // RU_COMPAT_4_1
-        if (out.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+        if (!out.getVersion().isUnknownOrLessThan(Versions.V4_2)) {
             Records.writeExpiryMetadata(out, expiryMetadata);
         }
     }
@@ -101,12 +101,13 @@ public class PutBackupOperation
         dataKey = IOUtil.readData(in);
 
         // RU_COMPAT_4_1
-        if (!in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+        boolean isLessThanV42 = in.getVersion().isUnknownOrLessThan(Versions.V4_2);
+        if (isLessThanV42) {
             expiryMetadata = new ExpiryMetadataImpl();
         }
         record = Records.readRecord(in, expiryMetadata);
         // RU_COMPAT_4_1
-        if (in.getVersion().isGreaterOrEqual(Versions.V4_2)) {
+        if (!isLessThanV42) {
             expiryMetadata = Records.readExpiryMetadata(in);
         }
     }

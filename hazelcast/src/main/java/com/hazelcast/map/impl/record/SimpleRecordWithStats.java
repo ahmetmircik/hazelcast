@@ -19,7 +19,7 @@ package com.hazelcast.map.impl.record;
 import com.hazelcast.internal.serialization.Data;
 
 import static com.hazelcast.internal.util.JVMUtil.REFERENCE_COST_IN_BYTES;
-import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS;
+import static com.hazelcast.map.impl.record.RecordReaderWriter.SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER;
 
 class SimpleRecordWithStats<V> extends AbstractRecord<V> {
     protected volatile V value;
@@ -33,7 +33,7 @@ class SimpleRecordWithStats<V> extends AbstractRecord<V> {
 
     @Override
     public RecordReaderWriter getMatchingRecordReaderWriter() {
-        return SIMPLE_DATA_RECORD_READER_WRITER_WITH_STATS;
+        return SIMPLE_DATA_RECORD_WITH_STATS_READER_WRITER;
     }
 
     /**
