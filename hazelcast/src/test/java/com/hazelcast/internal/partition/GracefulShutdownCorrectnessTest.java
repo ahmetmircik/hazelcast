@@ -40,9 +40,7 @@ public class GracefulShutdownCorrectnessTest extends AbstractGracefulShutdownCor
     @Parameterized.Parameters(name = "backups:{0},nodes:{1},shutdown:{2}")
     public static Collection<Object[]> parameters() {
         return Arrays.asList(new Object[][]{
-                {0, 2, 1},
                 {1, 2, 1},
-                {2, 3, 1},
         });
     }
 
@@ -50,7 +48,9 @@ public class GracefulShutdownCorrectnessTest extends AbstractGracefulShutdownCor
     protected Config getConfig() {
         // Partition count is overwritten back to PartitionCorrectnessTestSupport.partitionCount
         // in PartitionCorrectnessTestSupport.getConfig(boolean, boolean).
-        return smallInstanceConfig();
+        Config config = smallInstanceConfig();
+        config.getMetricsConfig().setEnabled(false);
+        return config;
     }
 
 }

@@ -130,6 +130,7 @@ public class BasicMapTest extends HazelcastTestSupport {
     public void init() {
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(INSTANCE_COUNT);
         Config config = getConfig();
+        config.getMetricsConfig().setEnabled(false);
         instances = factory.newInstances(config);
     }
 
