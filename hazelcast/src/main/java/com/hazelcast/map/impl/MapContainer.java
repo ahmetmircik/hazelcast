@@ -142,6 +142,7 @@ public class MapContainer {
                 serializationService, extractors);
         this.globalIndexes = shouldUseGlobalIndex() ? createIndexes(true) : null;
         this.mapStoreContext = createMapStoreContext(this);
+        System.err.println("mapName: " + name + " = " + mapStoreContext);
         initWanReplication(mapServiceContext.getNodeEngine());
     }
 

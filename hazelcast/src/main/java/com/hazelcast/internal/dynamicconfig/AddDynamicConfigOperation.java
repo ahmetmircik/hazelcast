@@ -16,15 +16,16 @@
 
 package com.hazelcast.internal.dynamicconfig;
 
-import com.hazelcast.internal.config.ConfigDataSerializerHook;
 import com.hazelcast.internal.cluster.ClusterService;
 import com.hazelcast.internal.cluster.impl.ClusterTopologyChangedException;
+import com.hazelcast.internal.config.ConfigDataSerializerHook;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.operationservice.ExceptionAction;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
 
@@ -44,6 +45,7 @@ public class AddDynamicConfigOperation extends AbstractDynamicConfigOperation {
 
     @Override
     public void run() throws Exception {
+        TimeUnit.MILLISECONDS.sleep(100);
         ClusterWideConfigurationService service = getService();
         service.registerConfigLocally(config, ConfigCheckMode.THROW_EXCEPTION);
         ClusterService clusterService = getNodeEngine().getClusterService();

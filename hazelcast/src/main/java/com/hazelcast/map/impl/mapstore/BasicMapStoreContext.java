@@ -191,4 +191,11 @@ final class BasicMapStoreContext implements MapStoreContext {
     void setMapStoreConfig(MapStoreConfig mapStoreConfig) {
         this.mapStoreConfig = mapStoreConfig;
     }
+
+    @Override
+    public String toString() {
+        return "BasicMapStoreContext{" +
+                "mapName='" + mapName + '\'' +
+                '}';
+    }
 }

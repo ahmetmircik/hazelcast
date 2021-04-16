@@ -94,6 +94,46 @@ public class MapLoaderTest extends HazelcastTestSupport {
     }
 
     @Test
+    public void name() {
+        TestHazelcastInstanceFactory factory = new TestHazelcastInstanceFactory();
+        HazelcastInstance server1 = factory.newHazelcastInstance();
+        factory.newHazelcastInstance();
+        factory.newHazelcastInstance();
+
+        sleepSeconds(2);
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig()
+                .setEnabled(true)
+                .setInitialLoadMode(MapStoreConfig.InitialLoadMode.LAZY)
+                .setClassName(TestMapLoader.class.getCanonicalName());
+
+        String mapName = "transition-no";
+        MapConfig mapConfig = new MapConfig(mapName);
+        mapConfig.setMapStoreConfig(mapStoreConfig);
+
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                sleepAtLeastMillis(200);
+                while (true) {
+                    Object o = server1.getMap(mapName).size();
+                    System.err.println(o);
+                    sleepSeconds(1);
+                }
+            }
+        };
+
+
+        new Thread(runnable).start();
+        server1.getConfig().addMapConfig(mapConfig);
+
+
+        sleepSeconds(30);
+
+
+    }
+
+    @Test
     public void testSenderAndBackupTerminates_AfterInitialLoad() {
         final ILogger logger = Logger.getLogger(MapLoaderTest.class);
         String name = randomString();
