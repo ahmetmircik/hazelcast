@@ -36,6 +36,7 @@ public final class PartitionStamp {
      * @return stamp value
      */
     public static long calculateStamp(InternalPartition[] partitions) {
+       // System.err.println(Thread.currentThread().getName());
         byte[] bb = new byte[Integer.BYTES * partitions.length];
         for (InternalPartition partition : partitions) {
             Bits.writeIntB(bb, partition.getPartitionId() * Integer.BYTES, partition.version());

@@ -16,6 +16,7 @@
 
 package com.hazelcast.cluster;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.InterfacesConfig;
 import com.hazelcast.config.JoinConfig;
@@ -26,9 +27,11 @@ import com.hazelcast.config.security.RealmConfig;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.instance.impl.HazelcastInstanceFactory;
+import com.hazelcast.map.IMap;
 import com.hazelcast.spi.properties.ClusterProperty;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.annotation.SlowTest;
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,6 +39,9 @@ import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(SlowTest.class)
@@ -45,6 +51,80 @@ public class TcpIpJoinTest extends AbstractJoinTest {
     @After
     public void killAllHazelcastInstances() throws IOException {
         HazelcastInstanceFactory.terminateAll();
+    }
+
+    @Test
+    public void name() throws InterruptedException {
+        Config config = newConfig();
+
+        HazelcastInstance h1 = Hazelcast.newHazelcastInstance(config);
+        HazelcastInstance h2 = Hazelcast.newHazelcastInstance(config);
+        HazelcastInstance h3 = Hazelcast.newHazelcastInstance(config);
+
+        assertClusterSize(3, h3);
+
+        HazelcastInstance client = HazelcastClient.newHazelcastClient();
+
+
+//        Config lite = newConfig();
+//        lite.setLiteMember(true);
+//        HazelcastInstance client = Hazelcast.newHazelcastInstance(lite);
+
+
+        IMap<Object, Object> map = client.getMap("test");
+
+        for (int i = 0; i < 10_000; i++) {
+            map.set(i, i);
+        }
+
+        AtomicBoolean stop = new AtomicBoolean();
+        AtomicLong measured = new AtomicLong();
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+                long diff = 0;
+                while (!stop.get()) {
+                    for (int i = 0; i < 10_000; i++) {
+                        long s = System.nanoTime();
+                        map.get(i);
+                        long newDiff = System.nanoTime() - s;
+                        if (diff < newDiff) {
+                            diff = newDiff;
+                        }
+                    }
+                }
+                measured.set(diff);
+            }
+        };
+
+        thread.start();
+
+        sleepSeconds(10);
+        h3.getLifecycleService().terminate();
+
+        stop.set(true);
+        thread.join();
+
+        sleepSeconds(10);
+
+
+        System.err.println("time spent: " + TimeUnit.NANOSECONDS.toMillis(measured.get()));
+
+    }
+
+    @NotNull
+    private Config newConfig() {
+        Config config = new Config();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "10001");
+
+        NetworkConfig networkConfig = config.getNetworkConfig();
+        JoinConfig join = networkConfig.getJoin();
+        TcpIpConfig tcpIpConfig = join.getTcpIpConfig();
+        tcpIpConfig.setEnabled(true);
+        tcpIpConfig.addMember("127.0.0.1:5701");
+        tcpIpConfig.addMember("127.0.0.1:5702");
+        tcpIpConfig.addMember("127.0.0.1:5703");
+        return config;
     }
 
     @Test

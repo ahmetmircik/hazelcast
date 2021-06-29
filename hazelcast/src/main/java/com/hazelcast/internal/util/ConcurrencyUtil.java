@@ -51,8 +51,17 @@ public final class ConcurrencyUtil {
 
     static {
         Executor asyncExecutor;
-        if (ForkJoinPool.getCommonPoolParallelism() > 1) {
-            asyncExecutor = ForkJoinPool.commonPool();
+
+        int parallelism = Runtime.getRuntime().availableProcessors() - 1;
+        if (parallelism < 0) {
+            parallelism = 1;
+        }
+
+        if (parallelism > 1) {
+            asyncExecutor = new ForkJoinPool(2 * parallelism,
+                    ForkJoinPool.defaultForkJoinWorkerThreadFactory,
+                    null, true);
+
         } else {
             asyncExecutor = command -> new Thread(command).start();
         }
