@@ -42,7 +42,8 @@ import static org.junit.Assert.assertTrue;
 @Category({QuickTest.class, ParallelJVMTest.class})
 public class GlobalIndexPartitionTrackerTest extends HazelcastTestSupport {
 
-    @Test @Repeat(100)
+    @Test
+    @Repeat(100)
     public void name() {
         int partitionCount = 1000;
         GlobalIndexPartitionTracker tracker = new GlobalIndexPartitionTracker(partitionCount);
