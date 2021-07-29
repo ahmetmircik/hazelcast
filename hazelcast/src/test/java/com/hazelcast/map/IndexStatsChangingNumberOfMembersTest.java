@@ -65,7 +65,7 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
 
     @Parameterized.Parameters(name = "format:{0}")
     public static Collection<Object[]> parameters() {
-        return asList(new Object[][]{ {InMemoryFormat.OBJECT}});
+        return asList(new Object[][]{{InMemoryFormat.OBJECT}});
     }
 
     @Parameterized.Parameter
@@ -73,7 +73,8 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
 
     protected static final int NODE_COUNT = 3;
 
-    @Test @Repeat(1)
+    @Test
+    @Repeat(1)
     public void testIndexStatsQueryingChangingNumberOfMembers() {
         int queriesBulk = 100;
 
@@ -84,7 +85,7 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
 
         String mapName = randomMapName();
         Config config = getConfig();
-        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(),"1001");
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1001");
         config.getMapConfig(mapName).setInMemoryFormat(inMemoryFormat).setBackupCount(5);
 
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory();
@@ -141,13 +142,12 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
             HazelcastInstance[] instances = factory.getAllHazelcastInstances().toArray(new HazelcastInstance[0]);
             awaitStable(mapName, instances);
 
-            instances[RandomPicker.getInt(1,instances.length)].shutdown();
+            instances[RandomPicker.getInt(1, instances.length)].shutdown();
 
             instances = factory.getAllHazelcastInstances().toArray(new HazelcastInstance[0]);
             awaitStable(mapName, instances);
 
         }
-
 
 
 //        // check that local stats were not affected by adding new member to cluster
