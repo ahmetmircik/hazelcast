@@ -16,14 +16,21 @@
 
 package com.hazelcast.query.impl;
 
+import com.hazelcast.internal.util.RandomPicker;
 import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.query.impl.GlobalIndexPartitionTracker.PartitionStamp;
 import com.hazelcast.test.HazelcastParallelClassRunner;
+import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -33,7 +40,53 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelJVMTest.class})
-public class GlobalIndexPartitionTrackerTest {
+public class GlobalIndexPartitionTrackerTest extends HazelcastTestSupport {
+
+    @Test @Repeat(100)
+    public void name() {
+        int partitionCount = 1000;
+        GlobalIndexPartitionTracker tracker = new GlobalIndexPartitionTracker(partitionCount);
+
+        ExecutorService es = Executors.newWorkStealingPool();
+
+        for (int i = 0; i < partitionCount; i++) {
+            int finalI = i;
+            Runnable runnable = () -> {
+                sleepAtLeastMillis(RandomPicker.getInt(1, 5));
+                tracker.beginPartitionUpdate();
+                if (finalI % 2 == 0) {
+                    tracker.partitionIndexed(finalI);
+                } else {
+                    tracker.partitionUnindexed(finalI);
+                }
+            };
+            es.submit(runnable);
+        }
+
+        shutdownAndAwaitTermination(es);
+
+        assertEquals(partitionCount / 2, tracker.indexedCount());
+
+    }
+
+    void shutdownAndAwaitTermination(ExecutorService pool) {
+        pool.shutdown(); // Disable new tasks from being submitted
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                pool.shutdownNow(); // Cancel currently executing tasks
+                // Wait a while for tasks to respond to being cancelled
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS))
+                    System.err.println("Pool did not terminate");
+            }
+        } catch (InterruptedException ie) {
+            // (Re-)Cancel if current thread also interrupted
+            pool.shutdownNow();
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
+    }
+
     @Test
     public void test_index_unindex() {
         GlobalIndexPartitionTracker tracker = new GlobalIndexPartitionTracker(100);

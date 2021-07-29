@@ -22,6 +22,7 @@ import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.IndexType;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.monitor.impl.PerIndexStats;
+import com.hazelcast.internal.util.RandomPicker;
 import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.partition.Partition;
@@ -29,11 +30,13 @@ import com.hazelcast.query.LocalIndexStats;
 import com.hazelcast.query.Predicates;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.InternalIndex;
+import com.hazelcast.spi.properties.ClusterProperty;
 import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -62,7 +65,7 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
 
     @Parameterized.Parameters(name = "format:{0}")
     public static Collection<Object[]> parameters() {
-        return asList(new Object[][]{{InMemoryFormat.OBJECT}, {InMemoryFormat.BINARY}});
+        return asList(new Object[][]{ {InMemoryFormat.OBJECT}});
     }
 
     @Parameterized.Parameter
@@ -70,20 +73,21 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
 
     protected static final int NODE_COUNT = 3;
 
-    @Test
+    @Test @Repeat(1)
     public void testIndexStatsQueryingChangingNumberOfMembers() {
         int queriesBulk = 100;
 
-        int entryCount = 1000;
+        int entryCount = 10000;
         final int lessEqualCount = 20;
         double expectedEqual = 1.0 - 1.0 / entryCount;
         double expectedGreaterEqual = 1.0 - ((double) lessEqualCount) / entryCount;
 
         String mapName = randomMapName();
         Config config = getConfig();
-        config.getMapConfig(mapName).setInMemoryFormat(inMemoryFormat);
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(),"1001");
+        config.getMapConfig(mapName).setInMemoryFormat(inMemoryFormat).setBackupCount(5);
 
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(NODE_COUNT);
+        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory();
         HazelcastInstance instance1 = factory.newHazelcastInstance(config);
         HazelcastInstance instance2 = factory.newHazelcastInstance(config);
         IMap<Integer, Integer> map1 = instance1.getMap(mapName);
@@ -130,97 +134,107 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
         assertEquals(2 * queriesBulk, originalMap2IndexedQueryCount);
         assertEquals(2 * queriesBulk, originalMap2IndexQueryCount);
 
-        // let's add another member
-        HazelcastInstance instance3 = factory.newHazelcastInstance(config);
-        IMap<Integer, Integer> map3 = instance3.getMap(mapName);
+        for (int i = 0; i < 100; i++) {
+            HazelcastInstance instance3 = factory.newHazelcastInstance(config);
+            IMap<Integer, Integer> map3 = instance3.getMap(mapName);
 
-        awaitStable(mapName, instance1, instance2, instance3);
+            HazelcastInstance[] instances = factory.getAllHazelcastInstances().toArray(new HazelcastInstance[0]);
+            awaitStable(mapName, instances);
 
-        // check that local stats were not affected by adding new member to cluster
-        assertEquals(originalMap1QueryCount, stats(map1).getQueryCount());
-        assertEquals(originalMap1IndexedQueryCount, stats(map1).getIndexedQueryCount());
-        assertEquals(originalMap1IndexQueryCount, valueStats(map1).getQueryCount());
-        assertEquals(originalMap1AverageHitLatency, valueStats(map1).getAverageHitLatency());
-        assertEquals(originalMap1AverageHitSelectivity, valueStats(map1).getAverageHitSelectivity(), 0.001);
-        assertEquals(originalMap2QueryCount, stats(map2).getQueryCount());
-        assertEquals(originalMap2IndexedQueryCount, stats(map2).getIndexedQueryCount());
-        assertEquals(originalMap2IndexQueryCount, valueStats(map2).getQueryCount());
-        assertEquals(originalMap2AverageHitLatency, valueStats(map2).getAverageHitLatency());
-        assertEquals(originalMap2AverageHitSelectivity, valueStats(map2).getAverageHitSelectivity(), 0.001);
-        assertEquals(originalOverallAverageHitSelectivity, calculateOverallSelectivity(map1, map2, map3), 0.001);
+            instances[RandomPicker.getInt(1,instances.length)].shutdown();
 
-        for (int i = 0; i < queriesBulk; i++) {
-            map1.entrySet(Predicates.alwaysTrue());
-            map3.entrySet(Predicates.equal("this", 10));
-            map2.entrySet(Predicates.lessEqual("this", lessEqualCount));
+            instances = factory.getAllHazelcastInstances().toArray(new HazelcastInstance[0]);
+            awaitStable(mapName, instances);
+
         }
 
-        assertEquals(6 * queriesBulk, stats(map1).getQueryCount());
-        assertEquals(4 * queriesBulk, stats(map1).getIndexedQueryCount());
-        assertEquals(4 * queriesBulk, valueStats(map1).getQueryCount());
-        assertEquals(6 * queriesBulk, stats(map2).getQueryCount());
-        assertEquals(4 * queriesBulk, stats(map2).getIndexedQueryCount());
-        assertEquals(4 * queriesBulk, valueStats(map2).getQueryCount());
-        assertEquals(3 * queriesBulk, stats(map3).getQueryCount());
-        assertEquals(2 * queriesBulk, stats(map3).getIndexedQueryCount());
-        assertEquals(2 * queriesBulk, valueStats(map3).getQueryCount());
 
-        originalOverallAverageHitSelectivity = calculateOverallSelectivity(map1, map2, map3);
-        assertEquals((expectedEqual + expectedGreaterEqual) / 2, originalOverallAverageHitSelectivity, 0.015);
 
-        originalMap1QueryCount = stats(map1).getQueryCount();
-        originalMap1IndexedQueryCount = stats(map1).getIndexedQueryCount();
-        originalMap1IndexQueryCount = valueStats(map1).getQueryCount();
-        originalMap1AverageHitLatency = valueStats(map1).getAverageHitLatency();
-        originalMap1AverageHitSelectivity = valueStats(map1).getAverageHitSelectivity();
-        long originalMap3QueryCount = stats(map3).getQueryCount();
-        long originalMap3IndexedQueryCount = stats(map3).getIndexedQueryCount();
-        long originalMap3IndexQueryCount = valueStats(map3).getQueryCount();
-        long originalMap3AverageHitLatency = valueStats(map3).getAverageHitLatency();
-        double originalMap3AverageHitSelectivity = valueStats(map3).getAverageHitSelectivity();
-
-        // After removing member AverageHitSelectivity will not provide accurate value => this serves just for ensure
-        // that AverageHitSelectivity is still counted correctly on live members.
-        long map2Hits = valueStats(map2).getHitCount();
-        double map2TotalHitSelectivity = valueStats(map2).getAverageHitSelectivity() * map2Hits;
-
-        // let's remove one member
-        instance2.shutdown();
-        awaitStable(mapName, instance1, instance3);
-
-        // check that local stats were not affected by removing member from cluster
-        assertEquals(originalMap1QueryCount, stats(map1).getQueryCount());
-        assertEquals(originalMap1IndexedQueryCount, stats(map1).getIndexedQueryCount());
-        assertEquals(originalMap1IndexQueryCount, valueStats(map1).getQueryCount());
-        assertEquals(originalMap1AverageHitLatency, valueStats(map1).getAverageHitLatency());
-        assertEquals(originalMap1AverageHitSelectivity, valueStats(map1).getAverageHitSelectivity(), 0.001);
-        assertEquals(originalMap3QueryCount, stats(map3).getQueryCount());
-        assertEquals(originalMap3IndexedQueryCount, stats(map3).getIndexedQueryCount());
-        assertEquals(originalMap3IndexQueryCount, valueStats(map3).getQueryCount());
-        assertEquals(originalMap3AverageHitLatency, valueStats(map3).getAverageHitLatency());
-        assertEquals(originalMap3AverageHitSelectivity, valueStats(map3).getAverageHitSelectivity(), 0.001);
-
-        assertEquals(originalOverallAverageHitSelectivity,
-                calculateOverallSelectivity(map2Hits, map2TotalHitSelectivity, map1, map3), 0.015);
-
-        for (int i = 0; i < queriesBulk; i++) {
-            map3.entrySet(Predicates.alwaysTrue());
-            map1.entrySet(Predicates.equal("this", 10));
-            map3.entrySet(Predicates.lessEqual("this", lessEqualCount));
-        }
-
-        assertEquals(9 * queriesBulk, stats(map1).getQueryCount());
-        assertEquals(6 * queriesBulk, stats(map1).getIndexedQueryCount());
-        assertEquals(6 * queriesBulk, valueStats(map1).getQueryCount());
-        assertEquals(6 * queriesBulk, stats(map3).getQueryCount());
-        assertEquals(4 * queriesBulk, stats(map3).getIndexedQueryCount());
-        assertEquals(4 * queriesBulk, valueStats(map3).getQueryCount());
-
-        // This work correctly only due to we stored data from shutdown member and uses this data for counting
-        // originalOverallAverageHitSelectivity. However this not represent real scenario. This check is here just for ensure
-        // that AverageHitSelectivity is still counted correctly on live members.
-        originalOverallAverageHitSelectivity = calculateOverallSelectivity(map2Hits, map2TotalHitSelectivity, map1, map3);
-        assertEquals((expectedEqual + expectedGreaterEqual) / 2, originalOverallAverageHitSelectivity, 0.015);
+//        // check that local stats were not affected by adding new member to cluster
+//        assertEquals(originalMap1QueryCount, stats(map1).getQueryCount());
+//        assertEquals(originalMap1IndexedQueryCount, stats(map1).getIndexedQueryCount());
+//        assertEquals(originalMap1IndexQueryCount, valueStats(map1).getQueryCount());
+//        assertEquals(originalMap1AverageHitLatency, valueStats(map1).getAverageHitLatency());
+//        assertEquals(originalMap1AverageHitSelectivity, valueStats(map1).getAverageHitSelectivity(), 0.001);
+//        assertEquals(originalMap2QueryCount, stats(map2).getQueryCount());
+//        assertEquals(originalMap2IndexedQueryCount, stats(map2).getIndexedQueryCount());
+//        assertEquals(originalMap2IndexQueryCount, valueStats(map2).getQueryCount());
+//        assertEquals(originalMap2AverageHitLatency, valueStats(map2).getAverageHitLatency());
+//        assertEquals(originalMap2AverageHitSelectivity, valueStats(map2).getAverageHitSelectivity(), 0.001);
+//        assertEquals(originalOverallAverageHitSelectivity, calculateOverallSelectivity(map1, map2, map3), 0.001);
+//
+//        for (int i = 0; i < queriesBulk; i++) {
+//            map1.entrySet(Predicates.alwaysTrue());
+//            map3.entrySet(Predicates.equal("this", 10));
+//            map2.entrySet(Predicates.lessEqual("this", lessEqualCount));
+//        }
+//
+//        assertEquals(6 * queriesBulk, stats(map1).getQueryCount());
+//        assertEquals(4 * queriesBulk, stats(map1).getIndexedQueryCount());
+//        assertEquals(4 * queriesBulk, valueStats(map1).getQueryCount());
+//        assertEquals(6 * queriesBulk, stats(map2).getQueryCount());
+//        assertEquals(4 * queriesBulk, stats(map2).getIndexedQueryCount());
+//        assertEquals(4 * queriesBulk, valueStats(map2).getQueryCount());
+//        assertEquals(3 * queriesBulk, stats(map3).getQueryCount());
+//        assertEquals(2 * queriesBulk, stats(map3).getIndexedQueryCount());
+//        assertEquals(2 * queriesBulk, valueStats(map3).getQueryCount());
+//
+//        originalOverallAverageHitSelectivity = calculateOverallSelectivity(map1, map2, map3);
+//        assertEquals((expectedEqual + expectedGreaterEqual) / 2, originalOverallAverageHitSelectivity, 0.015);
+//
+//        originalMap1QueryCount = stats(map1).getQueryCount();
+//        originalMap1IndexedQueryCount = stats(map1).getIndexedQueryCount();
+//        originalMap1IndexQueryCount = valueStats(map1).getQueryCount();
+//        originalMap1AverageHitLatency = valueStats(map1).getAverageHitLatency();
+//        originalMap1AverageHitSelectivity = valueStats(map1).getAverageHitSelectivity();
+//        long originalMap3QueryCount = stats(map3).getQueryCount();
+//        long originalMap3IndexedQueryCount = stats(map3).getIndexedQueryCount();
+//        long originalMap3IndexQueryCount = valueStats(map3).getQueryCount();
+//        long originalMap3AverageHitLatency = valueStats(map3).getAverageHitLatency();
+//        double originalMap3AverageHitSelectivity = valueStats(map3).getAverageHitSelectivity();
+//
+//        // After removing member AverageHitSelectivity will not provide accurate value => this serves just for ensure
+//        // that AverageHitSelectivity is still counted correctly on live members.
+//        long map2Hits = valueStats(map2).getHitCount();
+//        double map2TotalHitSelectivity = valueStats(map2).getAverageHitSelectivity() * map2Hits;
+//
+//        // let's remove one member
+//        instance2.shutdown();
+//        awaitStable(mapName, instance1, instance3);
+//
+//        // check that local stats were not affected by removing member from cluster
+//        assertEquals(originalMap1QueryCount, stats(map1).getQueryCount());
+//        assertEquals(originalMap1IndexedQueryCount, stats(map1).getIndexedQueryCount());
+//        assertEquals(originalMap1IndexQueryCount, valueStats(map1).getQueryCount());
+//        assertEquals(originalMap1AverageHitLatency, valueStats(map1).getAverageHitLatency());
+//        assertEquals(originalMap1AverageHitSelectivity, valueStats(map1).getAverageHitSelectivity(), 0.001);
+//        assertEquals(originalMap3QueryCount, stats(map3).getQueryCount());
+//        assertEquals(originalMap3IndexedQueryCount, stats(map3).getIndexedQueryCount());
+//        assertEquals(originalMap3IndexQueryCount, valueStats(map3).getQueryCount());
+//        assertEquals(originalMap3AverageHitLatency, valueStats(map3).getAverageHitLatency());
+//        assertEquals(originalMap3AverageHitSelectivity, valueStats(map3).getAverageHitSelectivity(), 0.001);
+//
+//        assertEquals(originalOverallAverageHitSelectivity,
+//                calculateOverallSelectivity(map2Hits, map2TotalHitSelectivity, map1, map3), 0.015);
+//
+//        for (int i = 0; i < queriesBulk; i++) {
+//            map3.entrySet(Predicates.alwaysTrue());
+//            map1.entrySet(Predicates.equal("this", 10));
+//            map3.entrySet(Predicates.lessEqual("this", lessEqualCount));
+//        }
+//
+//        assertEquals(9 * queriesBulk, stats(map1).getQueryCount());
+//        assertEquals(6 * queriesBulk, stats(map1).getIndexedQueryCount());
+//        assertEquals(6 * queriesBulk, valueStats(map1).getQueryCount());
+//        assertEquals(6 * queriesBulk, stats(map3).getQueryCount());
+//        assertEquals(4 * queriesBulk, stats(map3).getIndexedQueryCount());
+//        assertEquals(4 * queriesBulk, valueStats(map3).getQueryCount());
+//
+//        // This work correctly only due to we stored data from shutdown member and uses this data for counting
+//        // originalOverallAverageHitSelectivity. However this not represent real scenario. This check is here just for ensure
+//        // that AverageHitSelectivity is still counted correctly on live members.
+//        originalOverallAverageHitSelectivity = calculateOverallSelectivity(map2Hits, map2TotalHitSelectivity, map1, map3);
+//        assertEquals((expectedEqual + expectedGreaterEqual) / 2, originalOverallAverageHitSelectivity, 0.015);
     }
 
     @Test
@@ -438,10 +452,12 @@ public class IndexStatsChangingNumberOfMembersTest extends HazelcastTestSupport 
                 // Double check: if we still see same partition distribution
                 assertEquals(memberToPartitions, toMemberToPartitionsMap(instances[0]));
 
-                assertEquals("MemberPartitions={size=" + expectedPartitions.size() + ", partitions=" + expectedPartitions
-                                + "}, " + index,
+                String message = "MemberPartitions={size=" + expectedPartitions.size() + ", partitions=" + expectedPartitions
+                        + "}, " + index;
+                assertEquals(message,
                         expectedPartitions,
                         index.getPartitionStamp().partitions);
+                //System.err.println(message);
             }
         });
     }

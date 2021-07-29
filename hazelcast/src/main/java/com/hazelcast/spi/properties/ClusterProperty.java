@@ -639,7 +639,7 @@ public final class ClusterProperty {
      * </ul>
      */
     public static final HazelcastProperty PARTITION_MAX_PARALLEL_MIGRATIONS
-            = new HazelcastProperty("hazelcast.partition.max.parallel.migrations", 10);
+            = new HazelcastProperty("hazelcast.partition.max.parallel.migrations", 1000);
 
     /**
      * Maximum number of anti-entropy partition replications to be executed on a member.

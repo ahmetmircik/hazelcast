@@ -19,6 +19,7 @@ package com.hazelcast.internal.cluster.impl;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.JoinConfig;
 import com.hazelcast.config.MulticastConfig;
+import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.instance.impl.Node;
 import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
@@ -168,6 +169,11 @@ public final class MulticastService implements Runnable {
         multicastConfig.setMulticastGroup(multicastGroup);
         multicastSocket.joinGroup(InetAddress.getByName(multicastGroup));
         multicastSocket.setSoTimeout(SOCKET_TIMEOUT);
+    }
+
+    public static void main(String[] args) {
+        Hazelcast.newHazelcastInstance();
+        Hazelcast.newHazelcastInstance();
     }
 
     public void addMulticastListener(MulticastListener multicastListener) {
