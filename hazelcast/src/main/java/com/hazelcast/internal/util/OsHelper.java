@@ -26,6 +26,10 @@ public final class OsHelper {
      */
     public static final String OS = StringUtil.lowerCaseInternal(System.getProperty("os.name"));
 
+    private static final boolean IS_LINUX = OS.contains("nux");
+    private static final boolean IS_UNIX_FAMILY = (OS.contains("nix") || OS.contains("nux") || OS.contains("aix"));
+    private static final boolean IS_MAC_OS = OS.contains("mac") || OS.contains("darwin");
+
     private OsHelper() {
     }
 
@@ -35,7 +39,7 @@ public final class OsHelper {
      * @return {@code true} if the current system is Linux.
      */
     public static boolean isLinux() {
-        return OS.contains("nux");
+        return IS_LINUX;
     }
 
     /**
@@ -44,7 +48,7 @@ public final class OsHelper {
      * @return {@code true} if the current system is Unix/Linux/AIX.
      */
     public static boolean isUnixFamily() {
-        return (OS.contains("nix") || OS.contains("nux") || OS.contains("aix"));
+        return IS_UNIX_FAMILY;
     }
 
     /**
@@ -53,6 +57,6 @@ public final class OsHelper {
      * @return {@code true} if the current system is Mac.
      */
     public static boolean isMac() {
-        return (OS.contains("mac") || OS.contains("darwin"));
+        return IS_MAC_OS;
     }
 }
