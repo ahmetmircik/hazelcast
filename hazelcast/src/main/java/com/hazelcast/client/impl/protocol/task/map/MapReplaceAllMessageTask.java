@@ -50,7 +50,7 @@ public class MapReplaceAllMessageTask
     protected OperationFactory createOperationFactory() {
         MapOperationProvider operationProvider = getMapOperationProvider(parameters.name);
         return operationProvider.createPartitionWideEntryWithPredicateOperationFactory(parameters.name,
-           new MapEntryReplacingEntryProcessor(function), Predicates.alwaysTrue());
+                new MapEntryReplacingEntryProcessor(function), Predicates.alwaysTrue());
     }
 
     @Override
