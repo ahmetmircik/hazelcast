@@ -116,7 +116,6 @@ import com.hazelcast.map.impl.operation.RemoveFromLoadAllOperation;
 import com.hazelcast.map.impl.operation.RemoveIfSameOperation;
 import com.hazelcast.map.impl.operation.RemoveInterceptorOperation;
 import com.hazelcast.map.impl.operation.RemoveOperation;
-import com.hazelcast.map.impl.operation.ReplaceAllOperation;
 import com.hazelcast.map.impl.operation.ReplaceIfSameOperation;
 import com.hazelcast.map.impl.operation.ReplaceOperation;
 import com.hazelcast.map.impl.operation.SetOperation;
@@ -324,8 +323,7 @@ public final class MapDataSerializerHook implements DataSerializerHook {
     public static final int MAP_FETCH_INDEX_OPERATION = 155;
     public static final int INDEX_ITERATION_POINTER = 156;
     public static final int MAP_FETCH_INDEX_OPERATION_RESULT = 157;
-    public static final int REPLACE_ALL = 158;
-    public static final int MAP_CHUNK = 159;
+    public static final int MAP_CHUNK = 158;
 
     private static final int LEN = MAP_CHUNK + 1;
 
@@ -492,7 +490,6 @@ public final class MapDataSerializerHook implements DataSerializerHook {
         constructors[MAP_FETCH_INDEX_OPERATION] = arg -> new MapFetchIndexOperation();
         constructors[INDEX_ITERATION_POINTER] = arg -> new IndexIterationPointer();
         constructors[MAP_FETCH_INDEX_OPERATION_RESULT] = arg -> new MapFetchIndexOperationResult();
-        constructors[REPLACE_ALL] = arg -> new ReplaceAllOperation();
         constructors[MAP_CHUNK] = arg -> new MapChunk();
 
         return new ArrayDataSerializableFactory(constructors);
