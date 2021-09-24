@@ -37,6 +37,10 @@ import java.util.Map;
  */
 public interface Storage<K, R> {
 
+    default Object getMutex() {
+        return null;
+    }
+
     void put(K key, R record);
 
     void updateRecordValue(K key, R record, Object value);
