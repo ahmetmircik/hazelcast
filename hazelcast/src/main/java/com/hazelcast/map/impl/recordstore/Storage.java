@@ -25,6 +25,8 @@ import com.hazelcast.map.impl.iterator.MapKeysWithCursor;
 import com.hazelcast.map.impl.record.Record;
 
 import javax.annotation.Nonnull;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -143,5 +145,10 @@ public interface Storage<K, R> {
 
     default void afterOperation() {
         // do nothing
+    }
+
+    @SuppressWarnings("rawtypes")
+    default Collection<MutationObserver<Record>> makeMutationObservers() {
+        return Collections.emptyList();
     }
 }

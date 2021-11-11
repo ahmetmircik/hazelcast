@@ -45,6 +45,7 @@ import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
+import java.util.Collection;
 
 /**
  * Contains record store common parts.
@@ -108,6 +109,11 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         // Add observer for indexing
         indexingObserver = new IndexingMutationObserver<>(this, serializationService);
         mutationObserver.add(indexingObserver);
+
+        Collection<MutationObserver<Record>> storageObservers = storage.makeMutationObservers();
+        for (MutationObserver<Record> observer : storageObservers) {
+            mutationObserver.add(observer);
+        }
     }
 
     public IndexingMutationObserver<Record> getIndexingObserver() {
