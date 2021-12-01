@@ -315,6 +315,14 @@ public class MigrationManager {
         finalizingMigrationsRegistry.add(migration);
     }
 
+    public boolean isChunkedMigrationEnabled() {
+        return chunkedMigrationEnabled;
+    }
+
+    public int getMaxTotalChunkedDataInBytes() {
+        return maxTotalChunkedDataInBytes;
+    }
+
     public boolean removeFinalizingMigration(MigrationInfo migration) {
         return finalizingMigrationsRegistry.remove(migration);
     }
