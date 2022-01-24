@@ -73,7 +73,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.hazelcast.cluster.impl.MemberImpl.NA_MEMBER_LIST_JOIN_VERSION;
@@ -87,8 +89,6 @@ import static com.hazelcast.internal.util.Preconditions.checkFalse;
 import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.internal.util.Preconditions.checkTrue;
 import static java.lang.String.format;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 @SuppressWarnings({"checkstyle:methodcount", "checkstyle:classdataabstractioncoupling", "checkstyle:classfanoutcomplexity"})
 public class ClusterServiceImpl implements ClusterService, ConnectionListener, ManagedService,
@@ -651,7 +651,6 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             logger.fine("Setting master address to " + master);
         }
         masterAddress = master;
-        joined.getAndUpdate(holder -> new JoinHolder(holder.isJoined)).latch.countDown();
     }
 
     @Override
@@ -685,7 +684,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     // should be called under lock
     void setJoined(boolean val) {
         assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
-        joined.getAndUpdate(holder -> new JoinHolder(val)).latch.countDown();
+        joined.updateAndGet(holder -> new JoinHolder(val)).latch.countDown();
     }
 
     @Override
