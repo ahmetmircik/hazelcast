@@ -223,7 +223,7 @@ public class ClusterHeartbeatManager {
                                 Collection<MemberInfo> suspectedMembers) {
         Address senderAddress = senderMembersViewMetadata.getMemberAddress();
         try {
-            long timeout = Math.min(TimeUnit.SECONDS.toMillis(1), heartbeatIntervalMillis / 2);
+            long timeout = Math.min(TimeUnit.SECONDS.toMillis(5), heartbeatIntervalMillis / 2);
             if (!clusterServiceLock.tryLock(timeout, MILLISECONDS)) {
                 logger.warning("Cannot handle heartbeat from " + senderAddress + ", could not acquire lock in time.");
                 return;
