@@ -30,6 +30,7 @@ import java.util.LinkedList;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
+
 class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<RecordStore> {
 
     private final MapServiceContext mapServiceContext;
