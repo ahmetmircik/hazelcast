@@ -925,10 +925,16 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                                   long maxIdle, long expiryTime, long now, UUID transactionId,
                                   EntryEventType entryEventType, boolean store,
                                   boolean backup) {
-        Record record = createRecord(key, newValue, now);
         if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
-            putIntoMapStore(record, key, newValue, ttl, maxIdle, now, transactionId);
+            long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
+            newValue = mapDataStore.add(key, newValue, expirationTime, now, transactionId);
         }
+
+        Record record = createRecord(key, newValue, now);
+        if (mapDataStore.isPostProcessingMapStore()) {
+            storage.updateRecordValue(key, record, newValue);
+        }
+
         storage.put(key, record);
         expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
 
@@ -942,18 +948,19 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     @SuppressWarnings("checkstyle:parameternumber")
     protected Object updateRecord(Record record, Data key, Object oldValue, Object newValue,
-                                long ttl, long maxIdle, long expiryTime, long now, UUID transactionId,
-                                boolean store, boolean countAsAccess, boolean backup) {
+                                  long ttl, long maxIdle, long expiryTime, long now, UUID transactionId,
+                                  boolean store, boolean countAsAccess, boolean backup) {
+
+        if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
+            newValue = putIntoMapStore(record, key, newValue,
+                    ttl, maxIdle, now, transactionId);
+        }
+
         updateStatsOnPut(countAsAccess, now);
         record.onUpdate(now);
 
         if (countAsAccess) {
             record.onAccess(now);
-        }
-
-        if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
-            newValue = putIntoMapStore(record, key, newValue,
-                    ttl, maxIdle, now, transactionId);
         }
 
         storage.updateRecordValue(key, record, newValue);
@@ -1181,7 +1188,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return getRecordOrNull(key, now, false);
     }
 
-    protected Record getRecordOrNull(Data key, long now, boolean backup) {
+    @Override
+    public Record getRecordOrNull(Data key, long now, boolean backup) {
         Record record = storage.get(key);
         if (record != null) {
             return evictIfExpired(key, now, backup) ? null : record;

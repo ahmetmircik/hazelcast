@@ -80,7 +80,7 @@ public class WriteThroughStore extends AbstractMapDataStore<Data, Object> {
 
     @Override
     public void reset() {
-
+        // NOP intentionally
     }
 
     @Override

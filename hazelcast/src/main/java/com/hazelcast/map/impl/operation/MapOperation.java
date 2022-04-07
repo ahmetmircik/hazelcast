@@ -39,6 +39,8 @@ import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
+import com.hazelcast.spi.impl.operationservice.BlockingOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
@@ -52,6 +54,9 @@ import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
 
 @SuppressWarnings("checkstyle:methodcount")
 public abstract class MapOperation extends AbstractNamedOperation
@@ -109,6 +114,31 @@ public abstract class MapOperation extends AbstractNamedOperation
             recordStore.beforeOperation();
         }
         // Concrete classes can override this method.
+    }
+
+    public RecordStore<Record> getRecordStore() {
+        return recordStore;
+    }
+
+    @Override
+    public CallStatus call() throws Exception {
+        if (this instanceof BlockingOperation) {
+            BlockingOperation blockingOperation = (BlockingOperation) this;
+            if (blockingOperation.shouldWait()) {
+                return WAIT;
+            }
+        }
+
+        return callInternal();
+    }
+
+    protected CallStatus callInternal() {
+        try {
+            runInternal();
+        } catch (NativeOutOfMemoryError e) {
+            rerunWithForcedEviction();
+        }
+        return returnsResponse() ? RESPONSE : VOID;
     }
 
     @Override

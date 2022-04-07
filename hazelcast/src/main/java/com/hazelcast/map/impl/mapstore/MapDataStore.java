@@ -21,6 +21,7 @@ import com.hazelcast.map.MapLoader;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.Collection;
 import java.util.Map;
@@ -143,4 +144,20 @@ public interface MapDataStore<K, V> {
     boolean isWithExpirationTime();
 
     TxnReservedCapacityCounter getTxnReservedCapacityCounter();
+
+    default void registerOp(Operation operation) {
+
+    }
+
+    default void deregisterOp(Operation operation) {
+
+    }
+
+    default boolean hasQueuedOperation() {
+        return false;
+    }
+
+    default void processQueuedOperations() {
+
+    }
 }

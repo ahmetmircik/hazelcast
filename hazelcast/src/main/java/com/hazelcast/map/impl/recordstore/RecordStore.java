@@ -468,6 +468,8 @@ public interface RecordStore<R extends Record> {
      */
     R getRecordOrNull(Data key);
 
+    R getRecordOrNull(Data key, long now, boolean backup);
+
     /**
      * Check if record is reachable according to TTL or idle times.
      *
@@ -510,6 +512,10 @@ public interface RecordStore<R extends Record> {
      * Initialize the recordStore after creation
      */
     void init();
+
+    CompositeMutationObserver<Record> getMutationObserver();
+
+    void updateStatsOnPut(boolean countAsAccess, long now);
 
     /**
      * Gets metadata store associated with the record store.

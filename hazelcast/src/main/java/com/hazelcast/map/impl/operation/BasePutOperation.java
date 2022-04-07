@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -29,12 +30,28 @@ public abstract class BasePutOperation
     protected transient Object oldValue;
     protected transient EntryEventType eventType;
     protected transient Record recordToBackup;
+    protected transient PutMachine putMachine;
 
     public BasePutOperation(String name, Data dataKey, Data value) {
         super(name, dataKey, value);
     }
 
     public BasePutOperation() {
+    }
+
+    @Override
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+
+        if (putMachine == null) {
+            // TODO check for thread safety. visibility, idempotency
+            putMachine = new PutMachine(this);
+            init(putMachine);
+        }
+    }
+
+    protected void init(PutMachine putMachine) {
+
     }
 
     @Override

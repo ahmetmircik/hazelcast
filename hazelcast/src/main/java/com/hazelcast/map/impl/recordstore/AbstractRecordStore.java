@@ -82,9 +82,18 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     @Override
+    public CompositeMutationObserver<Record> getMutationObserver() {
+        return mutationObserver;
+    }
+
+    @Override
     public void init() {
         this.storage = createStorage(recordFactory, inMemoryFormat);
         addMutationObservers();
+    }
+
+    public ValueComparator getValueComparator() {
+        return valueComparator;
     }
 
     // Overridden in EE.
@@ -223,7 +232,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         return storage;
     }
 
-    protected void updateStatsOnPut(boolean countAsAccess, long now) {
+    public void updateStatsOnPut(boolean countAsAccess, long now) {
         stats.setLastUpdateTime(now);
 
         if (countAsAccess) {

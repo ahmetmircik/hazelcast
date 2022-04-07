@@ -64,6 +64,10 @@ public class StateMachine<T extends Enum<T>> {
         return this;
     }
 
+    public T currentState() {
+        return currentState;
+    }
+
     /**
      * Transition to next state if not already there
      *
