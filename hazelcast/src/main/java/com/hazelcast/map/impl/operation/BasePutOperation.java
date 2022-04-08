@@ -56,6 +56,10 @@ public abstract class BasePutOperation
 
     @Override
     protected void afterRunInternal() {
+        if (!putMachine.isDone()) {
+            return;
+        }
+
         Object value = isPostProcessing(recordStore)
                 ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);

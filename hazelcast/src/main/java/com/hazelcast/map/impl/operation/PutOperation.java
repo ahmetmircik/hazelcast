@@ -36,11 +36,20 @@ public class PutOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     protected void init(PutMachine putMachine) {
-        putMachine.init(PutParams.PUT_PARAMS, dataKey, dataValue, getTtl(), getMaxIdle());
+        putMachine.setStaticPutParams(PutParams.PUT_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(getTtl())
+                .setMaxIdle(getMaxIdle());
+
     }
 
     protected CallStatus callInternal() {
-        return putMachine.run();
+        CallStatus run = putMachine.run();
+        if (putMachine.isDone()) {
+            afterRunInternal();
+        }
+        return run;
     }
 
     @Override

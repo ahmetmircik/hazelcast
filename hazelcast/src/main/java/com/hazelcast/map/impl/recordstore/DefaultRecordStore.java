@@ -810,7 +810,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return publisherRegistry != null;
     }
 
-    private void addEventToQueryCache(Data dataKey, Record record) {
+    @Override
+    public void addEventToQueryCache(Data dataKey, Record record) {
         EntryEventData eventData = new EntryEventData(thisAddress.toString(), name, thisAddress,
                 dataKey, mapServiceContext.toData(record.getValue()),
                 null, null, ADDED.getType());

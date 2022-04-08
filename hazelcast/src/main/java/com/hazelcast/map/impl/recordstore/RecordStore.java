@@ -615,6 +615,8 @@ public interface RecordStore<R extends Record> {
      */
     boolean hasQueryCache();
 
+    void addEventToQueryCache(Data dataKey, Record record);
+
     /**
      * Called by {@link IMap#destroy()} or {@link
      * com.hazelcast.map.impl.MapMigrationAwareService}

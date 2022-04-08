@@ -16,8 +16,11 @@
 
 package com.hazelcast.map.impl.operation;
 
-import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import static com.hazelcast.core.EntryEventType.ADDED;
@@ -25,8 +28,6 @@ import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class SetOperation extends BasePutOperation implements MutatingOperation {
-
-    private transient boolean newRecord;
 
     public SetOperation() {
     }
@@ -36,9 +37,20 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
     }
 
     @Override
+    protected void init(PutMachine putMachine) {
+        putMachine.setStaticPutParams(PutParams.SET_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(getTtl())
+                .setMaxIdle(getMaxIdle());
+    }
+
+    protected CallStatus callInternal() {
+        return putMachine.run();
+    }
+
+    @Override
     protected void runInternal() {
-        oldValue = recordStore.set(dataKey, dataValue, getTtl(), getMaxIdle());
-        newRecord = oldValue == null;
     }
 
     protected long getTtl() {
@@ -51,7 +63,7 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
 
     @Override
     protected void afterRunInternal() {
-        eventType = newRecord ? ADDED : UPDATED;
+        eventType = putMachine.getOldValue() == null ? ADDED : UPDATED;
 
         super.afterRunInternal();
     }

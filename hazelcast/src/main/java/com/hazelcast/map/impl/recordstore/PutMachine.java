@@ -21,9 +21,11 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.comparators.ValueComparator;
+import com.hazelcast.map.EntryLoader;
 import com.hazelcast.map.impl.InterceptorRegistry;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
@@ -33,10 +35,13 @@ import com.hazelcast.spi.impl.executionservice.ExecutionService;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import org.jetbrains.annotations.Nullable;
 
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.LOADED;
+import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
+import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class PutMachine {
     private final ExecutionService executionService;
@@ -49,18 +54,22 @@ public class PutMachine {
     private final ExpirySystem expirySystem;
     private final Storage storage;
     private final CompositeMutationObserver mutationObserver;
+    private final MapEventPublisher mapEventPublisher;
+    private final String name;
 
     // temp
     Record record;
     Operation operation;
+
     volatile Object oldValue;
+    volatile Object newValue;
     volatile State state = State.START;
 
     // params
     Data key;
-    volatile Object newValue;
     long ttl;
     long maxIdle;
+    boolean putTransient;
     PutParams staticPutParams;
     long now = Clock.currentTimeMillis();
 
@@ -82,15 +91,42 @@ public class PutMachine {
         this.mapDataStore = recordStore.getMapDataStore();
         this.storage = recordStore.getStorage();
         this.mutationObserver = recordStore.getMutationObserver();
+        this.mapEventPublisher = mapServiceContext.getMapEventPublisher();
+        this.name = mapContainer.getName();
     }
 
-    public void init(PutParams staticPutParams, Data key, Object value, long ttl,
-                     long maxIdle) {
+    public PutMachine setKey(Data key) {
         this.key = key;
-        this.newValue = value;
+        return this;
+    }
+
+    public PutMachine setNewValue(Object newValue) {
+        this.newValue = newValue;
+        return this;
+    }
+
+    public PutMachine setTtl(long ttl) {
         this.ttl = ttl;
+        return this;
+    }
+
+    public PutMachine setMaxIdle(long maxIdle) {
         this.maxIdle = maxIdle;
+        return this;
+    }
+
+    public PutMachine setPutTransient(boolean putTransient) {
+        this.putTransient = putTransient;
+        return this;
+    }
+
+    public PutMachine setStaticPutParams(PutParams staticPutParams) {
         this.staticPutParams = staticPutParams;
+        return this;
+    }
+
+    public boolean isDone() {
+        return state == State.DONE;
     }
 
     public Object getOldValue() {
@@ -101,10 +137,27 @@ public class PutMachine {
         state = next;
     }
 
+    public CallStatus runNormal() {
+        start();
+        meta();
+        finish();
+        return CallStatus.RESPONSE;
+    }
+
     public CallStatus run() {
+        if (recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE) {
+            return runWithMapStore();
+        }
+
+        return runNormal();
+    }
+
+    @Nullable
+    private CallStatus runWithMapStore() {
         do {
             switch (state) {
                 case START:
+                    checkIfLoaded();
                     start();
                     if (mustLoadOldValue()) {
                         nextState(State.LOAD);
@@ -122,7 +175,9 @@ public class PutMachine {
                     }
                     break;
                 case META:
+                    metaStore();
                     meta();
+                    nextState(State.STORE);
                     break;
                 case STORE:
                     if (offloadEnabled) {
@@ -138,7 +193,6 @@ public class PutMachine {
                     break;
             }
         } while (state != State.DONE);
-
         return CallStatus.RESPONSE;
     }
 
@@ -175,51 +229,133 @@ public class PutMachine {
         }
     }
 
+    private static long expirationTimeToTtl(long definedExpirationTime) {
+        return definedExpirationTime - System.currentTimeMillis();
+    }
+
     private void meta() {
         System.out.println("PutMachine.meta");
-        // For method replace, if current value is not expected one, return.
-        if (staticPutParams.isPutIfEqual()
-                && !valueComparator.isEqual(staticPutParams.getExpectedValue(),
-                oldValue, ss)) {
-            nextState(State.FINAL);
-            return;
+        if (staticPutParams.isPutIfEqual()) {
+            if (!valueComparator.isEqual(staticPutParams.getExpectedValue(), oldValue, ss)) {
+                nextState(State.DONE);
+                return;
+            }
         }
 
         // Intercept put on owner partition.
         if (!staticPutParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
-            nextState(State.STORE);
         }
     }
 
-    void putNew() {
-        Record record = recordStore.createRecord(key, newValue, now);
+    private void metaStore() {
+        if (staticPutParams.isPutIfAbsent()) {
+            preStoreForPutIf();
+            if (oldValue != null) {
+                nextState(State.DONE);
+                return;
+            }
+        }
+
+        if (staticPutParams.isPutIfExists()) {
+            preStoreForPutIf();
+            if (oldValue == null) {
+                nextState(State.DONE);
+                return;
+            }
+        }
+    }
+
+    // putIfAbsent and putIfExist
+    public Record preStoreForPutIf() {
+        if (oldValue == null) {
+            return null;
+        }
+
+        long ttl = UNSET;
+        if (mapDataStore.isWithExpirationTime()) {
+            EntryLoader.MetadataAwareValue loaderEntry = (EntryLoader.MetadataAwareValue) oldValue;
+            long proposedTtl = expirationTimeToTtl(loaderEntry.getExpirationTime());
+            if (proposedTtl <= 0) {
+                oldValue = null;
+            } else {
+                oldValue = loaderEntry.getValue();
+                ttl = proposedTtl;
+            }
+        }
+
+        putStorage(oldValue);
+        putExpirySystem(ttl, UNSET, UNSET);
+        publishLoadedEvent(record);
+
+        recordStore.evictEntries(key);
+        // here, we are only publishing events for loaded
+        // entries. This is required for notifying query-caches
+        // otherwise query-caches cannot see loaded entries
+        if (!staticPutParams.isBackup() && recordStore.hasQueryCache()) {
+            recordStore.addEventToQueryCache(key, record);
+        }
+        return record;
+    }
+
+    private void publishLoadedEvent(Record record) {
+        if (!staticPutParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
+            mapEventPublisher.publishEvent(staticPutParams.getCallerAddress(), name, EntryEventType.LOADED,
+                    key, null, record.getValue(), null);
+        }
+    }
+
+    private void notifyMutationObserver(EntryEventType entryEventType) {
+        switch (entryEventType) {
+            case ADDED:
+                mutationObserver.onPutRecord(key, record, oldValue, staticPutParams.isBackup());
+                break;
+            case UPDATED:
+                mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticPutParams.isBackup());
+                break;
+            case LOADED:
+                mutationObserver.onLoadRecord(key, record, staticPutParams.isBackup());
+                break;
+        }
+    }
+
+    private void putExpirySystem(long ttl, long maxIdle, long expiryTime) {
+        expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
+    }
+
+    private void putStorage(Object value) {
+        record = recordStore.createRecord(key, value, now);
         if (mapDataStore.isPostProcessingMapStore()) {
-            storage.updateRecordValue(key, record, newValue);
+            updateStorage(value);
         }
 
         storage.put(key, record);
-        expirySystem.add(key, ttl, maxIdle, staticPutParams.getExpiryTime(), now, now);
+    }
 
-        EntryEventType entryEventType = staticPutParams.isPutFromLoad() ? LOADED : ADDED;
-        if (entryEventType == EntryEventType.LOADED) {
-            mutationObserver.onLoadRecord(key, record, staticPutParams.isBackup());
-        } else {
-            mutationObserver.onPutRecord(key, record, oldValue, staticPutParams.isBackup());
-        }
+    private void put() {
+        putStorage(newValue);
+        putExpirySystem(ttl, maxIdle, staticPutParams.getExpiryTime());
+        notifyMutationObserver(staticPutParams.isPutFromLoad() ? LOADED : ADDED);
     }
 
     void update() {
+        updateStats();
+        updateStorage(newValue);
+        putExpirySystem(ttl, maxIdle, staticPutParams.getExpiryTime());
+        notifyMutationObserver(UPDATED);
+    }
+
+    private void updateStats() {
         recordStore.updateStatsOnPut(staticPutParams.isCountAsAccess(), now);
         record.onUpdate(now);
 
         if (staticPutParams.isCountAsAccess()) {
             record.onAccess(now);
         }
+    }
 
-        storage.updateRecordValue(key, record, newValue);
-        expirySystem.add(key, ttl, maxIdle, staticPutParams.getExpiryTime(), now, now);
-        mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticPutParams.isBackup());
+    private void updateStorage(Object value) {
+        storage.updateRecordValue(key, record, value);
     }
 
     PutMachine load() {
@@ -230,21 +366,26 @@ public class PutMachine {
 
     PutMachine store() {
         System.out.println("PutInternal.store");
-
-        if (mapDataStore != EMPTY_MAP_DATA_STORE && staticPutParams.isStore()) {
-            long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
-            newValue = mapDataStore.add(key, newValue, expirationTime, now, staticPutParams.getTransactionId());
+        if (!staticPutParams.isStore() || mapDataStore == EMPTY_MAP_DATA_STORE) {
+            return this;
         }
+
+        long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
+        newValue = mapDataStore.add(key, newValue, expirationTime, now, staticPutParams.getTransactionId());
         return this;
+    }
+
+    private void checkIfLoaded() {
+        if (!staticPutParams.isCheckIfLoaded()) {
+            return;
+            // TODO ?
+        }
+
+        recordStore.checkIfLoaded();
     }
 
     PutMachine start() {
         System.out.println("PutMachine.start");
-        if (staticPutParams.isCheckIfLoaded()) {
-            // TODO ?
-            recordStore.checkIfLoaded();
-        }
-
         // Get record by checking expiry, if expired, evict record.
         record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
@@ -252,7 +393,9 @@ public class PutMachine {
     }
 
     private boolean mustLoadOldValue() {
-        if (mapDataStore == EMPTY_MAP_DATA_STORE) {
+        if (!staticPutParams.isLoad()
+                || mapDataStore == EMPTY_MAP_DATA_STORE
+                || oldValue != null) {
             return false;
         }
 
@@ -264,13 +407,13 @@ public class PutMachine {
             return true;
         }
 
-        return record == null && (staticPutParams.isLoad() ? true : false);
+        return staticPutParams.isLoad();
     }
 
     PutMachine finish() {
         System.out.println("PutInternal.finish");
         if (record == null) {
-            putNew();
+            put();
         } else {
             update();
         }
