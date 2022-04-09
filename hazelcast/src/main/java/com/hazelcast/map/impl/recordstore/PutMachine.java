@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.recordstore;
 
+import com.hazelcast.cluster.Address;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
@@ -70,6 +71,8 @@ public class PutMachine {
     long ttl;
     long maxIdle;
     boolean putTransient;
+    Address callerAddress;
+    Object expect;
     PutParams staticPutParams;
     long now = Clock.currentTimeMillis();
 
@@ -93,6 +96,8 @@ public class PutMachine {
         this.mutationObserver = recordStore.getMutationObserver();
         this.mapEventPublisher = mapServiceContext.getMapEventPublisher();
         this.name = mapContainer.getName();
+        this.offloadEnabled = mapDataStore != EMPTY_MAP_DATA_STORE
+                && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
     }
 
     public PutMachine setKey(Data key) {
@@ -102,6 +107,11 @@ public class PutMachine {
 
     public PutMachine setNewValue(Object newValue) {
         this.newValue = newValue;
+        return this;
+    }
+
+    public PutMachine setExpect(Object expect) {
+        this.expect = expect;
         return this;
     }
 
@@ -125,6 +135,10 @@ public class PutMachine {
         return this;
     }
 
+    public void setCallerAddress(Address callerAddress) {
+        this.callerAddress = callerAddress;
+    }
+
     public boolean isDone() {
         return state == State.DONE;
     }
@@ -137,19 +151,26 @@ public class PutMachine {
         state = next;
     }
 
-    public CallStatus runNormal() {
-        start();
-        meta();
-        finish();
-        return CallStatus.RESPONSE;
-    }
-
     public CallStatus run() {
-        if (recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE) {
+        if (offloadEnabled) {
             return runWithMapStore();
         }
 
         return runNormal();
+    }
+
+    public CallStatus runNormal() {
+        start();
+        State nextState = findNextState();
+        if (nextState == State.STORE) {
+            meta();
+        }
+
+        if (nextState != State.DONE) {
+            finish();
+        }
+        nextState(State.DONE);
+        return CallStatus.RESPONSE;
     }
 
     @Nullable
@@ -162,7 +183,7 @@ public class PutMachine {
                     if (mustLoadOldValue()) {
                         nextState(State.LOAD);
                     } else {
-                        nextState(State.STORE);
+                        nextState(State.META);
                     }
                     break;
                 case LOAD:
@@ -175,9 +196,15 @@ public class PutMachine {
                     }
                     break;
                 case META:
-                    metaStore();
-                    meta();
-                    nextState(State.STORE);
+                    preStoreForPutIf();
+
+                    State nextState = findNextState();
+
+                    if (nextState == State.STORE) {
+                        meta();
+                    }
+
+                    nextState(nextState);
                     break;
                 case STORE:
                     if (offloadEnabled) {
@@ -194,6 +221,30 @@ public class PutMachine {
             }
         } while (state != State.DONE);
         return CallStatus.RESPONSE;
+    }
+
+    private State findNextState() {
+        if (staticPutParams.isPutIfEqual()) {
+            boolean equal = valueComparator.isEqual(expect, oldValue, ss);
+            if (!equal) {
+                oldValue = null;
+            }
+            return equal ? State.STORE : State.DONE;
+        }
+
+        if (!staticPutParams.isPutIfAbsent() && !staticPutParams.isPutIfExists()) {
+            return State.STORE;
+        }
+
+        if (staticPutParams.isPutIfAbsent()) {
+            return oldValue == null ? State.STORE : State.DONE;
+        }
+
+        if (staticPutParams.isPutIfExists()) {
+            return oldValue != null ? State.STORE : State.DONE;
+        }
+
+        return State.DONE;
     }
 
     private Offload offload(State next, boolean isLoad) {
@@ -235,40 +286,20 @@ public class PutMachine {
 
     private void meta() {
         System.out.println("PutMachine.meta");
-        if (staticPutParams.isPutIfEqual()) {
-            if (!valueComparator.isEqual(staticPutParams.getExpectedValue(), oldValue, ss)) {
-                nextState(State.DONE);
-                return;
-            }
-        }
-
         // Intercept put on owner partition.
         if (!staticPutParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
         }
     }
 
-    private void metaStore() {
-        if (staticPutParams.isPutIfAbsent()) {
-            preStoreForPutIf();
-            if (oldValue != null) {
-                nextState(State.DONE);
-                return;
-            }
-        }
-
-        if (staticPutParams.isPutIfExists()) {
-            preStoreForPutIf();
-            if (oldValue == null) {
-                nextState(State.DONE);
-                return;
-            }
-        }
+    // used to pre-store loaded value for putIfAbsent and putIfExists
+    private void preStoreOfLoadedValue() {
+        preStoreForPutIf();
     }
 
     // putIfAbsent and putIfExist
     public Record preStoreForPutIf() {
-        if (oldValue == null) {
+        if (record != null || oldValue == null) {
             return null;
         }
 
@@ -282,6 +313,11 @@ public class PutMachine {
                 oldValue = loaderEntry.getValue();
                 ttl = proposedTtl;
             }
+        }
+
+        if (!(staticPutParams.isPutIfAbsent()
+                || staticPutParams.isPutIfExists())) {
+            return record;
         }
 
         putStorage(oldValue);
@@ -360,6 +396,9 @@ public class PutMachine {
 
     PutMachine load() {
         System.out.println("PutInternal.load");
+        if (mapDataStore == EMPTY_MAP_DATA_STORE) {
+            return this;
+        }
         oldValue = recordStore.getMapDataStore().load(key);
         return this;
     }
@@ -395,7 +434,7 @@ public class PutMachine {
     private boolean mustLoadOldValue() {
         if (!staticPutParams.isLoad()
                 || mapDataStore == EMPTY_MAP_DATA_STORE
-                || oldValue != null) {
+                || record != null) {
             return false;
         }
 
@@ -417,6 +456,8 @@ public class PutMachine {
         } else {
             update();
         }
+        // TODO no need to convert heap data for NATIVE
+        oldValue = mapServiceContext.toData(oldValue);
         return this;
     }
 

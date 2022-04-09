@@ -18,11 +18,14 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public class PutIfAbsentOperation extends BasePutOperation implements MutatingOperation {
+public class PutIfAbsentOperation
+        extends BasePutOperation implements MutatingOperation {
 
     protected transient boolean successful;
 
@@ -34,11 +37,18 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
     }
 
     @Override
-    protected void runInternal() {
-        Object oldValue = recordStore.putIfAbsent(dataKey, dataValue,
-                getTtl(), getMaxIdle(), getCallerAddress());
-        this.oldValue = mapServiceContext.toData(oldValue);
-        successful = this.oldValue == null;
+    protected void init(PutMachine putMachine) {
+        putMachine.setStaticPutParams(PutParams.PUT_IF_ABSENT_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(getTtl())
+                .setMaxIdle(getMaxIdle())
+                .setCallerAddress(getCallerAddress());
+    }
+
+    @Override
+    protected void whenDone() {
+        successful = oldValue == null;
     }
 
     protected long getTtl() {
@@ -58,7 +68,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
 
     @Override
     public Object getResponse() {
-        return oldValue;
+        return mapServiceContext.toData(putMachine.getOldValue());
     }
 
     @Override

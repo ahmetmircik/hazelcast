@@ -32,6 +32,7 @@ import com.hazelcast.map.listener.EntryExpiredListener;
 import com.hazelcast.query.PagingPredicate;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.query.Predicates;
+import com.hazelcast.spi.impl.InternalCompletableFuture;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.ChangeLoggingRule;
 import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
@@ -956,8 +957,10 @@ public class BasicMapTest extends HazelcastTestSupport {
     public void testPutIfAbsentAsync() {
         MapProxyImpl<Object, Object> map = (MapProxyImpl<Object, Object>) getInstance().getMap("testPutIfAbsentAsync");
         try {
-            assertNull(map.putIfAbsentAsync(1, 1).toCompletableFuture().get());
-            assertEquals(1, map.putIfAbsentAsync(1, 2).toCompletableFuture().get());
+            InternalCompletableFuture<Object> future = map.putIfAbsentAsync(1, 1);
+            assertNull(future.toCompletableFuture().get());
+            InternalCompletableFuture<Object> future1 = map.putIfAbsentAsync(1, 2);
+            assertEquals(1, future1.toCompletableFuture().get());
             assertEquals(1, map.putIfAbsentAsync(1, 3).toCompletableFuture().get());
             assertEquals(1, map.size());
         } catch (InterruptedException | ExecutionException e) {

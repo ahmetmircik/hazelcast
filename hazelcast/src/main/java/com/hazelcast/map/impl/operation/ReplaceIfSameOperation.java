@@ -17,15 +17,18 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.nio.IOUtil;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import java.io.IOException;
 
-public class ReplaceIfSameOperation extends BasePutOperation implements MutatingOperation {
+public class ReplaceIfSameOperation
+        extends BasePutOperation implements MutatingOperation {
 
     private Data expect;
     private boolean successful;
@@ -39,8 +42,16 @@ public class ReplaceIfSameOperation extends BasePutOperation implements Mutating
     }
 
     @Override
-    protected void runInternal() {
-        successful = recordStore.replace(dataKey, expect, dataValue);
+    protected void init(PutMachine putMachine) {
+        putMachine.setStaticPutParams(PutParams.REPLACE_IF_SAME_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setExpect(expect);
+    }
+
+    @Override
+    protected void whenDone() {
+        successful = putMachine.getOldValue() != null;
         if (successful) {
             oldValue = expect;
         }

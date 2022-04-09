@@ -20,7 +20,6 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.PutParams;
-import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -41,20 +40,6 @@ public class PutOperation extends BasePutOperation implements MutatingOperation 
                 .setNewValue(dataValue)
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle());
-
-    }
-
-    protected CallStatus callInternal() {
-        CallStatus run = putMachine.run();
-        if (putMachine.isDone()) {
-            afterRunInternal();
-        }
-        return run;
-    }
-
-    @Override
-    protected void runInternal() {
-
     }
 
     // overridden in extension classes

@@ -27,12 +27,12 @@ public class PutParams {
 
     public static final PutParams PUT_PARAMS = new PutParams()
             .setExpiryTime(UNSET)
-            .setPutFromLoad(false)
-            .setStore(true)
             .setLoad(true)
+            .setStore(true)
             .setPutIfAbsent(false)
             .setPutIfExists(false)
             .setPutIfEqual(false)
+            .setPutFromLoad(false)
             .setExpectedValue(null)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
@@ -41,26 +41,41 @@ public class PutParams {
             .setCountAsAccess(true)
             .setBackup(false);
 
-    public static final PutParams PUT_BACKUP_PARAMS = new PutParams()
+    public static final PutParams PUT_IF_ABSENT_PARAMS = new PutParams()
+            .setExpiryTime(UNSET)
+            .setLoad(true)
+            .setStore(true)
+            .setPutIfAbsent(true)
+            .setPutIfExists(false)
+            .setPutIfEqual(false)
+            .setPutFromLoad(false)
+            .setExpectedValue(null)
+            .setSetTtl(false)
+            .setCheckIfLoaded(true)
+            .setCountAsAccess(true)
+            .setBackup(false);
+
+
+    public static final PutParams SET_PARAMS = new PutParams()
             .setExpiryTime(UNSET)
             .setLoad(false)
-            .setStore(false)
+            .setStore(true)
             .setPutIfAbsent(false)
             .setPutIfExists(false)
             .setPutIfEqual(false)
             .setPutFromLoad(false)
             .setExpectedValue(null)
             .setSetTtl(false)
-            .setCheckIfLoaded(false)
+            .setCheckIfLoaded(true)
             .setTransactionId(null)
             .setCallerAddress(null)
             .setCountAsAccess(true)
-            .setBackup(true);
+            .setBackup(false);
 
-    public static final PutParams SET_PARAMS = new PutParams()
+    public static final PutParams PUT_TRANSIENT_PARAMS = new PutParams()
             .setExpiryTime(UNSET)
             .setLoad(false)
-            .setStore(true)
+            .setStore(false)
             .setPutIfAbsent(false)
             .setPutIfExists(false)
             .setPutIfEqual(false)
@@ -92,7 +107,7 @@ public class PutParams {
             .setCountAsAccess(true)
             .setBackup(true);
 
-    public static final PutParams REPLACE_IF_EQUAL_PARAMS = new PutParams()
+    public static final PutParams REPLACE_IF_SAME_PARAMS = new PutParams()
             .setExpiryTime(UNSET)
             .setTtl(UNSET)
             .setMaxIdle(UNSET)

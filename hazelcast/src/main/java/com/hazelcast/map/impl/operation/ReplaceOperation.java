@@ -16,11 +16,14 @@
 
 package com.hazelcast.map.impl.operation;
 
-import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
-public class ReplaceOperation extends BasePutOperation implements MutatingOperation {
+public class ReplaceOperation
+        extends BasePutOperation implements MutatingOperation {
 
     private boolean successful;
 
@@ -32,10 +35,15 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
     }
 
     @Override
-    protected void runInternal() {
-        Object oldValue = recordStore.replace(dataKey, dataValue);
-        this.oldValue = mapServiceContext.toData(oldValue);
-        successful = oldValue != null;
+    protected void init(PutMachine putMachine) {
+        putMachine.setStaticPutParams(PutParams.REPLACE_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue);
+    }
+
+    @Override
+    protected void whenDone() {
+        successful = putMachine.getOldValue() != null;
     }
 
     @Override
@@ -50,10 +58,9 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
         }
     }
 
-
     @Override
     public Object getResponse() {
-        return oldValue;
+        return putMachine.getOldValue();
     }
 
     @Override

@@ -22,6 +22,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 public abstract class BasePutOperation
@@ -48,6 +49,21 @@ public abstract class BasePutOperation
             putMachine = new PutMachine(this);
             init(putMachine);
         }
+    }
+
+    @Override
+    protected final CallStatus callInternal() {
+        CallStatus run = putMachine.run();
+        if (putMachine.isDone()) {
+            oldValue = putMachine.getOldValue();
+            whenDone();
+            afterRunInternal();
+        }
+        return run;
+    }
+
+    protected void whenDone() {
+
     }
 
     protected void init(PutMachine putMachine) {

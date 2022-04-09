@@ -19,12 +19,15 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public class PutTransientOperation extends BasePutOperation implements MutatingOperation {
+public class PutTransientOperation
+        extends BasePutOperation implements MutatingOperation {
 
     public PutTransientOperation() {
     }
@@ -34,9 +37,18 @@ public class PutTransientOperation extends BasePutOperation implements MutatingO
     }
 
     @Override
-    protected void runInternal() {
-        oldValue = mapServiceContext.toData(recordStore.putTransient(dataKey,
-                dataValue, getTtl(), getMaxIdle()));
+    protected void init(PutMachine putMachine) {
+        // TODO mapdatastore.add
+        putMachine.setStaticPutParams(PutParams.PUT_TRANSIENT_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(getTtl())
+                .setMaxIdle(getMaxIdle());
+    }
+
+    @Override
+    protected void whenDone() {
+        oldValue = putMachine.getOldValue();
     }
 
     @Override
