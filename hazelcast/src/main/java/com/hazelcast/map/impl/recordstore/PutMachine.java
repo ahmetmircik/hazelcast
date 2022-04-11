@@ -57,6 +57,7 @@ public class PutMachine {
     private final CompositeMutationObserver mutationObserver;
     private final MapEventPublisher mapEventPublisher;
     private final String name;
+    private final boolean hasMapStore;
 
     // temp
     Record record;
@@ -96,7 +97,8 @@ public class PutMachine {
         this.mutationObserver = recordStore.getMutationObserver();
         this.mapEventPublisher = mapServiceContext.getMapEventPublisher();
         this.name = mapContainer.getName();
-        this.offloadEnabled = mapDataStore != EMPTY_MAP_DATA_STORE
+        this.hasMapStore = mapDataStore != EMPTY_MAP_DATA_STORE;
+        this.offloadEnabled = hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
     }
 
@@ -152,7 +154,7 @@ public class PutMachine {
     }
 
     public CallStatus run() {
-        if (offloadEnabled) {
+        if (hasMapStore) {
             return runWithMapStore();
         }
 

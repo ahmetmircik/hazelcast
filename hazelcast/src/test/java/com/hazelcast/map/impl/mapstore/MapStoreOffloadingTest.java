@@ -32,6 +32,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
     @Test
+    public void name2() {
+        HazelcastInstance node = createHazelcastInstance();
+        IMap<Object, Object> test1 = node.getMap("test1");
+        for (int i = 0; i < 1; i++) {
+            test1.set(i, i);
+        }
+
+        sleepSeconds(10);
+    }
+
+    @Test
     public void name() {
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");

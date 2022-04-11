@@ -57,7 +57,6 @@ public abstract class BasePutOperation
         if (putMachine.isDone()) {
             oldValue = putMachine.getOldValue();
             whenDone();
-            afterRunInternal();
         }
         return run;
     }
