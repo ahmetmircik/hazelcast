@@ -22,8 +22,6 @@ import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
-import static com.hazelcast.core.EntryEventType.ADDED;
-import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class SetOperation extends BasePutOperation implements MutatingOperation {
@@ -52,12 +50,6 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
         return UNSET;
     }
 
-    @Override
-    protected void afterRunInternal() {
-        eventType = putMachine.getOldValue() == null ? ADDED : UPDATED;
-
-        super.afterRunInternal();
-    }
 
     @Override
     public int getClassId() {

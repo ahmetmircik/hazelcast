@@ -47,18 +47,24 @@ public abstract class BasePutOperation
         if (putMachine == null) {
             // TODO check for thread safety. visibility, idempotency
             putMachine = new PutMachine(this);
+            putMachine.setThreadId(threadId);
             init(putMachine);
         }
     }
 
     @Override
     protected final CallStatus callInternal() {
+        beforeCallInternal();
         CallStatus run = putMachine.run();
         if (putMachine.isDone()) {
             oldValue = putMachine.getOldValue();
             whenDone();
         }
         return run;
+    }
+
+    protected void beforeCallInternal() {
+
     }
 
     protected void whenDone() {

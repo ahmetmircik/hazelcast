@@ -16,17 +16,16 @@
 
 package com.hazelcast.map.impl.tx;
 
-import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.spi.impl.eventservice.EventService;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
@@ -61,6 +60,18 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
+    protected void init(PutMachine putMachine) {
+        putMachine.setStaticPutParams(PutParams.SET_PARAMS)
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(ttl)
+                .setMaxIdle(UNSET)
+                .setTxnId(transactionId)
+                .setOwnerUuid(ownerUuid)
+                .setVersion(version);
+    }
+
+    @Override
     public boolean shouldWait() {
         return false;
     }
@@ -76,19 +87,25 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
-    protected void runInternal() {
+    protected void beforeCallInternal() {
+        super.beforeCallInternal();
         recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
-        Record record = recordStore.getRecordOrNull(dataKey);
-        if (record == null || version == record.getVersion()) {
-            EventService eventService = getNodeEngine().getEventService();
-            if (eventService.hasEventRegistration(MapService.SERVICE_NAME, getName())) {
-                oldValue = record == null ? null : mapServiceContext.toData(record.getValue());
-            }
-            eventType = record == null ? EntryEventType.ADDED : EntryEventType.UPDATED;
-            recordStore.setTxn(dataKey, dataValue, ttl, UNSET, transactionId);
-            shouldBackup = true;
-        }
     }
+
+//    @Override
+//    protected void runInternal() {
+//        recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
+//        Record record = recordStore.getRecordOrNull(dataKey);
+//        if (record == null || version == record.getVersion()) {
+//            EventService eventService = getNodeEngine().getEventService();
+//            if (eventService.hasEventRegistration(MapService.SERVICE_NAME, getName())) {
+//                oldValue = record == null ? null : mapServiceContext.toData(record.getValue());
+//            }
+//            eventType = record == null ? EntryEventType.ADDED : EntryEventType.UPDATED;
+//            recordStore.setTxn(dataKey, dataValue, ttl, UNSET, transactionId);
+//            shouldBackup = true;
+//        }
+//    }
 
     @Override
     public long getVersion() {

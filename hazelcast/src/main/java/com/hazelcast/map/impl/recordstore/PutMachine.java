@@ -38,6 +38,8 @@ import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.UUID;
+
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.LOADED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
@@ -69,12 +71,16 @@ public class PutMachine {
 
     // params
     Data key;
-    long ttl;
-    long maxIdle;
+    long ttl = UNSET;
+    long maxIdle = UNSET;
     boolean putTransient;
     Address callerAddress;
     Object expect;
     PutParams staticPutParams;
+    UUID txnId;
+    UUID ownerUuid;
+    long version;
+    private long threadId;
     long now = Clock.currentTimeMillis();
 
     // TODO do configurable
@@ -117,6 +123,21 @@ public class PutMachine {
         return this;
     }
 
+    public PutMachine setTxnId(UUID uuid) {
+        this.txnId = uuid;
+        return this;
+    }
+
+    public PutMachine setOwnerUuid(UUID ownerUuid) {
+        this.ownerUuid = ownerUuid;
+        return this;
+    }
+
+    public PutMachine setVersion(long version) {
+        this.version = version;
+        return this;
+    }
+
     public PutMachine setTtl(long ttl) {
         this.ttl = ttl;
         return this;
@@ -137,8 +158,9 @@ public class PutMachine {
         return this;
     }
 
-    public void setCallerAddress(Address callerAddress) {
+    public PutMachine setCallerAddress(Address callerAddress) {
         this.callerAddress = callerAddress;
+        return this;
     }
 
     public boolean isDone() {
@@ -174,6 +196,7 @@ public class PutMachine {
         nextState(State.DONE);
         return CallStatus.RESPONSE;
     }
+
 
     @Nullable
     private CallStatus runWithMapStore() {
@@ -246,11 +269,19 @@ public class PutMachine {
             return oldValue != null ? State.STORE : State.DONE;
         }
 
+        if (!canTxnProceed()) {
+            return State.DONE;
+        }
+
         return State.DONE;
     }
 
     private Offload offload(State next, boolean isLoad) {
         return new LoadStoreOffload(operation, next, isLoad);
+    }
+
+    public void setThreadId(long threadId) {
+        this.threadId = threadId;
     }
 
     private class LoadStoreOffload extends Offload {
@@ -287,7 +318,7 @@ public class PutMachine {
     }
 
     private void meta() {
-        System.out.println("PutMachine.meta");
+        log("PutMachine.meta");
         // Intercept put on owner partition.
         if (!staticPutParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
@@ -397,7 +428,7 @@ public class PutMachine {
     }
 
     PutMachine load() {
-        System.out.println("PutInternal.load");
+        log("PutInternal.load");
         if (mapDataStore == EMPTY_MAP_DATA_STORE) {
             return this;
         }
@@ -406,14 +437,18 @@ public class PutMachine {
     }
 
     PutMachine store() {
-        System.out.println("PutInternal.store");
+        log("PutInternal.store");
         if (!staticPutParams.isStore() || mapDataStore == EMPTY_MAP_DATA_STORE) {
             return this;
         }
 
         long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
-        newValue = mapDataStore.add(key, newValue, expirationTime, now, staticPutParams.getTransactionId());
+        newValue = mapDataStore.add(key, newValue, expirationTime, now, txnId);
         return this;
+    }
+
+    void log(String msg) {
+        System.out.println(msg);
     }
 
     private void checkIfLoaded() {
@@ -426,11 +461,30 @@ public class PutMachine {
     }
 
     PutMachine start() {
-        System.out.println("PutMachine.start");
+        log("PutMachine.start");
         // Get record by checking expiry, if expired, evict record.
         record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
         return this;
+    }
+
+    void unlock() {
+        recordStore.unlock(key, ownerUuid, threadId, operation.getCallId());
+    }
+
+    boolean canTxnProceed() {
+        return txnId != null
+                && (record == null || version == record.getVersion());
+    }
+
+
+    void flow() {
+        unlock();
+        start();
+        if (canTxnProceed()) {
+            finish();
+        }
+
     }
 
     private boolean mustLoadOldValue() {
@@ -452,13 +506,12 @@ public class PutMachine {
     }
 
     PutMachine finish() {
-        System.out.println("PutInternal.finish");
+        log("PutInternal.finish");
         if (record == null) {
             put();
         } else {
             update();
         }
-        // TODO no need to convert heap data for NATIVE
         oldValue = mapServiceContext.toData(oldValue);
         return this;
     }
@@ -475,26 +528,26 @@ public class PutMachine {
 
     // TODO use striped executor
     private void execute(Runnable task) {
-        System.out.println("PutInternal.execute");
+        log("PutInternal.execute");
         executionService.execute("offloaded-map-store", task);
 
     }
 
     private void resume(Operation operation) {
-        System.out.println("PutInternal.resume");
+        log("PutInternal.resume");
         recordStore.getMapContainer().getMapServiceContext()
                 .getNodeEngine().getOperationService().execute(operation);
 
     }
 
     private void setNextState(Operation op, State state) {
-        System.out.println("PutInternal.setNextState");
+        log("PutInternal.setNextState");
         this.state = state;
 
     }
 
     private void sendErrorResponse(Exception e) {
-        System.out.println("PutInternal.sendErrorResponse");
+        log("PutInternal.sendErrorResponse");
 
     }
 
