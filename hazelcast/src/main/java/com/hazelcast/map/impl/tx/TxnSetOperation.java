@@ -65,7 +65,6 @@ public class TxnSetOperation extends BasePutOperation
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(ttl)
-                .setMaxIdle(UNSET)
                 .setTxnId(transactionId)
                 .setOwnerUuid(ownerUuid)
                 .setVersion(version);
@@ -90,9 +89,10 @@ public class TxnSetOperation extends BasePutOperation
     protected void beforeCallInternal() {
         super.beforeCallInternal();
         recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
+        shouldBackup = putMachine.canTxnProceed();
     }
 
-//    @Override
+    //    @Override
 //    protected void runInternal() {
 //        recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
 //        Record record = recordStore.getRecordOrNull(dataKey);

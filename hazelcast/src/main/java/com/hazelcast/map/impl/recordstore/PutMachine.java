@@ -185,6 +185,7 @@ public class PutMachine {
 
     public CallStatus runNormal() {
         start();
+
         State nextState = findNextState();
         if (nextState == State.STORE) {
             meta();
@@ -257,16 +258,16 @@ public class PutMachine {
             return equal ? State.STORE : State.DONE;
         }
 
-        if (!staticPutParams.isPutIfAbsent() && !staticPutParams.isPutIfExists()) {
-            return State.STORE;
-        }
-
         if (staticPutParams.isPutIfAbsent()) {
             return oldValue == null ? State.STORE : State.DONE;
         }
 
         if (staticPutParams.isPutIfExists()) {
             return oldValue != null ? State.STORE : State.DONE;
+        }
+
+        if (!staticPutParams.isPutIfAbsent() && !staticPutParams.isPutIfExists()) {
+            return State.STORE;
         }
 
         if (!canTxnProceed()) {
@@ -369,7 +370,7 @@ public class PutMachine {
 
     private void publishLoadedEvent(Record record) {
         if (!staticPutParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
-            mapEventPublisher.publishEvent(staticPutParams.getCallerAddress(), name, EntryEventType.LOADED,
+            mapEventPublisher.publishEvent(callerAddress, name, EntryEventType.LOADED,
                     key, null, record.getValue(), null);
         }
     }
@@ -429,7 +430,7 @@ public class PutMachine {
 
     PutMachine load() {
         log("PutInternal.load");
-        if (mapDataStore == EMPTY_MAP_DATA_STORE) {
+        if (!staticPutParams.isLoad()) {
             return this;
         }
         oldValue = recordStore.getMapDataStore().load(key);
@@ -438,7 +439,7 @@ public class PutMachine {
 
     PutMachine store() {
         log("PutInternal.store");
-        if (!staticPutParams.isStore() || mapDataStore == EMPTY_MAP_DATA_STORE) {
+        if (!staticPutParams.isStore()) {
             return this;
         }
 
@@ -472,19 +473,9 @@ public class PutMachine {
         recordStore.unlock(key, ownerUuid, threadId, operation.getCallId());
     }
 
-    boolean canTxnProceed() {
+    public boolean canTxnProceed() {
         return txnId != null
                 && (record == null || version == record.getVersion());
-    }
-
-
-    void flow() {
-        unlock();
-        start();
-        if (canTxnProceed()) {
-            finish();
-        }
-
     }
 
     private boolean mustLoadOldValue() {
@@ -546,9 +537,9 @@ public class PutMachine {
 
     }
 
-    private void sendErrorResponse(Exception e) {
+    private void sendErrorResponse(Throwable t) {
         log("PutInternal.sendErrorResponse");
-
+        operation.sendResponse(t);
     }
 
 

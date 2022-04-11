@@ -42,9 +42,8 @@ public abstract class BasePutOperation
 
     @Override
     protected void innerBeforeRun() throws Exception {
-        super.innerBeforeRun();
-
         if (putMachine == null) {
+            super.innerBeforeRun();
             // TODO check for thread safety. visibility, idempotency
             putMachine = new PutMachine(this);
             putMachine.setThreadId(threadId);

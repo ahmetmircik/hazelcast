@@ -36,8 +36,6 @@ public class PutParams {
             .setExpectedValue(null)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
-            .setTransactionId(null)
-            .setCallerAddress(null)
             .setCountAsAccess(true)
             .setBackup(false);
 
@@ -67,8 +65,6 @@ public class PutParams {
             .setExpectedValue(null)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
-            .setTransactionId(null)
-            .setCallerAddress(null)
             .setCountAsAccess(true)
             .setBackup(false);
 
@@ -83,8 +79,6 @@ public class PutParams {
             .setExpectedValue(null)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
-            .setTransactionId(null)
-            .setCallerAddress(null)
             .setCountAsAccess(true)
             .setBackup(false);
 
@@ -102,10 +96,8 @@ public class PutParams {
             .setExpectedValue(null)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
-            .setTransactionId(null)
-            .setCallerAddress(null)
             .setCountAsAccess(true)
-            .setBackup(true);
+            .setBackup(false);
 
     public static final PutParams REPLACE_IF_SAME_PARAMS = new PutParams()
             .setExpiryTime(UNSET)
@@ -119,8 +111,6 @@ public class PutParams {
             .setPutFromLoad(false)
             .setSetTtl(false)
             .setCheckIfLoaded(true)
-            .setTransactionId(null)
-            .setCallerAddress(null)
             .setCountAsAccess(true)
             .setBackup(false);
 
@@ -219,16 +209,6 @@ public class PutParams {
 
     public PutParams setCheckIfLoaded(boolean checkIfLoaded) {
         this.checkIfLoaded = checkIfLoaded;
-        return this;
-    }
-
-    public PutParams setTransactionId(UUID transactionId) {
-        this.transactionId = transactionId;
-        return this;
-    }
-
-    public PutParams setCallerAddress(Address callerAddress) {
-        this.callerAddress = callerAddress;
         return this;
     }
 

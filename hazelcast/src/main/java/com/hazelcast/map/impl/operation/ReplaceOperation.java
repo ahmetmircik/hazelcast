@@ -43,7 +43,7 @@ public class ReplaceOperation
 
     @Override
     protected void whenDone() {
-        successful = putMachine.getOldValue() != null;
+        successful = oldValue != null;
     }
 
     @Override
@@ -60,7 +60,7 @@ public class ReplaceOperation
 
     @Override
     public Object getResponse() {
-        return putMachine.getOldValue();
+        return oldValue;
     }
 
     @Override
