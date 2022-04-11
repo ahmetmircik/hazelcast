@@ -39,9 +39,7 @@ public class TryPutOperation
     protected void init(PutMachine putMachine) {
         putMachine.setStaticPutParams(PutParams.PUT_PARAMS)
                 .setKey(dataKey)
-                .setNewValue(dataValue)
-                .setTtl(UNSET)
-                .setMaxIdle(UNSET);
+                .setNewValue(dataValue);
     }
 
     @Override

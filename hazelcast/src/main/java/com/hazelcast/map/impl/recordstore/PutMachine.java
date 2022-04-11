@@ -47,6 +47,7 @@ import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class PutMachine {
+
     private final ExecutionService executionService;
     private final MapServiceContext mapServiceContext;
     private final RecordStore recordStore;
@@ -70,21 +71,22 @@ public class PutMachine {
     volatile State state = State.START;
 
     // params
-    Data key;
+    boolean putTransient;
     long ttl = UNSET;
     long maxIdle = UNSET;
-    boolean putTransient;
+    long version;
+    long threadId;
+    long expiryTime;
+    long now = Clock.currentTimeMillis();
+    Data key;
     Address callerAddress;
     Object expect;
     PutParams staticPutParams;
     UUID txnId;
     UUID ownerUuid;
-    long version;
-    private long threadId;
-    long now = Clock.currentTimeMillis();
 
     // TODO do configurable
-    boolean offloadEnabled = true;
+    final boolean offloadEnabled;
 
     public PutMachine(Operation operation) {
         this.operation = operation;
@@ -146,6 +148,10 @@ public class PutMachine {
     public PutMachine setMaxIdle(long maxIdle) {
         this.maxIdle = maxIdle;
         return this;
+    }
+
+    public void setExpiryTime(long expiryTime) {
+        this.expiryTime = expiryTime;
     }
 
     public PutMachine setPutTransient(boolean putTransient) {
@@ -250,12 +256,17 @@ public class PutMachine {
     }
 
     private State findNextState() {
+        if (staticPutParams.isPutVanilla()) {
+            return State.STORE;
+        }
+
         if (staticPutParams.isPutIfEqual()) {
             boolean equal = valueComparator.isEqual(expect, oldValue, ss);
             if (!equal) {
                 oldValue = null;
+                return State.DONE;
             }
-            return equal ? State.STORE : State.DONE;
+            return State.STORE;
         }
 
         if (staticPutParams.isPutIfAbsent()) {
@@ -266,12 +277,8 @@ public class PutMachine {
             return oldValue != null ? State.STORE : State.DONE;
         }
 
-        if (!staticPutParams.isPutIfAbsent() && !staticPutParams.isPutIfExists()) {
+        if (canTxnProceed()) {
             return State.STORE;
-        }
-
-        if (!canTxnProceed()) {
-            return State.DONE;
         }
 
         return State.DONE;
@@ -324,11 +331,6 @@ public class PutMachine {
         if (!staticPutParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
         }
-    }
-
-    // used to pre-store loaded value for putIfAbsent and putIfExists
-    private void preStoreOfLoadedValue() {
-        preStoreForPutIf();
     }
 
     // putIfAbsent and putIfExist
@@ -404,14 +406,14 @@ public class PutMachine {
 
     private void put() {
         putStorage(newValue);
-        putExpirySystem(ttl, maxIdle, staticPutParams.getExpiryTime());
+        putExpirySystem(ttl, maxIdle, expiryTime);
         notifyMutationObserver(staticPutParams.isPutFromLoad() ? LOADED : ADDED);
     }
 
     void update() {
         updateStats();
         updateStorage(newValue);
-        putExpirySystem(ttl, maxIdle, staticPutParams.getExpiryTime());
+        putExpirySystem(ttl, maxIdle, expiryTime);
         notifyMutationObserver(UPDATED);
     }
 
@@ -437,15 +439,18 @@ public class PutMachine {
         return this;
     }
 
-    PutMachine store() {
+    void store() {
         log("PutInternal.store");
-        if (!staticPutParams.isStore()) {
-            return this;
+        if (staticPutParams.isStore()) {
+            long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
+            newValue = mapDataStore.add(key, newValue, expirationTime, now, txnId);
+            return;
         }
 
-        long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
-        newValue = mapDataStore.add(key, newValue, expirationTime, now, txnId);
-        return this;
+        if (staticPutParams.isPutTransient()) {
+            mapDataStore.addTransient(key, now);
+            return;
+        }
     }
 
     void log(String msg) {
@@ -469,10 +474,6 @@ public class PutMachine {
         return this;
     }
 
-    void unlock() {
-        recordStore.unlock(key, ownerUuid, threadId, operation.getCallId());
-    }
-
     public boolean canTxnProceed() {
         return txnId != null
                 && (record == null || version == record.getVersion());
@@ -480,7 +481,6 @@ public class PutMachine {
 
     private boolean mustLoadOldValue() {
         if (!staticPutParams.isLoad()
-                || mapDataStore == EMPTY_MAP_DATA_STORE
                 || record != null) {
             return false;
         }
@@ -528,12 +528,6 @@ public class PutMachine {
         log("PutInternal.resume");
         recordStore.getMapContainer().getMapServiceContext()
                 .getNodeEngine().getOperationService().execute(operation);
-
-    }
-
-    private void setNextState(Operation op, State state) {
-        log("PutInternal.setNextState");
-        this.state = state;
 
     }
 

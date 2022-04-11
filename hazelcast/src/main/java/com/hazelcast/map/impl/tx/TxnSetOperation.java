@@ -34,8 +34,6 @@ import com.hazelcast.transaction.TransactionException;
 import java.io.IOException;
 import java.util.UUID;
 
-import static com.hazelcast.map.impl.record.Record.UNSET;
-
 /**
  * An operation to unlock and set (key,value) on the partition .
  */
@@ -89,23 +87,12 @@ public class TxnSetOperation extends BasePutOperation
     protected void beforeCallInternal() {
         super.beforeCallInternal();
         recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
-        shouldBackup = putMachine.canTxnProceed();
     }
 
-    //    @Override
-//    protected void runInternal() {
-//        recordStore.unlock(dataKey, ownerUuid, threadId, getCallId());
-//        Record record = recordStore.getRecordOrNull(dataKey);
-//        if (record == null || version == record.getVersion()) {
-//            EventService eventService = getNodeEngine().getEventService();
-//            if (eventService.hasEventRegistration(MapService.SERVICE_NAME, getName())) {
-//                oldValue = record == null ? null : mapServiceContext.toData(record.getValue());
-//            }
-//            eventType = record == null ? EntryEventType.ADDED : EntryEventType.UPDATED;
-//            recordStore.setTxn(dataKey, dataValue, ttl, UNSET, transactionId);
-//            shouldBackup = true;
-//        }
-//    }
+    @Override
+    protected void whenDone() {
+        shouldBackup = putMachine.canTxnProceed();
+    }
 
     @Override
     public long getVersion() {

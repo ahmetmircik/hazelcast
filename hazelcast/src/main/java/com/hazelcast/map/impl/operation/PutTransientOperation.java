@@ -38,17 +38,11 @@ public class PutTransientOperation
 
     @Override
     protected void init(PutMachine putMachine) {
-        // TODO mapdatastore.add
         putMachine.setStaticPutParams(PutParams.PUT_TRANSIENT_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle());
-    }
-
-    @Override
-    protected void whenDone() {
-        oldValue = putMachine.getOldValue();
     }
 
     @Override
