@@ -466,12 +466,11 @@ public class PutMachine {
         recordStore.checkIfLoaded();
     }
 
-    PutMachine start() {
+    void start() {
         log("PutMachine.start");
         // Get record by checking expiry, if expired, evict record.
         record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
-        return this;
     }
 
     public boolean canTxnProceed() {
@@ -496,7 +495,7 @@ public class PutMachine {
         return staticPutParams.isLoad();
     }
 
-    PutMachine finish() {
+    void finish() {
         log("PutInternal.finish");
         if (record == null) {
             put();
@@ -504,7 +503,6 @@ public class PutMachine {
             update();
         }
         oldValue = mapServiceContext.toData(oldValue);
-        return this;
     }
 
     enum State {
