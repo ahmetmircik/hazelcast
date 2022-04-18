@@ -95,7 +95,7 @@ public abstract class AbstractNearCacheBasicTest<NK, NV> extends HazelcastTestSu
     /**
      * The default count to be inserted into the Near Caches.
      */
-    protected static final int DEFAULT_RECORD_COUNT = 1;
+    protected static final int DEFAULT_RECORD_COUNT = 1_000;
 
     /**
      * Number of seconds to expire Near Cache entries via TTL.

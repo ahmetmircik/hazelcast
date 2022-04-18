@@ -68,7 +68,7 @@ public class PutMachine {
 
     volatile Object oldValue;
     volatile Object newValue;
-    volatile State state = State.START;
+    volatile State state = State.READ_MEMORY;
 
     // params
     boolean putTransient;
@@ -177,7 +177,7 @@ public class PutMachine {
         return oldValue;
     }
 
-    private void nextState(State next) {
+    private void setNextState(State next) {
         state = next;
     }
 
@@ -190,17 +190,13 @@ public class PutMachine {
     }
 
     public CallStatus runNormal() {
-        start();
+        readMemory();
 
-        State nextState = findNextState();
-        if (nextState == State.STORE) {
-            meta();
+        if (!isNextStateDone()) {
+            doMetaOps();
+            writeMemory();
         }
-
-        if (nextState != State.DONE) {
-            finish();
-        }
-        nextState(State.DONE);
+        setNextState(State.DONE);
         return CallStatus.RESPONSE;
     }
 
@@ -209,79 +205,85 @@ public class PutMachine {
     private CallStatus runWithMapStore() {
         do {
             switch (state) {
-                case START:
+                case READ_MEMORY:
                     checkIfLoaded();
-                    start();
+                    readMemory();
                     if (mustLoadOldValue()) {
-                        nextState(State.LOAD);
+                        setNextState(offloadEnabled ? State.ASYNC_LOAD : State.SYNC_LOAD);
                     } else {
-                        nextState(State.META);
+                        setNextState(State.META_OPS);
                     }
                     break;
-                case LOAD:
+                case SYNC_LOAD:
+                    load();
+                    setNextState(State.META_OPS);
+                    break;
+                case ASYNC_LOAD:
                     // TODO max offloaded request count, do we need a limit?
-                    if (offloadEnabled) {
-                        return offload(State.META, true);
-                    } else {
-                        load();
-                        nextState(State.META);
-                    }
-                    break;
-                case META:
+                    return offloadLoad(State.META_OPS);
+                case META_OPS:
                     preStoreForPutIf();
 
-                    State nextState = findNextState();
-
-                    if (nextState == State.STORE) {
-                        meta();
-                    }
-
-                    nextState(nextState);
-                    break;
-                case STORE:
-                    if (offloadEnabled) {
-                        return offload(State.FINAL, false);
+                    boolean nextStateDone = isNextStateDone();
+                    if (nextStateDone) {
+                        setNextState(State.DONE);
                     } else {
-                        store();
-                        nextState(State.FINAL);
+                        doMetaOps();
+                        setNextState(offloadEnabled ? State.ASYNC_STORE : State.SYNC_STORE);
                     }
                     break;
-                case FINAL:
-                    finish();
-                    nextState(State.DONE);
+                case SYNC_STORE:
+                    store();
+                    setNextState(State.WRITE_MEMORY);
+                    break;
+                case ASYNC_STORE:
+                    // TODO max offloaded request count, do we need a limit?
+                    return offloadStore(State.WRITE_MEMORY);
+                case WRITE_MEMORY:
+                    writeMemory();
+                    setNextState(State.DONE);
                     break;
             }
         } while (state != State.DONE);
+
         return CallStatus.RESPONSE;
     }
 
-    private State findNextState() {
+    private boolean isNextStateDone() {
         if (staticPutParams.isPutVanilla()) {
-            return State.STORE;
+            return false;
         }
 
         if (staticPutParams.isPutIfEqual()) {
             boolean equal = valueComparator.isEqual(expect, oldValue, ss);
             if (!equal) {
                 oldValue = null;
-                return State.DONE;
+                return true;
             }
-            return State.STORE;
+            return false;
         }
 
         if (staticPutParams.isPutIfAbsent()) {
-            return oldValue == null ? State.STORE : State.DONE;
+            return oldValue != null;
         }
 
         if (staticPutParams.isPutIfExists()) {
-            return oldValue != null ? State.STORE : State.DONE;
+            return oldValue == null;
         }
 
         if (canTxnProceed()) {
-            return State.STORE;
+            return false;
         }
 
-        return State.DONE;
+        return true;
+    }
+
+    private Offload offloadLoad(State next) {
+        return offload(next, true);
+    }
+
+    private Offload offloadStore(State next) {
+        return offload(next, false);
     }
 
     private Offload offload(State next, boolean isLoad) {
@@ -311,7 +313,7 @@ public class PutMachine {
                     } else {
                         store();
                     }
-                    nextState(next);
+                    setNextState(next);
                     resume(operation);
                 } catch (Exception e) {
                     sendErrorResponse(e);
@@ -325,7 +327,7 @@ public class PutMachine {
         return definedExpirationTime - System.currentTimeMillis();
     }
 
-    private void meta() {
+    private void doMetaOps() {
         log("PutMachine.meta");
         // Intercept put on owner partition.
         if (!staticPutParams.isBackup()) {
@@ -466,7 +468,7 @@ public class PutMachine {
         recordStore.checkIfLoaded();
     }
 
-    void start() {
+    void readMemory() {
         log("PutMachine.start");
         // Get record by checking expiry, if expired, evict record.
         record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
@@ -479,38 +481,34 @@ public class PutMachine {
     }
 
     private boolean mustLoadOldValue() {
-        if (!staticPutParams.isLoad()
-                || record != null) {
+        if (!staticPutParams.isLoad() || record != null) {
+            // we don't want to load old value or
+            // we already have old value
             return false;
         }
 
-        if (staticPutParams.isPutIfAbsent()) {
-            return true;
-        }
-
-        if (staticPutParams.isPutIfExists()) {
-            return true;
-        }
-
-        return staticPutParams.isLoad();
+        return true;
     }
 
-    void finish() {
+    void writeMemory() {
         log("PutInternal.finish");
         if (record == null) {
             put();
         } else {
             update();
         }
+        // TODO do we need to create on-heap copy for common path?
         oldValue = mapServiceContext.toData(oldValue);
     }
 
     enum State {
-        START,
-        LOAD,
-        META,
-        STORE,
-        FINAL,
+        READ_MEMORY,
+        SYNC_LOAD,
+        ASYNC_LOAD,
+        META_OPS,
+        SYNC_STORE,
+        ASYNC_STORE,
+        WRITE_MEMORY,
         DONE
 
     }
@@ -533,6 +531,4 @@ public class PutMachine {
         log("PutInternal.sendErrorResponse");
         operation.sendResponse(t);
     }
-
-
 }
