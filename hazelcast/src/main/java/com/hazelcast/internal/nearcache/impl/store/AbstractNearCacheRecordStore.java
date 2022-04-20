@@ -210,6 +210,12 @@ public abstract class AbstractNearCacheRecordStore<K, V, KS, R extends NearCache
 
     @Override
     public void onEvict(KS key, R record, boolean wasExpired) {
+        if (!canUpdateStats(record)) {
+            // A record can only be checked for expiry if its record state is
+            // READ_PERMITTED. We can't check reserved records for expiry.
+            return;
+        }
+
         if (wasExpired) {
             nearCacheStats.incrementExpirations();
         } else {

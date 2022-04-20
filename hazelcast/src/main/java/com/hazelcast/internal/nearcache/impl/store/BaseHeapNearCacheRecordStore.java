@@ -99,6 +99,12 @@ public abstract class BaseHeapNearCacheRecordStore<K, V, R extends NearCacheReco
     @Override
     public void onEvict(K key, R record, boolean wasExpired) {
         super.onEvict(key, record, wasExpired);
+
+        if (!canUpdateStats(record)) {
+            // A record can only be checked for expiry if its record state is
+            // READ_PERMITTED. We can't check reserved records for expiry.
+            return;
+        }
         nearCacheStats.decrementOwnedEntryMemoryCost(getTotalStorageMemoryCost(key, record));
     }
 
