@@ -233,6 +233,9 @@ public abstract class PartitionCorrectnessTestSupport extends HazelcastTestSuppo
         int total = 0;
         int[] fragmentTotals = new int[NAMESPACES.length];
         for (HazelcastInstance hz : instances) {
+            if (!getNode(hz).isRunning()) {
+                break;
+            }
             TestMigrationAwareService service = getService(hz, TestMigrationAwareService.SERVICE_NAME);
             total += service.size();
 
@@ -298,7 +301,7 @@ public abstract class PartitionCorrectnessTestSupport extends HazelcastTestSuppo
     }
 
     private <N> void assertReplicaVersionsAndBackupValues(int actualBackupCount, TestAbstractMigrationAwareService<N> service,
-                                                            Node node, InternalPartition[] partitions, N name, boolean allowDirty) {
+                                                          Node node, InternalPartition[] partitions, N name, boolean allowDirty) {
         Address thisAddress = node.getThisAddress();
         ServiceNamespace namespace = service.getNamespace(name);
 
@@ -321,7 +324,7 @@ public abstract class PartitionCorrectnessTestSupport extends HazelcastTestSuppo
                             = getPartitionReplicaVersionsView(backupNode, partitionId);
                     long[] backupReplicaVersions = backupReplicaVersionsView.getVersions(namespace);
                     assertNotNull(namespace + " replica versions are null on " + backupNode.address
-                                    + ", partitionId: " + partitionId + ", replicaIndex: " + replica, backupReplicaVersions);
+                            + ", partitionId: " + partitionId + ", replicaIndex: " + replica, backupReplicaVersions);
 
                     for (int i = replica - 1; i < actualBackupCount; i++) {
                         assertEquals("Replica version mismatch! Owner: " + thisAddress + ", Backup: " + address
