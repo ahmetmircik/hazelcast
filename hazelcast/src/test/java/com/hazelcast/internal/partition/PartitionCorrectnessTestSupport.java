@@ -375,6 +375,7 @@ public abstract class PartitionCorrectnessTestSupport extends HazelcastTestSuppo
 
     Config getConfig(boolean withService, boolean antiEntropyEnabled) {
         Config config = getConfig();
+        config.getMetricsConfig().setEnabled(false);
 
         if (withService) {
             ServicesConfig servicesConfig = ConfigAccessor.getServicesConfig(config);
