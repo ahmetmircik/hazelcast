@@ -19,8 +19,10 @@ package com.hazelcast.internal.partition;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.instance.impl.Node;
 import com.hazelcast.internal.partition.service.TestGetOperation;
 import com.hazelcast.internal.partition.service.TestPutOperation;
+import com.hazelcast.partition.Partition;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.OperationService;
 import org.junit.Test;
@@ -32,6 +34,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -97,19 +100,41 @@ public abstract class AbstractGracefulShutdownCorrectnessTest extends PartitionC
 
         Collection<Address> addresses = Collections.emptySet();
 
-        int size = 1;
-        while (size < (nodeCount + 1)) {
-            int startCount = (shutdownNodeCount + 1) - addresses.size();
-            startNodes(config, addresses);
-            startNodes(config, startCount);
-            size += (shutdownNodeCount + 1);
+        boolean gotException = false;
+        try {
+            int size = 1;
+            while (size < (nodeCount + 1)) {
+                int startCount = (shutdownNodeCount + 1) - addresses.size();
+                startNodes(config, addresses);
+                startNodes(config, startCount);
+                size += (shutdownNodeCount + 1);
 
-            assertSizeAndDataEventually();
+                assertSizeAndDataEventually();
 
-            addresses = shutdownNodes(shutdownNodeCount);
-            size -= shutdownNodeCount;
+                addresses = shutdownNodes(shutdownNodeCount);
+                size -= shutdownNodeCount;
 
-            assertSizeAndDataEventually();
+                assertSizeAndDataEventually();
+            }
+        } catch (Throwable e) {
+            gotException = true;
+            throw e;
+        } finally {
+            if (gotException) {
+                for (HazelcastInstance instance : factory.getAllHazelcastInstances()) {
+                    Node node = getNode(instance);
+                    if (!node.isRunning()) {
+                        break;
+                    }
+
+                    Set<Partition> partitions = instance.getPartitionService().getPartitions();
+                    String pstr = "\n\n\n" + "Partitions on " + instance + ":\n";
+                    for (Partition partition : partitions) {
+                        pstr += "\n" + partition + ", ";
+                    }
+                    node.getNodeEngine().getLogger(this.getClass()).severe(pstr);
+                }
+            }
         }
     }
 
