@@ -16,6 +16,7 @@
 
 package com.hazelcast.internal.partition.service;
 
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -37,6 +38,10 @@ public class TestBackupPutOperation extends Operation {
     public void run() throws Exception {
         TestMigrationAwareService service = getService();
         service.put(getPartitionId(), value);
+
+        int partitionId = getPartitionId();
+        ILogger logger = getNodeEngine().getLogger(getClass());
+        logger.severe("Putting " + partitionId + ", size=" + service.size());
     }
 
     @Override

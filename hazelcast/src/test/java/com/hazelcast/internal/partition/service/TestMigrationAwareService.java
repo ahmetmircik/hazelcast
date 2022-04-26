@@ -74,7 +74,7 @@ public class TestMigrationAwareService extends TestAbstractMigrationAwareService
         if (event.getMigrationEndpoint() == MigrationEndpoint.SOURCE) {
             if (event.getNewReplicaIndex() == -1 || event.getNewReplicaIndex() > backupCount) {
                 data.remove(event.getPartitionId());
-                logger.severe("Removing data of partitionId=" + event.getPartitionId() + ", " + event);
+                logger.severe("onCommitMigration removing data of partitionId=" + event.getPartitionId() + ", " + event);
             }
         }
         if (event.getMigrationEndpoint() == MigrationEndpoint.DESTINATION) {
@@ -89,6 +89,7 @@ public class TestMigrationAwareService extends TestAbstractMigrationAwareService
         if (event.getMigrationEndpoint() == MigrationEndpoint.DESTINATION) {
             if (event.getCurrentReplicaIndex() == -1 || event.getCurrentReplicaIndex() > backupCount) {
                 data.remove(event.getPartitionId());
+                logger.severe("onRollbackMigration removing data of partitionId=" + event.getPartitionId() + ", " + event);
             }
         }
     }
