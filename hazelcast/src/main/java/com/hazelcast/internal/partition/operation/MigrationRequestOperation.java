@@ -44,6 +44,7 @@ import com.hazelcast.spi.impl.executionservice.ExecutionService;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.spi.impl.operationservice.OperationService;
 import com.hazelcast.spi.impl.operationservice.UrgentSystemOperation;
 
 import javax.annotation.Nullable;
@@ -172,6 +173,20 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
                 .setCallTimeout(partitionService.getPartitionMigrationTimeout())
                 .invoke()
                 .whenCompleteAsync(new MigrationCallback(), asyncExecutor);
+    }
+
+    private final class SendNewMigrationFragmentRunnable implements PartitionSpecificRunnable, UrgentSystemOperation {
+
+        @Override
+        public int getPartitionId() {
+            return MigrationRequestOperation.this.getPartitionId();
+        }
+
+        @Override
+        public void run() {
+            trySendNewFragment();
+        }
+
     }
 
     private void trySendNewFragment() {
@@ -435,10 +450,12 @@ public class MigrationRequestOperation extends BaseMigrationOperation {
                 logThrowable(throwable);
                 completeMigration(false);
             } else if (Boolean.TRUE.equals(result)) {
-                // ASYNC executor is of CONCRETE type (does not share threads with other executors)
-                // and is never used for user-supplied code.
-                getNodeEngine().getExecutionService().submit(ExecutionService.ASYNC_EXECUTOR,
-                        () -> trySendNewFragment());
+                OperationService operationService = getNodeEngine().getOperationService();
+                operationService.execute(new SendNewMigrationFragmentRunnable());
+//                // ASYNC executor is of CONCRETE type (does not share threads with other executors)
+//                // and is never used for user-supplied code.
+//                getNodeEngine().getExecutionService().submit(ExecutionService.ASYNC_EXECUTOR,
+//                        () -> trySendNewFragment());
             } else {
                 ILogger logger = getLogger();
                 if (logger.isFineEnabled()) {

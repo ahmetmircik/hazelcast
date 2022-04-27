@@ -41,7 +41,7 @@ public class TestBackupPutOperation extends Operation {
 
         int partitionId = getPartitionId();
         ILogger logger = getNodeEngine().getLogger(getClass());
-        logger.severe("Putting " + partitionId + ", size=" + service.size());
+        logger.severe("Putting partitionId=" + partitionId + ", size=" + service.size());
     }
 
     @Override

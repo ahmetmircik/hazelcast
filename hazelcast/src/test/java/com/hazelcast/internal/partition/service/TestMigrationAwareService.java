@@ -58,12 +58,16 @@ public class TestMigrationAwareService extends TestAbstractMigrationAwareService
         data.put(partitionId, value);
     }
 
+
     @Override
     public Operation prepareReplicationOperation(PartitionReplicationEvent event) {
         if (event.getReplicaIndex() > backupCount) {
+            logger.severe("prepareReplicationOperation returning null op because event.getReplicaIndex() > backupCount, backupCount="
+                    + backupCount + ", " + event);
             return null;
         }
         if (!data.containsKey(event.getPartitionId())) {
+            logger.severe("prepareReplicationOperation returning null op because data.containsKey false, " + event);
             return null;
         }
         return new TestReplicationOperation(data.get(event.getPartitionId()));
@@ -73,8 +77,10 @@ public class TestMigrationAwareService extends TestAbstractMigrationAwareService
     protected void onCommitMigration(PartitionMigrationEvent event) {
         if (event.getMigrationEndpoint() == MigrationEndpoint.SOURCE) {
             if (event.getNewReplicaIndex() == -1 || event.getNewReplicaIndex() > backupCount) {
-                data.remove(event.getPartitionId());
-                logger.severe("onCommitMigration removing data of partitionId=" + event.getPartitionId() + ", " + event);
+                Integer removed = data.remove(event.getPartitionId());
+                logger.severe("onCommitMigration removing data of partitionId=" + event.getPartitionId()
+                        + ", removed=" + removed
+                        + ", " + event);
             }
         }
         if (event.getMigrationEndpoint() == MigrationEndpoint.DESTINATION) {
