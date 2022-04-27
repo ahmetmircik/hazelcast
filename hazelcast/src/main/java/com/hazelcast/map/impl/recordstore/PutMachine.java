@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.recordstore;
 
 import com.hazelcast.cluster.Address;
 import com.hazelcast.core.EntryEventType;
+import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.Clock;
@@ -61,6 +62,7 @@ public class PutMachine {
     private final MapEventPublisher mapEventPublisher;
     private final String name;
     private final boolean hasMapStore;
+    private final InvalidationQueue<Operation> waitingMapStoreOperations;
 
     // temp
     Record record;
@@ -103,6 +105,7 @@ public class PutMachine {
         this.mapDataStore = recordStore.getMapDataStore();
         this.storage = recordStore.getStorage();
         this.mutationObserver = recordStore.getMutationObserver();
+        this.waitingMapStoreOperations = recordStore.getWaitingMapStoreOperations();
         this.mapEventPublisher = mapServiceContext.getMapEventPublisher();
         this.name = mapContainer.getName();
         this.hasMapStore = mapDataStore != EMPTY_MAP_DATA_STORE;
@@ -177,7 +180,7 @@ public class PutMachine {
         return oldValue;
     }
 
-    private void setNextState(State next) {
+    private void goToState(State next) {
         state = next;
     }
 
@@ -192,11 +195,11 @@ public class PutMachine {
     public CallStatus runNormal() {
         readMemory();
 
-        if (!isNextStateDone()) {
+        if (!canGoDoneState()) {
             doMetaOps();
             writeMemory();
         }
-        setNextState(State.DONE);
+        goToState(State.DONE);
         return CallStatus.RESPONSE;
     }
 
@@ -209,47 +212,52 @@ public class PutMachine {
                     checkIfLoaded();
                     readMemory();
                     if (mustLoadOldValue()) {
-                        setNextState(offloadEnabled ? State.ASYNC_LOAD : State.SYNC_LOAD);
+                        goToState(offloadEnabled ? State.LOAD_ASYNC : State.LOAD_SYNC);
                     } else {
-                        setNextState(State.META_OPS);
+                        goToState(State.DO_META_OPS);
                     }
                     break;
-                case SYNC_LOAD:
+                case LOAD_SYNC:
                     load();
-                    setNextState(State.META_OPS);
+                    goToState(State.DO_META_OPS);
                     break;
-                case ASYNC_LOAD:
+                case LOAD_ASYNC:
                     // TODO max offloaded request count, do we need a limit?
-                    return offloadLoad(State.META_OPS);
-                case META_OPS:
+                    return loadAsyncThenGoTo(State.DO_META_OPS);
+                case DO_META_OPS:
                     preStoreForPutIf();
 
-                    boolean nextStateDone = isNextStateDone();
-                    if (nextStateDone) {
-                        setNextState(State.DONE);
+                    if (canGoDoneState()) {
+                        goToState(State.DONE);
                     } else {
                         doMetaOps();
-                        setNextState(offloadEnabled ? State.ASYNC_STORE : State.SYNC_STORE);
+                        goToState(offloadEnabled ? State.STORE_ASYNC : State.STORE_SYNC);
                     }
                     break;
-                case SYNC_STORE:
+                case STORE_SYNC:
                     store();
-                    setNextState(State.WRITE_MEMORY);
+                    goToState(State.WRITE_MEMORY);
                     break;
-                case ASYNC_STORE:
+                case STORE_ASYNC:
                     // TODO max offloaded request count, do we need a limit?
-                    return offloadStore(State.WRITE_MEMORY);
+                    return storeAsyncThenGoTo(State.WRITE_MEMORY);
                 case WRITE_MEMORY:
                     writeMemory();
-                    setNextState(State.DONE);
+                    goToState(State.DONE);
                     break;
             }
         } while (state != State.DONE);
 
+        log("Finished running: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
+
+        if (recordStore.hasActiveOffload().compareAndSet(true, false)) {
+            resume(waitingMapStoreOperations.poll());
+        }
+
         return CallStatus.RESPONSE;
     }
 
-    private boolean isNextStateDone() {
+    private boolean canGoDoneState() {
         if (staticPutParams.isPutVanilla()) {
             return false;
         }
@@ -278,11 +286,11 @@ public class PutMachine {
         return true;
     }
 
-    private Offload offloadLoad(State next) {
+    private Offload loadAsyncThenGoTo(State next) {
         return offload(next, true);
     }
 
-    private Offload offloadStore(State next) {
+    private Offload storeAsyncThenGoTo(State next) {
         return offload(next, false);
     }
 
@@ -306,6 +314,11 @@ public class PutMachine {
 
         @Override
         public void start() throws Exception {
+            if (!recordStore.hasActiveOffload().compareAndSet(false, true)) {
+                waitingMapStoreOperations.offer(offloadedOperation());
+                return;
+            }
+
             execute(() -> {
                 try {
                     if (isLoad) {
@@ -313,13 +326,12 @@ public class PutMachine {
                     } else {
                         store();
                     }
-                    setNextState(next);
-                    resume(operation);
+                    goToState(next);
+                    resume(offloadedOperation());
                 } catch (Exception e) {
                     sendErrorResponse(e);
                 }
             });
-
         }
     }
 
@@ -503,25 +515,27 @@ public class PutMachine {
 
     enum State {
         READ_MEMORY,
-        SYNC_LOAD,
-        ASYNC_LOAD,
-        META_OPS,
-        SYNC_STORE,
-        ASYNC_STORE,
+        LOAD_SYNC,
+        LOAD_ASYNC,
+        DO_META_OPS,
+        STORE_SYNC,
+        STORE_ASYNC,
         WRITE_MEMORY,
         DONE
-
     }
 
     // TODO use striped executor
     private void execute(Runnable task) {
         log("PutInternal.execute");
         executionService.execute("offloaded-map-store", task);
-
     }
 
     private void resume(Operation operation) {
-        log("PutInternal.resume");
+        if (operation == null) {
+            return;
+        }
+
+        log("PutInternal.resume: " +  operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
         recordStore.getMapContainer().getMapServiceContext()
                 .getNodeEngine().getOperationService().execute(operation);
 

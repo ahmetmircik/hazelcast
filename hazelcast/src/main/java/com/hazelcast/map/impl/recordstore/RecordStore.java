@@ -39,6 +39,7 @@ import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryReason;
 import com.hazelcast.map.impl.recordstore.expiry.ExpirySystem;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes.MapMergeTypes;
 import com.hazelcast.wan.impl.CallerProvenance;
@@ -50,12 +51,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
 /**
  * Defines a record-store.
  */
 public interface RecordStore<R extends Record> {
+
+    InvalidationQueue<Operation> getWaitingMapStoreOperations();
+
+    AtomicBoolean hasActiveOffload();
 
     ExpirySystem getExpirySystem();
 
@@ -514,6 +520,7 @@ public interface RecordStore<R extends Record> {
     void init();
 
     CompositeMutationObserver<Record> getMutationObserver();
+
 
     void updateStatsOnPut(boolean countAsAccess, long now);
 

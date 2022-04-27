@@ -24,6 +24,7 @@ import com.hazelcast.internal.locksupport.LockStore;
 import com.hazelcast.internal.locksupport.LockSupportService;
 import com.hazelcast.internal.monitor.LocalRecordStoreStats;
 import com.hazelcast.internal.monitor.impl.LocalRecordStoreStatsImpl;
+import com.hazelcast.internal.nearcache.impl.invalidation.InvalidationQueue;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.Clock;
@@ -40,9 +41,11 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.map.impl.record.RecordReaderWriter;
 import com.hazelcast.spi.impl.NodeEngine;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Contains record store common parts.
@@ -61,6 +64,13 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     protected final SerializationService serializationService;
     protected final CompositeMutationObserver<Record> mutationObserver;
     protected final LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
+    protected final InvalidationQueue<Operation> waitingMapStoreOperations = new InvalidationQueue<>();
+    protected final AtomicBoolean hasActiveOffload = new AtomicBoolean();
+
+    @Override
+    public InvalidationQueue<Operation> getWaitingMapStoreOperations() {
+        return waitingMapStoreOperations;
+    }
 
     protected Storage<Data, Record> storage;
     protected IndexingMutationObserver<Record> indexingObserver;
@@ -79,6 +89,11 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         this.mapDataStore = mapStoreContext.getMapStoreManager().getMapDataStore(name, partitionId);
         this.lockStore = createLockStore();
         this.mutationObserver = new CompositeMutationObserver<>();
+    }
+
+    @Override
+    public AtomicBoolean hasActiveOffload() {
+        return hasActiveOffload;
     }
 
     @Override

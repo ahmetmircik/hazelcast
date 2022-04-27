@@ -95,11 +95,66 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
             }
         });
 
-        IMap<Object, Object> test2 = node.getMap("test2");
+        IMap<Object, Object> test2 = node.getMap(mapName);
         Object old = test2.put(11, 1);
         System.out.println("old value is=" + old);
         Object old2 = test2.put(11, 2);
         System.out.println("old2 value is=" + old2);
+
+        sleepSeconds(100);
+    }
+
+
+    @Test
+    public void name3() {
+        Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
+        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            ConcurrentHashMap store = new ConcurrentHashMap<>();
+
+            @Override
+            public Integer load(Integer key) {
+                sleepSeconds(2);
+                return (Integer) store.get(key);
+            }
+
+            @Override
+            public void store(Integer key, Integer value) {
+                sleepSeconds(2);
+                store.put(key, value);
+            }
+
+            @Override
+            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
+                return null;
+            }
+
+            @Override
+            public Iterable<Integer> loadAllKeys() {
+                return null;
+            }
+        });
+        String mapName = "test2";
+        config.getMapConfig(mapName).setMapStoreConfig(mapStoreConfig);
+
+        HazelcastInstance node = createHazelcastInstance(config);
+        IMap<Object, Object> test1 = node.getMap(mapName);
+
+        spawn(() -> {
+            test1.set(1, 1);
+            System.out.println("set i = " + 1);
+        });
+
+        spawn(() -> {
+            test1.set(2, 1);
+            System.out.println("set i = " + 2);
+        });
+
 
         sleepSeconds(100);
     }
