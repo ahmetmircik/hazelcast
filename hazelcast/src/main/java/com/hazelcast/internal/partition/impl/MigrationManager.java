@@ -631,12 +631,12 @@ public class MigrationManager {
 
     void onShutdownRequest(Member member) {
         if (!partitionStateManager.isInitialized()) {
-            sendShutdownOperation(member.getAddress());
+            sendShutdownResponseOperation(member.getAddress());
             return;
         }
         ClusterState clusterState = node.getClusterService().getClusterState();
         if (!clusterState.isMigrationAllowed() && clusterState != ClusterState.IN_TRANSITION) {
-            sendShutdownOperation(member.getAddress());
+            sendShutdownResponseOperation(member.getAddress());
             return;
         }
         if (shutdownRequestedMembers.add(member)) {
@@ -749,7 +749,7 @@ public class MigrationManager {
     /**
      * Sends a {@link ShutdownResponseOperation} to the {@code address} or takes a shortcut if shutdown is local.
      */
-    private void sendShutdownOperation(Address address) {
+    private void sendShutdownResponseOperation(Address address) {
         if (node.getThisAddress().equals(address)) {
             assert !node.isRunning() : "Node state: " + node.getState();
             partitionService.onShutdownResponse();
@@ -1360,7 +1360,7 @@ public class MigrationManager {
                     && migration.getDestinationNewReplicaIndex() == 0) {
 
                 throw new IllegalStateException("Promotion migrations must be handled by "
-                        + RepairPartitionTableTask.class.getSimpleName() + " -> " + migration);
+                        + FixPartitionTableTask.class.getSimpleName() + " -> " + migration);
             }
 
             Member partitionOwner = checkMigrationParticipantsAndGetPartitionOwner();
@@ -1637,7 +1637,7 @@ public class MigrationManager {
      * <p>
      * Invoked on the master node. Acquires partition service lock when scheduling the tasks on the migration queue.
      */
-    private class RepairPartitionTableTask implements MigrationRunnable {
+    private class FixPartitionTableTask implements MigrationRunnable {
         @Override
         public void run() {
             if (!partitionStateManager.isInitialized()) {
@@ -1914,7 +1914,7 @@ public class MigrationManager {
      * Task scheduled on the master node to fetch and repair the latest partition table.
      * It will first check if we need to fetch the new partition table and schedule a task to do so, along with a new
      * {@link ControlTask} to be executed afterwards. If we don't need to fetch the partition table it will send a
-     * {@link RepairPartitionTableTask} to repair the existing partition table.
+     * {@link FixPartitionTableTask} to repair the existing partition table.
      * Invoked on the master node. It will acquire the partition service lock.
      *
      * @see InternalPartitionServiceImpl#isFetchMostRecentPartitionTableTaskRequired()
@@ -1935,7 +1935,7 @@ public class MigrationManager {
                 if (logger.isFinestEnabled()) {
                     logger.finest("RepairPartitionTableTask scheduled");
                 }
-                migrationQueue.add(new RepairPartitionTableTask());
+                migrationQueue.add(new FixPartitionTableTask());
             } finally {
                 partitionServiceLock.unlock();
             }
@@ -1960,13 +1960,13 @@ public class MigrationManager {
                 if (shutdownRequestCount > 0) {
                     if (shutdownRequestCount == nodeEngine.getClusterService().getSize(DATA_MEMBER_SELECTOR)) {
                         for (Member member : shutdownRequestedMembers) {
-                            sendShutdownOperation(member.getAddress());
+                            sendShutdownResponseOperation(member.getAddress());
                         }
                     } else {
                         boolean present = false;
                         for (Member member : shutdownRequestedMembers) {
                             if (partitionStateManager.isAbsentInPartitionTable(member)) {
-                                sendShutdownOperation(member.getAddress());
+                                sendShutdownResponseOperation(member.getAddress());
                             } else {
                                 logger.warning(member + " requested to shutdown but still in partition table");
                                 present = true;
