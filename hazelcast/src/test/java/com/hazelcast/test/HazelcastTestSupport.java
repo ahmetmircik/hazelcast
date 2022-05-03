@@ -667,7 +667,7 @@ public abstract class HazelcastTestSupport {
     public static void suspectMember(Node suspectingNode, Node suspectedNode, String reason) {
         if (suspectingNode != null && suspectedNode != null) {
             ClusterServiceImpl clusterService = suspectingNode.getClusterService();
-            Member suspectedMember = clusterService.getMember(suspectedNode.getLocalMember().getAddress());
+            Member suspectedMember = clusterService.getMember(suspectedNode.getLocalMember().getUuid());
             if (suspectedMember != null) {
                 clusterService.suspectMember(suspectedMember, reason, true);
             }
