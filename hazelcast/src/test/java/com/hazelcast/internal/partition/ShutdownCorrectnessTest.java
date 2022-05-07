@@ -19,7 +19,6 @@ package com.hazelcast.internal.partition;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.internal.util.FutureUtil;
 import com.hazelcast.map.IMap;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
@@ -30,16 +29,12 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
-import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 
 import static com.hazelcast.test.Accessors.getNode;
-import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category({SlowTest.class})
@@ -62,31 +57,38 @@ public class ShutdownCorrectnessTest extends HazelcastTestSupport {
             map.set(i, i);
         }
 
-        //suspectMember(one, instance);
+        System.err.println(two.getCluster().getLocalMember().getUuid());
+        Address address = getNode(two).getThisAddress();
+        two.shutdown();
+        HazelcastInstance instance = instanceFactory.newHazelcastInstance(address);
 
-        CountDownLatch latch = new CountDownLatch(2);
-        Future first = spawn(new Runnable() {
-            @Override
-            public void run() {
-                Address address = getNode(two).getThisAddress();
-                instanceFactory.newHazelcastInstance(address);
-                two.shutdown();
-            }
-        });
+        System.err.println(instance.getCluster().getLocalMember().getUuid());
 
-        Future second = spawn(new Runnable() {
-            @Override
-            public void run() {
-                Address address = getNode(three).getThisAddress();
-                three.shutdown();
-                instanceFactory.newHazelcastInstance(address);
-            }
-        });
-
-        FutureUtil.waitForever(Arrays.asList(first, second));
-
-        int size = instanceFactory.getAllHazelcastInstances().iterator().next().getMap("test").size();
-        assertEquals(size, 10_000);
+//        //suspectMember(one, instance);
+//
+//        CountDownLatch latch = new CountDownLatch(2);
+//        Future first = spawn(new Runnable() {
+//            @Override
+//            public void run() {
+//                Address address = getNode(two).getThisAddress();
+//                instanceFactory.newHazelcastInstance(address);
+//                two.shutdown();
+//            }
+//        });
+//
+//        Future second = spawn(new Runnable() {
+//            @Override
+//            public void run() {
+//                Address address = getNode(three).getThisAddress();
+//                three.shutdown();
+//                instanceFactory.newHazelcastInstance(address);
+//            }
+//        });
+//
+//        FutureUtil.waitForever(Arrays.asList(first, second));
+//
+//        int size = instanceFactory.getAllHazelcastInstances().iterator().next().getMap("test").size();
+//        assertEquals(size, 10_000);
     }
 
     @Test

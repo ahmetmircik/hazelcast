@@ -590,6 +590,50 @@ public class MembershipManager {
         return sender != null && node.getThisAddress().equals(membersViewMetadata.getMasterAddress());
     }
 
+    void suspectMember2(MemberImpl suspectedMember, String reason, boolean closeConnection) {
+        assert !suspectedMember.equals(getLocalMember()) : "Cannot suspect from myself!";
+        assert !suspectedMember.localMember() : "Cannot be local member";
+
+        final MemberMap localMemberMap;
+        final Set<MemberImpl> membersToAsk;
+
+        clusterServiceLock.lock();
+        try {
+            if (!clusterService.isJoined()) {
+                if (logger.isFineEnabled()) {
+                    logger.fine("Cannot handle suspect of " + suspectedMember + " because this node is not joined...");
+                }
+
+                return;
+            }
+
+            ClusterJoinManager clusterJoinManager = clusterService.getClusterJoinManager();
+            if (clusterService.isMaster() && !clusterJoinManager.isMastershipClaimInProgress()) {
+                //removeMember(suspectedMember, reason, closeConnection);
+                return;
+            }
+
+            if (!addSuspectedMember(suspectedMember, reason, closeConnection)) {
+                return;
+            }
+
+            if (!tryStartMastershipClaim()) {
+                return;
+            }
+
+            localMemberMap = getMemberMap();
+            membersToAsk = collectMembersToAsk(localMemberMap);
+            logger.info("Local " + localMemberMap.toMembersView() + " with suspected members: "  + suspectedMembers
+                    + " and initial addresses to ask: " + membersToAsk);
+        } finally {
+            clusterServiceLock.unlock();
+        }
+
+        ExecutorService executor = nodeEngine.getExecutionService().getExecutor(MASTERSHIP_CLAIM_EXECUTOR_NAME);
+        executor.submit(new DecideNewMembersViewTask(localMemberMap, membersToAsk));
+    }
+
+
     void suspectMember(MemberImpl suspectedMember, String reason, boolean closeConnection) {
         assert !suspectedMember.equals(getLocalMember()) : "Cannot suspect from myself!";
         assert !suspectedMember.localMember() : "Cannot be local member";

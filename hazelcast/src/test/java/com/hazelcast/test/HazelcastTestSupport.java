@@ -669,7 +669,7 @@ public abstract class HazelcastTestSupport {
             ClusterServiceImpl clusterService = suspectingNode.getClusterService();
             Member suspectedMember = clusterService.getMember(suspectedNode.getLocalMember().getUuid());
             if (suspectedMember != null) {
-                clusterService.suspectMember(suspectedMember, reason, true);
+                clusterService.suspectMember2(suspectedMember, reason, true);
             }
         }
     }

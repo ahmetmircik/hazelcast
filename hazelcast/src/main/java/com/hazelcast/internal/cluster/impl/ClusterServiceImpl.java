@@ -73,7 +73,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.hazelcast.cluster.impl.MemberImpl.NA_MEMBER_LIST_JOIN_VERSION;
@@ -87,8 +89,6 @@ import static com.hazelcast.internal.util.Preconditions.checkFalse;
 import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.internal.util.Preconditions.checkTrue;
 import static java.lang.String.format;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 @SuppressWarnings({"checkstyle:methodcount", "checkstyle:classdataabstractioncoupling", "checkstyle:classfanoutcomplexity"})
 public class ClusterServiceImpl implements ClusterService, ConnectionListener, ManagedService,
@@ -193,6 +193,10 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     public void suspectMember(Member suspectedMember, String reason, boolean destroyConnection) {
         membershipManager.suspectMember((MemberImpl) suspectedMember, reason, destroyConnection);
+    }
+
+    public void suspectMember2(Member suspectedMember, String reason, boolean destroyConnection) {
+        membershipManager.suspectMember2((MemberImpl) suspectedMember, reason, destroyConnection);
     }
 
     public void suspectAddressIfNotConnected(Address address) {
