@@ -609,13 +609,13 @@ public class MembershipManager {
 
             ClusterJoinManager clusterJoinManager = clusterService.getClusterJoinManager();
             if (clusterService.isMaster() && !clusterJoinManager.isMastershipClaimInProgress()) {
-                //removeMember(suspectedMember, reason, closeConnection);
+                removeMember(suspectedMember, reason, closeConnection);
                 return;
             }
 
-            if (!addSuspectedMember(suspectedMember, reason, closeConnection)) {
-                return;
-            }
+//            if (!addSuspectedMember(suspectedMember, reason, closeConnection)) {
+//                return;
+//            }
 
             if (!tryStartMastershipClaim()) {
                 return;
