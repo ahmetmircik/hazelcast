@@ -840,9 +840,9 @@ public class MembershipManager {
             if (logger.isFineEnabled()) {
                 logger.fine(member + " is removed. Publishing new member list.");
             }
-//            sendMemberListToOthers();
-//
-//            handleMemberRemove(newMembers, member);
+            sendMemberListToOthers();
+
+            handleMemberRemove2(newMembers, member);
             clusterService.printMemberList();
         } finally {
             clusterServiceLock.unlock();
@@ -876,12 +876,44 @@ public class MembershipManager {
                 unmodifiableSet(new LinkedHashSet<Member>(newMembers.getMembers())), false);
     }
 
+    private void handleMemberRemove2(MemberMap newMembers, MemberImpl removedMember) {
+        ClusterState clusterState = clusterService.getClusterState();
+        if (!clusterState.isJoinAllowed()) {
+            if (logger.isFineEnabled()) {
+                logger.fine(removedMember + " is removed, added to members left while cluster is " + clusterState + " state");
+            }
+
+            InternalHotRestartService hotRestartService = node.getNodeExtension().getInternalHotRestartService();
+            if (!hotRestartService.isMemberExcluded(removedMember.getAddress(), removedMember.getUuid())) {
+                addToMissingMembers(removedMember);
+            }
+        }
+
+        onMemberRemove2(removedMember);
+
+        // async events
+        sendMembershipEventNotifications(removedMember,
+                unmodifiableSet(new LinkedHashSet<Member>(newMembers.getMembers())), false);
+    }
+
     void onMemberRemove(MemberImpl... deadMembers) {
         if (deadMembers.length == 0) {
             return;
         }
         // sync calls
         node.getPartitionService().memberRemoved(deadMembers);
+        for (MemberImpl deadMember : deadMembers) {
+            nodeEngine.onMemberLeft(deadMember);
+        }
+        node.getNodeExtension().onMemberListChange();
+    }
+
+    void onMemberRemove2(MemberImpl... deadMembers) {
+        if (deadMembers.length == 0) {
+            return;
+        }
+        // sync calls
+        ((InternalPartitionServiceImpl) node.getPartitionService()).memberRemoved2(deadMembers);
         for (MemberImpl deadMember : deadMembers) {
             nodeEngine.onMemberLeft(deadMember);
         }

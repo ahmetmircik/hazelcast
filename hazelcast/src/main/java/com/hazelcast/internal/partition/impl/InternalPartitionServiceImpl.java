@@ -412,6 +412,49 @@ public class InternalPartitionServiceImpl implements InternalPartitionService,
         }
     }
 
+    public void memberRemoved2(Member... members) {
+        if (members.length == 0) {
+            return;
+        }
+        logger.fine("Removing " + Arrays.toString(members));
+        partitionServiceLock.lock();
+        try {
+            ClusterState clusterState = node.getClusterService().getClusterState();
+            for (Member member : members) {
+                migrationManager.onMemberRemove(member);
+                replicaManager.cancelReplicaSyncRequestsTo(member);
+
+                Address formerMaster = latestMaster;
+                latestMaster = node.getClusterService().getMasterAddress();
+
+                if (clusterState.isMigrationAllowed() || clusterState.isPartitionPromotionAllowed()) {
+                    partitionStateManager.updateMemberGroupsSize();
+
+                    boolean isThisNodeNewMaster = node.isMaster() && !node.getThisAddress().equals(formerMaster);
+                    if (isThisNodeNewMaster) {
+                        assert !shouldFetchPartitionTables;
+                        shouldFetchPartitionTables = true;
+                    }
+                    // keep partition table snapshot as member leaves, unless
+                    // no partitions were assigned to it (member left with graceful shutdown)
+                    if (partitionStateManager.existsInPartitionTable(member)) {
+                        partitionStateManager.storeSnapshot(member.getUuid());
+                    }
+                }
+            }
+            // the following call should be made outside the loop, otherwise if node.isMaster() == true
+            // current node might store partition assignment snapshot for some members but not the others,
+            // since migrationManager.triggerControlTaskWithDelay() might remove unknown members from
+            // the partition table before the above logic is executed for another removed member.
+            if (node.isMaster()
+                    && (clusterState.isMigrationAllowed() || clusterState.isPartitionPromotionAllowed())) {
+               // migrationManager.triggerControlTaskWithDelay();
+            }
+        } finally {
+            partitionServiceLock.unlock();
+        }
+    }
+
     @Override
     public void onClusterStateChange(ClusterState newState) {
         if (!newState.isMigrationAllowed()) {
