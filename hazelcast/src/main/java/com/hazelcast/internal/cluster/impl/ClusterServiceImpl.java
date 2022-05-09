@@ -116,7 +116,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     private final ClusterJoinManager clusterJoinManager;
     private final ClusterStateManager clusterStateManager;
     private final ClusterHeartbeatManager clusterHeartbeatManager;
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock clusterServiceLock = new ReentrantLock();
     private final AtomicReference<JoinHolder> joined =
             new AtomicReference<>(new JoinHolder(false));
 
@@ -141,10 +141,10 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
         logger = node.getLogger(ClusterService.class.getName());
         clusterClock = new ClusterClockImpl(logger);
 
-        membershipManager = new MembershipManager(node, this, lock);
-        clusterStateManager = new ClusterStateManager(node, lock);
-        clusterJoinManager = new ClusterJoinManager(node, this, lock);
-        clusterHeartbeatManager = new ClusterHeartbeatManager(node, this, lock);
+        membershipManager = new MembershipManager(node, this, clusterServiceLock);
+        clusterStateManager = new ClusterStateManager(node, clusterServiceLock);
+        clusterJoinManager = new ClusterJoinManager(node, this, clusterServiceLock);
+        clusterHeartbeatManager = new ClusterHeartbeatManager(node, this, clusterServiceLock);
 
         node.getServer().getConnectionManager(MEMBER).addConnectionListener(this);
         ExecutionService executionService = nodeEngine.getExecutionService();
@@ -200,7 +200,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     }
 
     public void suspectAddressIfNotConnected(Address address) {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             MemberImpl member = getMember(address);
             if (member == null) {
@@ -221,7 +221,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             }
             suspectMember(member, "No connection", false);
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
@@ -265,7 +265,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
         checkNotNull(candidateUuid);
         checkFalse(getThisAddress().equals(candidateAddress), "cannot accept my own mastership claim!");
 
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             checkTrue(isJoined(), candidateAddress + " claims mastership but this node is not joined!");
             checkFalse(isMaster(),
@@ -296,14 +296,14 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
             return response;
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     // called under cluster service lock
     // mastership is accepted when all members before the candidate is suspected
     private boolean shouldAcceptMastership(MemberMap memberMap, MemberImpl candidate) {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         for (MemberImpl member : memberMap.headMemberSet(candidate, false)) {
             if (!membershipManager.isMemberSuspected(member)) {
                 if (logger.isFineEnabled()) {
@@ -325,19 +325,19 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     @Override
     public void reset() {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             resetJoinState();
             resetLocalMemberUuid();
             resetClusterId();
             clearInternalState();
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     private void resetLocalMemberUuid() {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         assert !isJoined() : "Cannot reset local member UUID when joined.";
 
         Map<EndpointQualifier, Address> addressMap = localMember.getAddressMap();
@@ -359,12 +359,12 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     }
 
     public void resetJoinState() {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             setMasterAddress(null);
             setJoined(false);
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
@@ -372,7 +372,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     public boolean finalizeJoin(MembersView membersView, Address callerAddress, UUID callerUuid, UUID targetUuid,
                                 UUID clusterId, ClusterState clusterState, Version clusterVersion, long clusterStartTime,
                                 long masterTime, OnJoinOp preJoinOp) {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             if (!checkValidMaster(callerAddress)) {
                 if (logger.isFineEnabled()) {
@@ -425,12 +425,12 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
                 .log();
             return true;
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     public boolean updateMembers(MembersView membersView, Address callerAddress, UUID callerUuid, UUID targetUuid) {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             if (!isJoined()) {
                 logger.warning("Not updating members received from caller: " + callerAddress + " because node is not joined! ");
@@ -457,7 +457,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             membershipManager.updateMembers(membersView);
             return true;
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
@@ -552,11 +552,11 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     }
 
     public void notifyForRemovedMember(MemberImpl member) {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             membershipManager.onMemberRemove(member);
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
@@ -615,7 +615,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
     }
 
     private void clearInternalState() {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             membershipManager.reset();
             clusterHeartbeatManager.reset();
@@ -623,12 +623,12 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             clusterJoinManager.reset();
             resetJoinState();
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     public boolean setMasterAddressToJoin(final Address master) {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             if (isJoined()) {
                 Address currentMasterAddress = getMasterAddress();
@@ -644,13 +644,13 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             setMasterAddress(master);
             return true;
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     // should be called under lock
     void setMasterAddress(Address master) {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         if (logger.isFineEnabled()) {
             logger.fine("Setting master address to " + master);
         }
@@ -688,7 +688,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     // should be called under lock
     void setJoined(boolean val) {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         joined.getAndUpdate(holder -> new JoinHolder(val)).latch.countDown();
     }
 
@@ -733,14 +733,14 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     // called under cluster service lock
     void setClusterId(UUID newClusterId) {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         assert clusterId == null : "Cluster ID should be null: " + clusterId;
         clusterId = newClusterId;
     }
 
     // called under cluster service lock
     private void resetClusterId() {
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
         clusterId = null;
     }
 
@@ -751,12 +751,12 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
         EventService eventService = nodeEngine.getEventService();
         EventRegistration registration;
         if (listener instanceof InitialMembershipListener) {
-            lock.lock();
+            clusterServiceLock.lock();
             try {
                 ((InitialMembershipListener) listener).init(new InitialMembershipEvent(this, getMembers()));
                 registration = eventService.registerLocalListener(SERVICE_NAME, SERVICE_NAME, listener);
             } finally {
-                lock.unlock();
+                clusterServiceLock.unlock();
             }
         } else {
             registration = eventService.registerLocalListener(SERVICE_NAME, SERVICE_NAME, listener);
@@ -883,7 +883,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     @Override
     public int getMemberListJoinVersion() {
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             if (!isJoined()) {
                 throw new IllegalStateException("Member list join version is not available when not joined");
@@ -897,7 +897,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
             }
             return joinVersion;
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
@@ -1028,7 +1028,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
                 nodeEngine.getOperationService().invokeOnTarget(SERVICE_NAME, op, master.getAddress());
         MembersView view = future.joinInternal();
 
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             if (!member.getAddress().equals(master.getAddress())) {
                 updateMembers(view, master.getAddress(), master.getUuid(), getThisUuid());
@@ -1046,14 +1046,14 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
                         + ", Current master is: " + getMasterAddress());
             }
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
     }
 
     MemberImpl promoteAndGetLocalMember() {
         MemberImpl member = getLocalMember();
         assert member.isLiteMember() : "Local member is not lite member!";
-        assert lock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
+        assert clusterServiceLock.isHeldByCurrentThread() : "Called without holding cluster service lock!";
 
         localMember = new MemberImpl.Builder(member.getAddressMap())
                 .version(member.getVersion())
@@ -1074,7 +1074,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
     private MemberImpl getMasterMember() {
         MemberImpl master;
-        lock.lock();
+        clusterServiceLock.lock();
         try {
             Address masterAddress = getMasterAddress();
             if (masterAddress == null) {
@@ -1083,7 +1083,7 @@ public class ClusterServiceImpl implements ClusterService, ConnectionListener, M
 
             master = getMember(masterAddress);
         } finally {
-            lock.unlock();
+            clusterServiceLock.unlock();
         }
         return master;
     }

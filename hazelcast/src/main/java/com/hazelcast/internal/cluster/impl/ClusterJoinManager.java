@@ -134,7 +134,7 @@ public class ClusterJoinManager {
         maxWaitMillisBeforeJoin = node.getProperties().getMillis(ClusterProperty.MAX_WAIT_SECONDS_BEFORE_JOIN);
         waitMillisBeforeJoin = node.getProperties().getMillis(ClusterProperty.WAIT_SECONDS_BEFORE_JOIN);
         staleJoinPreventionDurationInMillis = TimeUnit.SECONDS.toMillis(
-            Integer.getInteger(STALE_JOIN_PREVENTION_DURATION_PROP, DEFAULT_STALE_JOIN_PREVENTION_DURATION_IN_SECS));
+                Integer.getInteger(STALE_JOIN_PREVENTION_DURATION_PROP, DEFAULT_STALE_JOIN_PREVENTION_DURATION_IN_SECS));
     }
 
     boolean isJoinInProgress() {
@@ -163,7 +163,7 @@ public class ClusterJoinManager {
      * joining node know the current master. Otherwise, if no other join is in progress, execute the {@link JoinRequest}
      *
      * @param joinRequest the join request
-     * @param connection the connection to the joining node
+     * @param connection  the connection to the joining node
      * @see JoinRequestOp
      */
     public void handleJoinRequest(JoinRequest joinRequest, ServerConnection connection) {
@@ -403,13 +403,13 @@ public class ClusterJoinManager {
             } finally {
                 Address remoteAddr = connection == null ? null : connection.getRemoteAddress();
                 nodeEngine.getNode().getNodeExtension().getAuditlogService()
-                    .eventBuilder(AuditlogTypeIds.AUTHENTICATION_MEMBER)
-                    .message("Member connection authentication.")
-                    .addParameter("credentials", credentials)
-                    .addParameter("remoteAddress", remoteAddr)
-                    .addParameter("endpoint", endpoint)
-                    .addParameter("passed", passed)
-                    .log();
+                        .eventBuilder(AuditlogTypeIds.AUTHENTICATION_MEMBER)
+                        .message("Member connection authentication.")
+                        .addParameter("credentials", credentials)
+                        .addParameter("remoteAddress", remoteAddr)
+                        .addParameter("endpoint", endpoint)
+                        .addParameter("passed", passed)
+                        .log();
             }
         }
     }
@@ -474,7 +474,7 @@ public class ClusterJoinManager {
     /**
      * Send join request to {@code toAddress}.
      *
-     * @param toAddress       the currently known master address.
+     * @param toAddress the currently known master address.
      * @return {@code true} if join request was sent successfully, otherwise {@code false}.
      */
     public boolean sendJoinRequest(Address toAddress) {
@@ -634,7 +634,7 @@ public class ClusterJoinManager {
 
         if (masterAddress.equals(node.getThisAddress())
                 && node.getNodeExtension().getInternalHotRestartService()
-                    .isMemberExcluded(masterAddress, clusterService.getThisUuid())) {
+                .isMemberExcluded(masterAddress, clusterService.getThisUuid())) {
             // I already know that I will do a force-start, so I will not allow target to join me
             logger.info("Cannot send master answer because " + target + " should not join to this master node.");
             return;
@@ -702,7 +702,9 @@ public class ClusterJoinManager {
         return true;
     }
 
-    /** check if member is joining with persistence enabled */
+    /**
+     * check if member is joining with persistence enabled
+     */
     private boolean isMemberRestartingWithPersistence(Map<String, String> attributes) {
         return attributes.get(PERSISTENCE_ENABLED_ATTRIBUTE) != null
                 && attributes.get(PERSISTENCE_ENABLED_ATTRIBUTE).equals("true");
@@ -781,7 +783,7 @@ public class ClusterJoinManager {
                 PartitionRuntimeState partitionRuntimeState = partitionService.createPartitionState();
                 for (MemberInfo member : joiningMembers.values()) {
                     if (isMemberRestartingWithPersistence(member.getAttributes())
-                        && isMemberRejoining(memberMap, member.getAddress(), member.getUuid())) {
+                            && isMemberRejoining(memberMap, member.getAddress(), member.getUuid())) {
                         logger.info(member + " is rejoining the cluster");
                         // do not trigger repartition immediately, wait for joining member to load hot-restart data
                         shouldTriggerRepartition = false;
@@ -969,7 +971,7 @@ public class ClusterJoinManager {
      * This is a pure function that must produce always the same output when called with the same parameters.
      * This logic should not be changed, otherwise compatibility will be broken.
      *
-     * @param thisAddress this address
+     * @param thisAddress   this address
      * @param targetAddress target address
      * @return true if this address should merge to target, false otherwise
      */
@@ -999,8 +1001,11 @@ public class ClusterJoinManager {
         }
     }
 
-    void removeJoin(Address address) {
-        joiningMembers.remove(address);
+    void removeJoin(Address address, Member member) {
+        MemberInfo memberInfo = joiningMembers.get(address);
+        if (memberInfo != null && memberInfo.getUuid().equals(member.getUuid())) {
+            joiningMembers.remove(address);
+        }
     }
 
     void addLeftMember(Member member) {

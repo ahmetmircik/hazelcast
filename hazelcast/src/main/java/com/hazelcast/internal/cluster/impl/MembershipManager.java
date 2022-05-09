@@ -248,7 +248,9 @@ public class MembershipManager {
         }
     }
 
-    /** Invoked on the master to send the member list (see {@link MembersUpdateOp}) to non-master nodes. */
+    /**
+     * Invoked on the master to send the member list (see {@link MembersUpdateOp}) to non-master nodes.
+     */
     private void sendMemberListToOthers() {
         if (!clusterService.isMaster() || !clusterService.isJoined()
                 || clusterService.getClusterJoinManager().isMastershipClaimInProgress()) {
@@ -256,7 +258,7 @@ public class MembershipManager {
                 logger.fine("Cannot publish member list to cluster. Is-master: "
                         + clusterService.isMaster() + ", joined: " + clusterService.isJoined()
                         + " , mastership claim in progress: " + clusterService.getClusterJoinManager()
-                                                                              .isMastershipClaimInProgress());
+                        .isMastershipClaimInProgress());
             }
 
             return;
@@ -412,13 +414,13 @@ public class MembershipManager {
         }
 
         return builder.version(memberInfo.getVersion())
-                      .localMember(localMember)
-                      .uuid(memberInfo.getUuid())
-                      .attributes(attributes)
-                      .liteMember(memberInfo.isLiteMember())
-                      .memberListJoinVersion(memberInfo.getMemberListJoinVersion())
-                      .instance(node.hazelcastInstance)
-                      .build();
+                .localMember(localMember)
+                .uuid(memberInfo.getUuid())
+                .attributes(attributes)
+                .liteMember(memberInfo.isLiteMember())
+                .memberListJoinVersion(memberInfo.getMemberListJoinVersion())
+                .instance(node.hazelcastInstance)
+                .build();
     }
 
     private void repairPartitionTableIfReturningMember(MemberImpl member) {
@@ -507,7 +509,7 @@ public class MembershipManager {
         clusterServiceLock.lock();
         try {
             if (!isMemberSuspected(member)) {
-                 return true;
+                return true;
             }
 
             MemberMap memberMap = getMemberMap();
@@ -531,7 +533,7 @@ public class MembershipManager {
     }
 
     void handleExplicitSuspicionTrigger(Address caller, int callerMemberListVersion,
-            MembersViewMetadata suspectedMembersViewMetadata) {
+                                        MembersViewMetadata suspectedMembersViewMetadata) {
         clusterServiceLock.lock();
         try {
             Address masterAddress = clusterService.getMasterAddress();
@@ -624,7 +626,7 @@ public class MembershipManager {
 
             localMemberMap = getMemberMap();
             membersToAsk = collectMembersToAsk(localMemberMap);
-            logger.info("Local " + localMemberMap.toMembersView() + " with suspected members: "  + suspectedMembers
+            logger.info("Local " + localMemberMap.toMembersView() + " with suspected members: " + suspectedMembers
                     + " and initial addresses to ask: " + membersToAsk);
         } finally {
             clusterServiceLock.unlock();
@@ -668,7 +670,7 @@ public class MembershipManager {
 
             localMemberMap = getMemberMap();
             membersToAsk = collectMembersToAsk(localMemberMap);
-            logger.info("Local " + localMemberMap.toMembersView() + " with suspected members: "  + suspectedMembers
+            logger.info("Local " + localMemberMap.toMembersView() + " with suspected members: " + suspectedMembers
                     + " and initial addresses to ask: " + membersToAsk);
         } finally {
             clusterServiceLock.unlock();
@@ -714,7 +716,7 @@ public class MembershipManager {
     }
 
     private boolean addSuspectedMember(MemberImpl suspectedMember, String reason,
-            boolean shouldCloseConn) {
+                                       boolean shouldCloseConn) {
 
         Address address = suspectedMember.getAddress();
         if (getMember(address, suspectedMember.getUuid()) == null) {
@@ -732,10 +734,10 @@ public class MembershipManager {
                 logger.warning(suspectedMember + " is suspected to be dead");
             }
             node.getNodeExtension().getAuditlogService().eventBuilder(AuditlogTypeIds.CLUSTER_MEMBER_SUSPECTED)
-                .message("Member is suspected")
-                .addParameter("address", address)
-                .addParameter("reason", reason)
-                .log();
+                    .message("Member is suspected")
+                    .addParameter("address", address)
+                    .addParameter("reason", reason)
+                    .log();
             clusterService.getClusterJoinManager().addLeftMember(suspectedMember);
         }
 
@@ -770,7 +772,7 @@ public class MembershipManager {
             }
 
             logger.info("Removing " + member);
-            clusterService.getClusterJoinManager().removeJoin(address);
+            clusterService.getClusterJoinManager().removeJoin(address, member);
             clusterService.getClusterJoinManager().addLeftMember(member);
             clusterService.getClusterHeartbeatManager().removeMember(member);
             partialDisconnectionHandler.removeMember(member);
@@ -779,10 +781,10 @@ public class MembershipManager {
             setMembers(newMembers);
 
             node.getNodeExtension().getAuditlogService().eventBuilder(AuditlogTypeIds.CLUSTER_MEMBER_SUSPECTED)
-                .message("Member is removed")
-                .addParameter("address", address)
-                .addParameter("reason", reason)
-                .log();
+                    .message("Member is removed")
+                    .addParameter("address", address)
+                    .addParameter("reason", reason)
+                    .log();
 
             if (logger.isFineEnabled()) {
                 logger.fine(member + " is removed. Publishing new member list.");
@@ -811,33 +813,33 @@ public class MembershipManager {
                 closeConnections(address, reason, member.getUuid());
             }
 
-//            MemberMap currentMembers = memberMapRef.get();
-//            if (currentMembers.getMember(address, member.getUuid()) == null) {
-//                if (logger.isFineEnabled()) {
-//                    logger.fine("No need to remove " + member + ", not a member.");
-//                }
-//
-//                return;
-//            }
-//
-//            logger.info("Removing " + member);
-//            clusterService.getClusterJoinManager().removeJoin(address);
-//            clusterService.getClusterJoinManager().addLeftMember(member);
-//            clusterService.getClusterHeartbeatManager().removeMember(member);
-//            partialDisconnectionHandler.removeMember(member);
-//
-//            MemberMap newMembers = MemberMap.cloneExcluding(currentMembers, member);
-//            setMembers(newMembers);
-//
-//            node.getNodeExtension().getAuditlogService().eventBuilder(AuditlogTypeIds.CLUSTER_MEMBER_SUSPECTED)
-//                    .message("Member is removed")
-//                    .addParameter("address", address)
-//                    .addParameter("reason", reason)
-//                    .log();
-//
-//            if (logger.isFineEnabled()) {
-//                logger.fine(member + " is removed. Publishing new member list.");
-//            }
+            MemberMap currentMembers = memberMapRef.get();
+            if (currentMembers.getMember(address, member.getUuid()) == null) {
+                if (logger.isFineEnabled()) {
+                    logger.fine("No need to remove " + member + ", not a member.");
+                }
+
+                return;
+            }
+
+            logger.info("Removing " + member);
+            clusterService.getClusterJoinManager().removeJoin(address, member);
+            clusterService.getClusterJoinManager().addLeftMember(member);
+            clusterService.getClusterHeartbeatManager().removeMember(member);
+            partialDisconnectionHandler.removeMember(member);
+
+            MemberMap newMembers = MemberMap.cloneExcluding(currentMembers, member);
+            setMembers(newMembers);
+
+            node.getNodeExtension().getAuditlogService().eventBuilder(AuditlogTypeIds.CLUSTER_MEMBER_SUSPECTED)
+                    .message("Member is removed")
+                    .addParameter("address", address)
+                    .addParameter("reason", reason)
+                    .log();
+
+            if (logger.isFineEnabled()) {
+                logger.fine(member + " is removed. Publishing new member list.");
+            }
 //            sendMemberListToOthers();
 //
 //            handleMemberRemove(newMembers, member);
@@ -1101,9 +1103,9 @@ public class MembershipManager {
         Operation op = new FetchMembersViewOp(targetUuid).setCallerUuid(clusterService.getThisUuid());
 
         return nodeEngine.getOperationService()
-                         .createInvocationBuilder(SERVICE_NAME, op, target)
-                         .setTryCount(mastershipClaimTimeoutSeconds)
-                         .setCallTimeout(SECONDS.toMillis(mastershipClaimTimeoutSeconds)).invoke();
+                .createInvocationBuilder(SERVICE_NAME, op, target)
+                .setTryCount(mastershipClaimTimeoutSeconds)
+                .setCallTimeout(SECONDS.toMillis(mastershipClaimTimeoutSeconds)).invoke();
     }
 
     /**
@@ -1111,7 +1113,7 @@ public class MembershipManager {
      * depending on Persistence is enabled or not) is a known missing member or not.
      *
      * @param address Address of the missing member
-     * @param uuid Uuid of the missing member
+     * @param uuid    Uuid of the missing member
      * @return true if it's a known missing member, false otherwise
      */
     boolean isMissingMember(Address address, UUID uuid) {
@@ -1124,7 +1126,7 @@ public class MembershipManager {
      * depending on Persistence feature is enabled or not.
      *
      * @param address Address of the missing member
-     * @param uuid Uuid of the missing member
+     * @param uuid    Uuid of the missing member
      * @return the missing member
      */
     MemberImpl getMissingMember(Address address, UUID uuid) {
@@ -1357,9 +1359,9 @@ public class MembershipManager {
 
         MemberMap memberMap = getMemberMap();
         List<MemberImpl> suspectedMembers = suspectedMemberInfos.stream()
-                                                                .map(m -> memberMap.getMember(m.getAddress(), m.getUuid()))
-                                                                .filter(Objects::nonNull)
-                                                                .collect(toList());
+                .map(m -> memberMap.getMember(m.getAddress(), m.getUuid()))
+                .filter(Objects::nonNull)
+                .collect(toList());
 
         if (partialDisconnectionHandler.update(sender, timestamp, suspectedMembers)) {
             logger.warning("Received suspected members: " + suspectedMembers + " from " + sender);
