@@ -276,14 +276,20 @@ public class FirewallingServer
         }
 
         @Override
-        public ServerConnection get(@Nonnull Address address, int streamId) {
+        public synchronized ServerConnection get(@Nonnull Address address, int streamId) {
             return wrap(delegate.get(address, streamId));
         }
 
         @Override
         @Nonnull
-        public List<ServerConnection> getAllConnections(@Nonnull Address address) {
+        public synchronized List<ServerConnection> getAllConnections(@Nonnull Address address) {
             return delegate.getAllConnections(address).stream().map(this::wrap).collect(Collectors.toList());
+        }
+
+        @Override
+        @Nonnull
+        public synchronized List<ServerConnection> getAllConnections(@Nonnull UUID uuid) {
+            return delegate.getAllConnections(uuid).stream().map(this::wrap).collect(Collectors.toList());
         }
 
         private ServerConnection wrap(ServerConnection c) {
@@ -307,7 +313,7 @@ public class FirewallingServer
         }
 
         @Override
-        public boolean register(
+        public synchronized boolean register(
                 Address remoteAddress,
                 Address targetAddress,
                 Collection<Address> remoteAddressAliases,

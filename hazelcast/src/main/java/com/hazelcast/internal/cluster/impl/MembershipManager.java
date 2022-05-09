@@ -29,6 +29,7 @@ import com.hazelcast.internal.cluster.impl.operations.MembersUpdateOp;
 import com.hazelcast.internal.hotrestart.InternalHotRestartService;
 import com.hazelcast.internal.partition.impl.InternalPartitionServiceImpl;
 import com.hazelcast.internal.server.ServerConnection;
+import com.hazelcast.internal.server.ServerConnectionManager;
 import com.hazelcast.internal.services.MembershipAwareService;
 import com.hazelcast.internal.services.MembershipServiceEvent;
 import com.hazelcast.internal.util.EmptyStatement;
@@ -353,7 +354,7 @@ public class MembershipManager {
         }
 
         for (MemberImpl member : removedMembers) {
-            closeConnections(member.getAddress(), "Member left event received from master");
+            closeConnections(member.getAddress(), "Member left event received from master", member.getUuid());
             handleMemberRemove(memberMapRef.get(), member);
         }
 
@@ -613,9 +614,9 @@ public class MembershipManager {
                 return;
             }
 
-//            if (!addSuspectedMember(suspectedMember, reason, closeConnection)) {
-//                return;
-//            }
+            if (!addSuspectedMember(suspectedMember, reason, closeConnection)) {
+                return;
+            }
 
             if (!tryStartMastershipClaim()) {
                 return;
@@ -739,7 +740,7 @@ public class MembershipManager {
         }
 
         if (shouldCloseConn) {
-            closeConnections(address, reason);
+            closeConnections(address, reason, suspectedMember.getUuid());
         }
         return true;
     }
@@ -756,7 +757,7 @@ public class MembershipManager {
 
             Address address = member.getAddress();
             if (shouldCloseConn) {
-                closeConnections(address, reason);
+                closeConnections(address, reason, member.getUuid());
             }
 
             MemberMap currentMembers = memberMapRef.get();
@@ -795,8 +796,9 @@ public class MembershipManager {
         }
     }
 
-    private void closeConnections(Address address, String reason) {
-        List<ServerConnection> connections = node.getServer().getConnectionManager(MEMBER).getAllConnections(address);
+    private void closeConnections(Address address, String reason, UUID uuid) {
+        ServerConnectionManager connectionManager = node.getServer().getConnectionManager(MEMBER);
+        List<ServerConnection> connections = connectionManager.getAllConnections(uuid);
         connections.forEach(conn -> conn.close(reason, null));
     }
 

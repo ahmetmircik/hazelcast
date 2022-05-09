@@ -148,6 +148,11 @@ public interface ServerConnectionManager
     @Nonnull
     List<ServerConnection> getAllConnections(@Nonnull Address address);
 
+
+    default List<ServerConnection> getAllConnections(@Nonnull UUID uuid) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Gets the existing connection for a given address or connects.
      * <p>

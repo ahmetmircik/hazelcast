@@ -123,6 +123,17 @@ class MockServer implements Server {
         }
 
         @Override
+        @Nonnull
+        public List<ServerConnection> getAllConnections(@Nonnull UUID uuid) {
+            Address address = server.nodeRegistry.addressOf(uuid);
+            if (address == null) {
+                return Collections.emptyList();
+            }
+            ServerConnection conn = get(uuid);
+            return conn != null ? Collections.singletonList(conn) : Collections.emptyList();
+        }
+
+        @Override
         public MockServerConnection getOrConnect(@Nonnull Address address, int stream) {
             UUID uuid = server.nodeRegistry.uuidOf(address);
             MockServerConnection conn = null;
