@@ -394,7 +394,7 @@ public class InternalPartitionServiceImpl implements InternalPartitionService,
                     }
                     // keep partition table snapshot as member leaves, unless
                     // no partitions were assigned to it (member left with graceful shutdown)
-                    if (!partitionStateManager.isAbsentInPartitionTable(member)) {
+                    if (partitionStateManager.existsInPartitionTable(member)) {
                         partitionStateManager.storeSnapshot(member.getUuid());
                     }
                 }

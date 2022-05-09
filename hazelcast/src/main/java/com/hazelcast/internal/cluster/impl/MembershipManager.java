@@ -610,7 +610,7 @@ public class MembershipManager {
 
             ClusterJoinManager clusterJoinManager = clusterService.getClusterJoinManager();
             if (clusterService.isMaster() && !clusterJoinManager.isMastershipClaimInProgress()) {
-                removeMember(suspectedMember, reason, closeConnection);
+                removeMember2(suspectedMember, reason, closeConnection);
                 return;
             }
 
@@ -795,6 +795,58 @@ public class MembershipManager {
             clusterServiceLock.unlock();
         }
     }
+
+    private void removeMember2(MemberImpl member, String reason, boolean shouldCloseConn) {
+        clusterServiceLock.lock();
+        try {
+            assert clusterService.isMaster() : "Master: " + clusterService.getMasterAddress();
+
+            if (!clusterService.isJoined()) {
+                logger.warning("Not removing " + member + " for reason: " + reason + ", because not joined!");
+                return;
+            }
+
+            Address address = member.getAddress();
+            if (shouldCloseConn) {
+                closeConnections(address, reason, member.getUuid());
+            }
+
+//            MemberMap currentMembers = memberMapRef.get();
+//            if (currentMembers.getMember(address, member.getUuid()) == null) {
+//                if (logger.isFineEnabled()) {
+//                    logger.fine("No need to remove " + member + ", not a member.");
+//                }
+//
+//                return;
+//            }
+//
+//            logger.info("Removing " + member);
+//            clusterService.getClusterJoinManager().removeJoin(address);
+//            clusterService.getClusterJoinManager().addLeftMember(member);
+//            clusterService.getClusterHeartbeatManager().removeMember(member);
+//            partialDisconnectionHandler.removeMember(member);
+//
+//            MemberMap newMembers = MemberMap.cloneExcluding(currentMembers, member);
+//            setMembers(newMembers);
+//
+//            node.getNodeExtension().getAuditlogService().eventBuilder(AuditlogTypeIds.CLUSTER_MEMBER_SUSPECTED)
+//                    .message("Member is removed")
+//                    .addParameter("address", address)
+//                    .addParameter("reason", reason)
+//                    .log();
+//
+//            if (logger.isFineEnabled()) {
+//                logger.fine(member + " is removed. Publishing new member list.");
+//            }
+//            sendMemberListToOthers();
+//
+//            handleMemberRemove(newMembers, member);
+            clusterService.printMemberList();
+        } finally {
+            clusterServiceLock.unlock();
+        }
+    }
+
 
     private void closeConnections(Address address, String reason, UUID uuid) {
         ServerConnectionManager connectionManager = node.getServer().getConnectionManager(MEMBER);

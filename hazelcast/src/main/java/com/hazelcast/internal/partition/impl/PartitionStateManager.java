@@ -324,6 +324,10 @@ public class PartitionStateManager {
         return true;
     }
 
+    boolean existsInPartitionTable(Member member) {
+        return !isAbsentInPartitionTable(member);
+    }
+
     InternalPartition[] getPartitions() {
         return partitions;
     }
