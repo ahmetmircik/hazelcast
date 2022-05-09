@@ -1116,7 +1116,7 @@ public class MigrationManager {
         /**
          * List of migration queues per-partition
          */
-        private final List<Queue<MigrationInfo>> migrationQs;
+        private final List<Queue<MigrationInfo>> queuedMigrations;
         /**
          * Queue for completed migrations.
          * It will be processed concurrently while migrations are running.
@@ -1137,16 +1137,16 @@ public class MigrationManager {
         private boolean failed;
         private volatile boolean aborted;
 
-        MigrationPlanTask(List<Queue<MigrationInfo>> migrationQs) {
-            this.migrationQs = migrationQs;
-            this.completed = new ArrayBlockingQueue<>(migrationQs.size());
+        MigrationPlanTask(List<Queue<MigrationInfo>> queuedMigrations) {
+            this.queuedMigrations = queuedMigrations;
+            this.completed = new ArrayBlockingQueue<>(queuedMigrations.size());
             this.migratingPartitions
-                    = new IntHashSet(migrationQs.stream().mapToInt(Collection::size).sum(), -1);
+                    = new IntHashSet(queuedMigrations.stream().mapToInt(Collection::size).sum(), -1);
         }
 
         @Override
         public void run() {
-            migrationCount.set(migrationQs.stream().mapToInt(Collection::size).sum());
+            migrationCount.set(queuedMigrations.stream().mapToInt(Collection::size).sum());
 
             while (true) {
                 MigrationInfo migration = next();
@@ -1185,7 +1185,7 @@ public class MigrationManager {
                         + ". Ignoring remaining migrations. Will recalculate the new migration plan. ("
                         + stats.formatToString(logger.isFineEnabled()) + ")");
                 migrationCount.set(0);
-                migrationQs.clear();
+                queuedMigrations.clear();
             } else {
                 logger.info("All migration tasks have been completed. (" + stats.formatToString(logger.isFineEnabled()) + ")");
             }
@@ -1239,7 +1239,7 @@ public class MigrationManager {
         private MigrationInfo next() {
             MigrationInfo m;
             while ((m = next0()) == null) {
-                if (migrationQs.isEmpty()) {
+                if (queuedMigrations.isEmpty()) {
                     break;
                 }
 
@@ -1261,7 +1261,7 @@ public class MigrationManager {
         }
 
         private MigrationInfo next0() {
-            Iterator<Queue<MigrationInfo>> iter = migrationQs.iterator();
+            Iterator<Queue<MigrationInfo>> iter = queuedMigrations.iterator();
             while (iter.hasNext()) {
                 Queue<MigrationInfo> q = iter.next();
                 if (q.isEmpty()) {
