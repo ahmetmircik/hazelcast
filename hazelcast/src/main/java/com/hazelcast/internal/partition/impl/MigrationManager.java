@@ -1933,7 +1933,7 @@ public class MigrationManager {
                     return;
                 }
                 if (logger.isFinestEnabled()) {
-                    logger.finest("RepairPartitionTableTask scheduled");
+                    logger.finest("FixPartitionTableTask scheduled");
                 }
                 migrationQueue.add(new FixPartitionTableTask());
             } finally {
