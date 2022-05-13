@@ -23,11 +23,23 @@ import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.partition.MigrationCycleOperation;
 import com.hazelcast.internal.partition.impl.InternalPartitionServiceImpl;
 import com.hazelcast.internal.partition.impl.PartitionDataSerializerHook;
+import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
+
+import java.io.IOException;
+import java.util.UUID;
 
 public class ShutdownRequestOperation extends AbstractPartitionOperation implements MigrationCycleOperation {
 
+    private UUID uuid;
+
     public ShutdownRequestOperation() {
+    }
+
+    public ShutdownRequestOperation(UUID uuid) {
+        this.uuid = uuid;
     }
 
     @Override
@@ -43,7 +55,11 @@ public class ShutdownRequestOperation extends AbstractPartitionOperation impleme
                 if (logger.isFinestEnabled()) {
                     logger.finest("Received shutdown request from " + caller);
                 }
-                partitionService.onShutdownRequest(member);
+                if (member.getUuid().equals(uuid)) {
+                    partitionService.onShutdownRequest(member);
+                } else {
+                    logger.warning("Ignoring shutdown request from " + uuid + " because it is not a member");
+                }
             } else {
                 logger.warning("Ignoring shutdown request from " + caller + " because it is not a member");
             }
@@ -65,5 +81,19 @@ public class ShutdownRequestOperation extends AbstractPartitionOperation impleme
     @Override
     public int getClassId() {
         return PartitionDataSerializerHook.SHUTDOWN_REQUEST;
+    }
+
+    @Override
+    protected void writeInternal(ObjectDataOutput out) throws IOException {
+        super.writeInternal(out);
+
+        UUIDSerializationUtil.writeUUID(out, uuid);
+    }
+
+    @Override
+    protected void readInternal(ObjectDataInput in) throws IOException {
+        super.readInternal(in);
+
+        uuid = UUIDSerializationUtil.readUUID(in);
     }
 }
