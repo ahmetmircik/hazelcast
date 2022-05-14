@@ -39,6 +39,7 @@ public class ShutdownRequestOperation extends AbstractPartitionOperation impleme
     }
 
     public ShutdownRequestOperation(UUID uuid) {
+        assert uuid != null;
         this.uuid = uuid;
     }
 
@@ -55,10 +56,9 @@ public class ShutdownRequestOperation extends AbstractPartitionOperation impleme
                 if (logger.isFinestEnabled()) {
                     logger.finest("Received shutdown request from " + caller);
                 }
-                if (member.getUuid().equals(uuid)) {
-                    partitionService.onShutdownRequest(member);
-                } else {
-                    logger.warning("Ignoring shutdown request from " + uuid + " because it is not a member");
+                partitionService.onShutdownRequest(member);
+                if (!member.getUuid().equals(uuid)) {
+                    logger.warning("Heey.. onShutdownRequest " + uuid + " since it's not the expected member");
                 }
             } else {
                 logger.warning("Ignoring shutdown request from " + caller + " because it is not a member");

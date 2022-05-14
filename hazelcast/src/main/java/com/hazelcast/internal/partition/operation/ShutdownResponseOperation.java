@@ -58,11 +58,12 @@ public class ShutdownResponseOperation extends AbstractPartitionOperation implem
                 logger.finest("Received shutdown response from " + caller);
             }
 
-            if (nodeEngine.getLocalMember().getUuid().equals(uuid)) {
-                partitionService.onShutdownResponse();
-            } else {
-                logger.warning("Ignoring shutdown response for " + uuid + " since it's not the expected member");
+            partitionService.onShutdownResponse();
+
+            if (!nodeEngine.getLocalMember().getUuid().equals(uuid)) {
+                logger.warning("Heey.. onShutdownResponse " + uuid + " since it's not the expected member");
             }
+
         } else {
             logger.warning("Received shutdown response from " + caller + " but it's not the known master");
         }

@@ -919,7 +919,7 @@ public class InternalPartitionServiceImpl implements InternalPartitionService,
                 if (node.getThisAddress().equals(masterAddress)) {
                     onShutdownRequest(node.getLocalMember());
                 } else {
-                    operationService.send(new ShutdownRequestOperation(), masterAddress);
+                    operationService.send(new ShutdownRequestOperation(node.getLocalMember().getUuid()), masterAddress);
                 }
                 if (latch.await(awaitStep, TimeUnit.MILLISECONDS)) {
                     return true;
