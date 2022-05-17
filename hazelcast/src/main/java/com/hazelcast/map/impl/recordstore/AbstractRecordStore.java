@@ -45,7 +45,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Contains record store common parts.
@@ -65,7 +65,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     protected final CompositeMutationObserver<Record> mutationObserver;
     protected final LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
     protected final InvalidationQueue<Operation> waitingMapStoreOperations = new InvalidationQueue<>();
-    protected final AtomicBoolean hasActiveOffload = new AtomicBoolean();
+    protected final AtomicReference<Operation> hasActiveOffload = new AtomicReference<Operation>();
 
     @Override
     public InvalidationQueue<Operation> getWaitingMapStoreOperations() {
@@ -92,7 +92,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     @Override
-    public AtomicBoolean hasActiveOffload() {
+    public AtomicReference<Operation> hasActiveOffload() {
         return hasActiveOffload;
     }
 

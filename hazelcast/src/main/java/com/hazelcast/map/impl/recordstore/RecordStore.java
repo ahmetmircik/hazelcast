@@ -51,7 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 /**
@@ -61,7 +61,7 @@ public interface RecordStore<R extends Record> {
 
     InvalidationQueue<Operation> getWaitingMapStoreOperations();
 
-    AtomicBoolean hasActiveOffload();
+    AtomicReference<Operation> hasActiveOffload();
 
     ExpirySystem getExpirySystem();
 

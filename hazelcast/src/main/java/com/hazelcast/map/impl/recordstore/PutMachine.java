@@ -40,6 +40,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.LOADED;
@@ -181,6 +182,7 @@ public class PutMachine {
     }
 
     private void goToState(State next) {
+        log("Going next state: " + next.name());
         state = next;
     }
 
@@ -249,10 +251,8 @@ public class PutMachine {
         } while (state != State.DONE);
 
         log("Finished running: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
-
-        if (recordStore.hasActiveOffload().compareAndSet(true, false)) {
-            resume(waitingMapStoreOperations.poll());
-        }
+        recordStore.hasActiveOffload().set(null);
+        resume(waitingMapStoreOperations.poll());
 
         return CallStatus.RESPONSE;
     }
@@ -314,7 +314,13 @@ public class PutMachine {
 
         @Override
         public void start() throws Exception {
-            if (!recordStore.hasActiveOffload().compareAndSet(false, true)) {
+            log("LoadStoreOffload." + (isLoad ? "load" : "store"));
+            AtomicReference activeOffload = recordStore.hasActiveOffload();
+            Operation offloadedOperation = offloadedOperation();
+
+            if (activeOffload.get() != offloadedOperation
+                    && !activeOffload.compareAndSet(null, offloadedOperation)) {
+                log("LoadStoreOffload " + (isLoad ? "load" : "store") + " --> put into waitingMapStoreOperations");
                 waitingMapStoreOperations.offer(offloadedOperation());
                 return;
             }
@@ -328,8 +334,11 @@ public class PutMachine {
                     }
                     goToState(next);
                     resume(offloadedOperation());
-                } catch (Exception e) {
-                    sendErrorResponse(e);
+                } catch (Throwable t) {
+                    recordStore.hasActiveOffload().set(null);
+                    resume(waitingMapStoreOperations.poll());
+
+                    sendErrorResponse(t);
                 }
             });
         }
@@ -481,7 +490,7 @@ public class PutMachine {
     }
 
     void readMemory() {
-        log("PutMachine.start");
+        log("PutMachine.readMemory");
         // Get record by checking expiry, if expired, evict record.
         record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
@@ -535,7 +544,9 @@ public class PutMachine {
             return;
         }
 
-        log("PutInternal.resume: " +  operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
+        log("Resuming next op from waitingMapStoreOperations");
+
+        log("PutInternal.resume: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
         recordStore.getMapContainer().getMapServiceContext()
                 .getNodeEngine().getOperationService().execute(operation);
 
