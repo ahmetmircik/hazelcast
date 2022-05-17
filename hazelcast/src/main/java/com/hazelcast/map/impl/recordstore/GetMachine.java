@@ -259,7 +259,7 @@ public class GetMachine {
 
         log("Finished running: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
 
-        if (recordStore.hasActiveOffload().compareAndSet(true, false)) {
+        if (recordStore.getRunningOffloadOp().compareAndSet(true, false)) {
             resume(waitingMapStoreOperations.poll());
         }
 
@@ -323,7 +323,7 @@ public class GetMachine {
 
         @Override
         public void start() throws Exception {
-            if (!recordStore.hasActiveOffload().compareAndSet(false, true)) {
+            if (!recordStore.getRunningOffloadOp().compareAndSet(false, true)) {
                 waitingMapStoreOperations.offer(offloadedOperation());
                 return;
             }

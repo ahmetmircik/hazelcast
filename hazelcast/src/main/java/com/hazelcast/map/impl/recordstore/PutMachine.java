@@ -251,7 +251,7 @@ public class PutMachine {
         } while (state != State.DONE);
 
         log("Finished running: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
-        recordStore.hasActiveOffload().set(null);
+        recordStore.getRunningOffloadOp().set(null);
         resume(waitingMapStoreOperations.poll());
 
         return CallStatus.RESPONSE;
@@ -315,7 +315,7 @@ public class PutMachine {
         @Override
         public void start() throws Exception {
             log("LoadStoreOffload." + (isLoad ? "load" : "store"));
-            AtomicReference activeOffload = recordStore.hasActiveOffload();
+            AtomicReference activeOffload = recordStore.getRunningOffloadOp();
             Operation offloadedOperation = offloadedOperation();
 
             if (activeOffload.get() != offloadedOperation
@@ -335,7 +335,7 @@ public class PutMachine {
                     goToState(next);
                     resume(offloadedOperation());
                 } catch (Throwable t) {
-                    recordStore.hasActiveOffload().set(null);
+                    recordStore.getRunningOffloadOp().set(null);
                     resume(waitingMapStoreOperations.poll());
 
                     sendErrorResponse(t);

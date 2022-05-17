@@ -65,7 +65,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     protected final CompositeMutationObserver<Record> mutationObserver;
     protected final LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
     protected final InvalidationQueue<Operation> waitingMapStoreOperations = new InvalidationQueue<>();
-    protected final AtomicReference<Operation> hasActiveOffload = new AtomicReference<Operation>();
+    protected final AtomicReference<Operation> runningOffloadOp = new AtomicReference<Operation>();
 
     @Override
     public InvalidationQueue<Operation> getWaitingMapStoreOperations() {
@@ -92,8 +92,8 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     @Override
-    public AtomicReference<Operation> hasActiveOffload() {
-        return hasActiveOffload;
+    public AtomicReference<Operation> getRunningOffloadOp() {
+        return runningOffloadOp;
     }
 
     @Override

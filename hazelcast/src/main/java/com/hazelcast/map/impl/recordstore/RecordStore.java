@@ -61,7 +61,7 @@ public interface RecordStore<R extends Record> {
 
     InvalidationQueue<Operation> getWaitingMapStoreOperations();
 
-    AtomicReference<Operation> hasActiveOffload();
+    AtomicReference<Operation> getRunningOffloadOp();
 
     ExpirySystem getExpirySystem();
 
