@@ -20,7 +20,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.PutMachine;
-import com.hazelcast.map.impl.recordstore.PutParams;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -38,7 +38,7 @@ public class PutTransientOperation
 
     @Override
     protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(PutParams.PUT_TRANSIENT_PARAMS)
+        putMachine.setStaticPutParams(StaticParams.PUT_TRANSIENT_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(getTtl())

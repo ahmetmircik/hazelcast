@@ -22,7 +22,7 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.PutMachine;
-import com.hazelcast.map.impl.recordstore.PutParams;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -59,7 +59,7 @@ public class TxnSetOperation extends BasePutOperation
 
     @Override
     protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(PutParams.SET_PARAMS)
+        putMachine.setStaticPutParams(StaticParams.SET_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(ttl)

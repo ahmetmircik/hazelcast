@@ -20,7 +20,7 @@ import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.recordstore.PutMachine;
-import com.hazelcast.map.impl.recordstore.PutParams;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
@@ -43,7 +43,7 @@ public class ReplaceIfSameOperation
 
     @Override
     protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(PutParams.REPLACE_IF_SAME_PARAMS)
+        putMachine.setStaticPutParams(StaticParams.REPLACE_IF_SAME_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setExpect(expect);

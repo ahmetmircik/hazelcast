@@ -83,7 +83,7 @@ public class GetMachine {
     Data key;
     Address callerAddress;
     Object expect;
-    PutParams staticPutParams;
+    StaticParams staticStaticParams;
     UUID txnId;
     UUID ownerUuid;
 
@@ -162,8 +162,8 @@ public class GetMachine {
         return this;
     }
 
-    public GetMachine setStaticPutParams(PutParams staticPutParams) {
-        this.staticPutParams = staticPutParams;
+    public GetMachine setStaticPutParams(StaticParams staticStaticParams) {
+        this.staticStaticParams = staticStaticParams;
         return this;
     }
 
@@ -267,11 +267,11 @@ public class GetMachine {
     }
 
     private boolean canGoDoneState() {
-        if (staticPutParams.isPutVanilla()) {
+        if (staticStaticParams.isPutVanilla()) {
             return false;
         }
 
-        if (staticPutParams.isPutIfEqual()) {
+        if (staticStaticParams.isPutIfEqual()) {
             boolean equal = valueComparator.isEqual(expect, oldValue, ss);
             if (!equal) {
                 oldValue = null;
@@ -280,11 +280,11 @@ public class GetMachine {
             return false;
         }
 
-        if (staticPutParams.isPutIfAbsent()) {
+        if (staticStaticParams.isPutIfAbsent()) {
             return oldValue != null;
         }
 
-        if (staticPutParams.isPutIfExists()) {
+        if (staticStaticParams.isPutIfExists()) {
             return oldValue == null;
         }
 
@@ -351,7 +351,7 @@ public class GetMachine {
     private void doMetaOps() {
         log("PutMachine.meta");
         // Intercept put on owner partition.
-        if (!staticPutParams.isBackup()) {
+        if (!staticStaticParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
         }
     }
@@ -374,8 +374,8 @@ public class GetMachine {
             }
         }
 
-        if (!(staticPutParams.isPutIfAbsent()
-                || staticPutParams.isPutIfExists())) {
+        if (!(staticStaticParams.isPutIfAbsent()
+                || staticStaticParams.isPutIfExists())) {
             return record;
         }
 
@@ -387,14 +387,14 @@ public class GetMachine {
         // here, we are only publishing events for loaded
         // entries. This is required for notifying query-caches
         // otherwise query-caches cannot see loaded entries
-        if (!staticPutParams.isBackup() && recordStore.hasQueryCache()) {
+        if (!staticStaticParams.isBackup() && recordStore.hasQueryCache()) {
             recordStore.addEventToQueryCache(key, record);
         }
         return record;
     }
 
     private void publishLoadedEvent(Record record) {
-        if (!staticPutParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
+        if (!staticStaticParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
             mapEventPublisher.publishEvent(callerAddress, name, EntryEventType.LOADED,
                     key, null, record.getValue(), null);
         }
@@ -403,13 +403,13 @@ public class GetMachine {
     private void notifyMutationObserver(EntryEventType entryEventType) {
         switch (entryEventType) {
             case ADDED:
-                mutationObserver.onPutRecord(key, record, oldValue, staticPutParams.isBackup());
+                mutationObserver.onPutRecord(key, record, oldValue, staticStaticParams.isBackup());
                 break;
             case UPDATED:
-                mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticPutParams.isBackup());
+                mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticStaticParams.isBackup());
                 break;
             case LOADED:
-                mutationObserver.onLoadRecord(key, record, staticPutParams.isBackup());
+                mutationObserver.onLoadRecord(key, record, staticStaticParams.isBackup());
                 break;
         }
     }
@@ -430,7 +430,7 @@ public class GetMachine {
     private void put() {
         putStorage(newValue);
         putExpirySystem(ttl, maxIdle, expiryTime);
-        notifyMutationObserver(staticPutParams.isPutFromLoad() ? LOADED : ADDED);
+        notifyMutationObserver(staticStaticParams.isPutFromLoad() ? LOADED : ADDED);
     }
 
     void update() {
@@ -441,10 +441,10 @@ public class GetMachine {
     }
 
     private void updateStats() {
-        recordStore.updateStatsOnPut(staticPutParams.isCountAsAccess(), now);
+        recordStore.updateStatsOnPut(staticStaticParams.isCountAsAccess(), now);
         record.onUpdate(now);
 
-        if (staticPutParams.isCountAsAccess()) {
+        if (staticStaticParams.isCountAsAccess()) {
             record.onAccess(now);
         }
     }
@@ -455,7 +455,7 @@ public class GetMachine {
 
     GetMachine load() {
         log("PutInternal.load");
-        if (!staticPutParams.isLoad()) {
+        if (!staticStaticParams.isLoad()) {
             return this;
         }
         oldValue = recordStore.getMapDataStore().load(key);
@@ -464,13 +464,13 @@ public class GetMachine {
 
     void store() {
         log("PutInternal.store");
-        if (staticPutParams.isStore()) {
+        if (staticStaticParams.isStore()) {
             long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
             newValue = mapDataStore.add(key, newValue, expirationTime, now, txnId);
             return;
         }
 
-        if (staticPutParams.isPutTransient()) {
+        if (staticStaticParams.isPutTransient()) {
             mapDataStore.addTransient(key, now);
             return;
         }
@@ -481,7 +481,7 @@ public class GetMachine {
     }
 
     private void checkIfLoaded() {
-        if (!staticPutParams.isCheckIfLoaded()) {
+        if (!staticStaticParams.isCheckIfLoaded()) {
             return;
             // TODO ?
         }
@@ -492,7 +492,7 @@ public class GetMachine {
     void readMemory() {
         log("PutMachine.start");
         // Get record by checking expiry, if expired, evict record.
-        record = recordStore.getRecordOrNull(key, now, staticPutParams.isBackup());
+        record = recordStore.getRecordOrNull(key, now, staticStaticParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
     }
 
@@ -502,7 +502,7 @@ public class GetMachine {
     }
 
     private boolean mustLoadOldValue() {
-        if (!staticPutParams.isLoad() || record != null) {
+        if (!staticStaticParams.isLoad() || record != null) {
             // we don't want to load old value or
             // we already have old value
             return false;
