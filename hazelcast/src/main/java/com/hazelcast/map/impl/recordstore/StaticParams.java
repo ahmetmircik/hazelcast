@@ -19,48 +19,48 @@ package com.hazelcast.map.impl.recordstore;
 /**
  * Represent static parameters of record-store methods.
  */
-final class StaticParams {
+public final class StaticParams {
 
-    static final StaticParams PUT_PARAMS = new StaticParams()
+    public static final StaticParams PUT_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setLoad(true)
             .setStore(true)
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams PUT_BACKUP_PARAMS = new StaticParams()
+    public static final StaticParams PUT_BACKUP_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setCountAsAccess(true)
             .setBackup(true);
 
-    static final StaticParams PUT_IF_ABSENT_PARAMS = new StaticParams()
+    public static final StaticParams PUT_IF_ABSENT_PARAMS = new StaticParams()
             .setPutIfAbsent(true)
             .setLoad(true)
             .setStore(true)
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams PUT_FROM_LOAD_PARAMS = new StaticParams()
+    public static final StaticParams PUT_FROM_LOAD_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setPutFromLoad(true);
 
-    static final StaticParams PUT_FROM_LOAD_BACKUP_PARAMS = new StaticParams()
+    public static final StaticParams PUT_FROM_LOAD_BACKUP_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setPutFromLoad(true)
             .setBackup(true);
 
-    static final StaticParams SET_PARAMS = new StaticParams()
+    public static final StaticParams SET_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setStore(true)
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams()
+    public static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setStore(true)
             .setCheckIfLoaded(true);
 
-    static final StaticParams SET_TTL_PARAMS = new StaticParams()
+    public static final StaticParams SET_TTL_PARAMS = new StaticParams()
             .setPutIfExists(true)
             .setSetTtl(true)
             .setLoad(true)
@@ -68,7 +68,7 @@ final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams SET_TTL_BACKUP_PARAMS = new StaticParams()
+    public static final StaticParams SET_TTL_BACKUP_PARAMS = new StaticParams()
             .setPutIfExists(true)
             .setSetTtl(true)
             .setLoad(true)
@@ -77,20 +77,20 @@ final class StaticParams {
             .setCountAsAccess(true)
             .setBackup(true);
 
-    static final StaticParams PUT_TRANSIENT_PARAMS = new StaticParams()
+    public static final StaticParams PUT_TRANSIENT_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setTransient(true)
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams REPLACE_PARAMS = new StaticParams()
+    public static final StaticParams REPLACE_PARAMS = new StaticParams()
             .setPutIfExists(true)
             .setLoad(true)
             .setStore(true)
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    static final StaticParams REPLACE_IF_SAME_PARAMS = new StaticParams()
+    public static final StaticParams REPLACE_IF_SAME_PARAMS = new StaticParams()
             .setPutIfExists(true)
             .setPutIfEqual(true)
             .setLoad(true)
