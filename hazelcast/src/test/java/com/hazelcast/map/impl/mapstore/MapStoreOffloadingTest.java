@@ -76,30 +76,31 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
                 return null;
             }
         });
-        String mapName = "test2";
-        config.getMapConfig(mapName).setMapStoreConfig(mapStoreConfig);
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
 
         HazelcastInstance node = createHazelcastInstance(config);
-        IMap<Object, Object> test1 = node.getMap("test1");
+        IMap<Object, Object> fastMap = node.getMap("fast");
         for (int i = 0; i < 10; i++) {
-            test1.set(i, i);
+            fastMap.set(i, i);
         }
+
         spawn(() -> {
             while (true) {
                 sleepSeconds(3);
                 for (int i = 0; i < 10; i++) {
-                    Object res = test1.get(i);
-                    System.out.println("res = " + res);
+                    Object res = fastMap.get(i);
+                    System.out.println("fast map res = " + res);
 
                 }
             }
         });
 
-        IMap<Object, Object> test2 = node.getMap(mapName);
-        Object old = test2.put(11, 1);
-        System.out.println("old value is=" + old);
-        Object old2 = test2.put(11, 2);
-        System.out.println("old2 value is=" + old2);
+        IMap<Object, Object> slowMap = node.getMap(slowMapName);
+        Object old = slowMap.put(11, 1);
+        System.out.println("slow map old value is=" + old);
+        Object old2 = slowMap.put(11, 2);
+        System.out.println("slow map old2 value is=" + old2);
 
         sleepSeconds(100);
     }
@@ -139,20 +140,20 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
                 return null;
             }
         });
-        String mapName = "test2";
-        config.getMapConfig(mapName).setMapStoreConfig(mapStoreConfig);
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
 
         HazelcastInstance node = createHazelcastInstance(config);
-        IMap<Object, Object> test1 = node.getMap(mapName);
+        IMap<Object, Object> slowMap = node.getMap(slowMapName);
 
         spawn(() -> {
-            test1.set(1, 1);
-            System.out.println("set i = " + 1);
+            slowMap.set(1, 1);
+            System.out.println("slow set i = " + 1);
         });
 
         spawn(() -> {
-            test1.set(2, 1);
-            System.out.println("set i = " + 2);
+            slowMap.set(2, 1);
+            System.out.println("slow set i = " + 2);
         });
 
 

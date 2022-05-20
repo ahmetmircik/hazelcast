@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -42,8 +41,8 @@ public class ReplaceIfSameOperation
     }
 
     @Override
-    protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(StaticParams.REPLACE_IF_SAME_PARAMS)
+    protected void initParams() {
+        setStaticPutParams(StaticParams.REPLACE_IF_SAME_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setExpect(expect);
@@ -51,7 +50,7 @@ public class ReplaceIfSameOperation
 
     @Override
     protected void whenDone() {
-        successful = putMachine.getOldValue() != null;
+        successful = oldValue != null;
         if (successful) {
             oldValue = expect;
         }

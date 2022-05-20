@@ -69,6 +69,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient MapContainer mapContainer;
     protected transient MapServiceContext mapServiceContext;
     protected transient MapEventPublisher mapEventPublisher;
+    protected transient CallStatus callStatus;
 
     protected transient boolean createRecordStoreOnDemand = true;
     protected transient boolean disposeDeferredBlocks = true;
@@ -138,7 +139,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         } catch (NativeOutOfMemoryError e) {
             rerunWithForcedEviction();
         }
-        return returnsResponse() ? RESPONSE : VOID;
+        return callStatus != null ? callStatus : (returnsResponse() ? RESPONSE : VOID);
     }
 
     @Override

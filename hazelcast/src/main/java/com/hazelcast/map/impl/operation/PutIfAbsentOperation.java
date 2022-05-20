@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -37,8 +36,8 @@ public class PutIfAbsentOperation
     }
 
     @Override
-    protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(StaticParams.PUT_IF_ABSENT_PARAMS)
+    protected void initParams() {
+        setStaticPutParams(StaticParams.PUT_IF_ABSENT_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(getTtl())
@@ -68,7 +67,7 @@ public class PutIfAbsentOperation
 
     @Override
     public Object getResponse() {
-        return mapServiceContext.toData(putMachine.getOldValue());
+        return mapServiceContext.toData(oldValue);
     }
 
     @Override

@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -34,8 +33,8 @@ public class SetOperation extends BasePutOperation implements MutatingOperation 
     }
 
     @Override
-    protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(StaticParams.SET_PARAMS)
+    protected void initParams() {
+        setStaticPutParams(StaticParams.SET_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(getTtl())

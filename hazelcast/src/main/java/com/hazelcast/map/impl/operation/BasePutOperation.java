@@ -19,19 +19,15 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.recordstore.PutMachine;
+import com.hazelcast.map.impl.recordstore.PutContext;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
-import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-public abstract class BasePutOperation
-        extends LockAwareOperation implements BackupAwareOperation {
+public abstract class BasePutOperation extends PutContext {
 
-    protected transient Object oldValue;
     protected transient EntryEventType eventType;
     protected transient Record recordToBackup;
-    protected transient PutMachine putMachine;
 
     public BasePutOperation(String name, Data dataKey, Data value) {
         super(name, dataKey, value);
@@ -42,24 +38,23 @@ public abstract class BasePutOperation
 
     @Override
     protected void innerBeforeRun() throws Exception {
-        if (putMachine == null) {
+        if (!initialized) {
             super.innerBeforeRun();
             // TODO check for thread safety. visibility, idempotency
-            putMachine = new PutMachine(this);
-            putMachine.setThreadId(threadId);
-            init(putMachine);
+            initContext();
+            initParams();
+            initialized = true;
         }
     }
 
     @Override
     protected final CallStatus callInternal() {
         beforeCallInternal();
-        CallStatus run = putMachine.run();
-        if (putMachine.isDone()) {
-            oldValue = putMachine.getOldValue();
+        doRun();
+        if (isDone()) {
             whenDone();
         }
-        return run;
+        return callStatus;
     }
 
     protected void beforeCallInternal() {
@@ -70,13 +65,13 @@ public abstract class BasePutOperation
 
     }
 
-    protected void init(PutMachine putMachine) {
+    protected void initParams() {
 
     }
 
     @Override
     protected void afterRunInternal() {
-        if (!putMachine.isDone()) {
+        if (!isDone()) {
             return;
         }
 

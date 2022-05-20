@@ -25,20 +25,18 @@ import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.EntryLoader;
 import com.hazelcast.map.impl.InterceptorRegistry;
-import com.hazelcast.map.impl.MapContainer;
-import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
-import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.LockAwareOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.expiry.ExpirySystem;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.executionservice.ExecutionService;
+import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
-import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.Nullable;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -48,55 +46,52 @@ import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public class PutMachine {
+public abstract class PutContext extends LockAwareOperation implements BackupAwareOperation {
 
-    private final ExecutionService executionService;
-    private final MapServiceContext mapServiceContext;
-    private final RecordStore recordStore;
-    private final SerializationService ss;
-    private final InterceptorRegistry interceptorRegistry;
-    private final ValueComparator valueComparator;
-    private final MapDataStore mapDataStore;
-    private final ExpirySystem expirySystem;
-    private final Storage storage;
-    private final CompositeMutationObserver mutationObserver;
-    private final MapEventPublisher mapEventPublisher;
-    private final String name;
-    private final boolean hasMapStore;
-    private final InvalidationQueue<Operation> waitingMapStoreOperations;
+    protected ExecutionService executionService;
+    protected SerializationService ss;
+    protected InterceptorRegistry interceptorRegistry;
+    protected ValueComparator valueComparator;
+    protected MapDataStore mapDataStore;
+    protected ExpirySystem expirySystem;
+    protected Storage storage;
+    protected MutationObserver mutationObserver;
+    protected boolean hasMapStore;
+    protected InvalidationQueue<Operation> waitingMapStoreOperations;
 
     // temp
     Record record;
-    Operation operation;
+    protected volatile boolean initialized;
 
-    volatile Object oldValue;
-    volatile Object newValue;
-    volatile State state = State.READ_MEMORY;
+    protected volatile Object oldValue;
+    protected volatile Object newValue;
+    protected volatile State state = State.READ_MEMORY;
 
     // params
     boolean putTransient;
     long ttl = UNSET;
     long maxIdle = UNSET;
     long version;
-    long threadId;
     long expiryTime;
     long now = Clock.currentTimeMillis();
     Data key;
     Address callerAddress;
     Object expect;
-    StaticParams staticStaticParams;
+    StaticParams staticParams;
     UUID txnId;
     UUID ownerUuid;
 
     // TODO do configurable
-    final boolean offloadEnabled;
+    boolean offloadEnabled;
 
-    public PutMachine(Operation operation) {
-        this.operation = operation;
-        this.recordStore = ((MapOperation) operation).getRecordStore();
-        MapContainer mapContainer = recordStore.getMapContainer();
-        this.mapServiceContext = mapContainer
-                .getMapServiceContext();
+    public PutContext() {
+    }
+
+    public PutContext(String name, Data dataKey, Data dataValue) {
+        super(name, dataKey, dataValue);
+    }
+
+    public void initContext() {
         NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
         this.ss = nodeEngine.getSerializationService();
         this.executionService = nodeEngine.getExecutionService();
@@ -107,49 +102,47 @@ public class PutMachine {
         this.storage = recordStore.getStorage();
         this.mutationObserver = recordStore.getMutationObserver();
         this.waitingMapStoreOperations = recordStore.getWaitingMapStoreOperations();
-        this.mapEventPublisher = mapServiceContext.getMapEventPublisher();
-        this.name = mapContainer.getName();
         this.hasMapStore = mapDataStore != EMPTY_MAP_DATA_STORE;
         this.offloadEnabled = hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
     }
 
-    public PutMachine setKey(Data key) {
+    public PutContext setKey(Data key) {
         this.key = key;
         return this;
     }
 
-    public PutMachine setNewValue(Object newValue) {
+    public PutContext setNewValue(Object newValue) {
         this.newValue = newValue;
         return this;
     }
 
-    public PutMachine setExpect(Object expect) {
+    public PutContext setExpect(Object expect) {
         this.expect = expect;
         return this;
     }
 
-    public PutMachine setTxnId(UUID uuid) {
+    public PutContext setTxnId(UUID uuid) {
         this.txnId = uuid;
         return this;
     }
 
-    public PutMachine setOwnerUuid(UUID ownerUuid) {
+    public PutContext ownerUuid(UUID ownerUuid) {
         this.ownerUuid = ownerUuid;
         return this;
     }
 
-    public PutMachine setVersion(long version) {
+    public PutContext version(long version) {
         this.version = version;
         return this;
     }
 
-    public PutMachine setTtl(long ttl) {
+    public PutContext setTtl(long ttl) {
         this.ttl = ttl;
         return this;
     }
 
-    public PutMachine setMaxIdle(long maxIdle) {
+    public PutContext setMaxIdle(long maxIdle) {
         this.maxIdle = maxIdle;
         return this;
     }
@@ -158,17 +151,17 @@ public class PutMachine {
         this.expiryTime = expiryTime;
     }
 
-    public PutMachine setPutTransient(boolean putTransient) {
+    public PutContext setPutTransient(boolean putTransient) {
         this.putTransient = putTransient;
         return this;
     }
 
-    public PutMachine setStaticPutParams(StaticParams staticStaticParams) {
-        this.staticStaticParams = staticStaticParams;
+    public PutContext setStaticPutParams(StaticParams staticStaticParams) {
+        this.staticParams = staticStaticParams;
         return this;
     }
 
-    public PutMachine setCallerAddress(Address callerAddress) {
+    public PutContext setCallerAddress(Address callerAddress) {
         this.callerAddress = callerAddress;
         return this;
     }
@@ -177,24 +170,20 @@ public class PutMachine {
         return state == State.DONE;
     }
 
-    public Object getOldValue() {
-        return oldValue;
-    }
-
     private void goToState(State next) {
         log("Going next state: " + next.name());
         state = next;
     }
 
-    public CallStatus run() {
+    public void doRun() {
         if (hasMapStore) {
-            return runWithMapStore();
+            doRunWithMapStore();
+        } else {
+            doRunVanilla();
         }
-
-        return runNormal();
     }
 
-    public CallStatus runNormal() {
+    public void doRunVanilla() {
         readMemory();
 
         if (!canGoDoneState()) {
@@ -202,12 +191,12 @@ public class PutMachine {
             writeMemory();
         }
         goToState(State.DONE);
-        return CallStatus.RESPONSE;
+        callStatus = CallStatus.RESPONSE;
     }
 
 
     @Nullable
-    private CallStatus runWithMapStore() {
+    private void doRunWithMapStore() {
         do {
             switch (state) {
                 case READ_MEMORY:
@@ -225,7 +214,8 @@ public class PutMachine {
                     break;
                 case LOAD_ASYNC:
                     // TODO max offloaded request count, do we need a limit?
-                    return loadAsyncThenGoTo(State.DO_META_OPS);
+                    callStatus = loadAsyncThenGoTo(State.DO_META_OPS);
+                    return;
                 case DO_META_OPS:
                     preStoreForPutIf();
 
@@ -242,7 +232,8 @@ public class PutMachine {
                     break;
                 case STORE_ASYNC:
                     // TODO max offloaded request count, do we need a limit?
-                    return storeAsyncThenGoTo(State.WRITE_MEMORY);
+                    callStatus = storeAsyncThenGoTo(State.WRITE_MEMORY);
+                    return;
                 case WRITE_MEMORY:
                     writeMemory();
                     goToState(State.DONE);
@@ -250,19 +241,20 @@ public class PutMachine {
             }
         } while (state != State.DONE);
 
-        log("Finished running: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
+        log("Finished running: " + this.getClass().getSimpleName()
+                + ", identity: " + System.identityHashCode(this));
         recordStore.getRunningOffloadOp().set(null);
         resume(waitingMapStoreOperations.poll());
 
-        return CallStatus.RESPONSE;
+        callStatus = CallStatus.RESPONSE;
     }
 
     private boolean canGoDoneState() {
-        if (staticStaticParams.isPutVanilla()) {
+        if (staticParams.isPutVanilla()) {
             return false;
         }
 
-        if (staticStaticParams.isPutIfEqual()) {
+        if (staticParams.isPutIfEqual()) {
             boolean equal = valueComparator.isEqual(expect, oldValue, ss);
             if (!equal) {
                 oldValue = null;
@@ -271,11 +263,11 @@ public class PutMachine {
             return false;
         }
 
-        if (staticStaticParams.isPutIfAbsent()) {
+        if (staticParams.isPutIfAbsent()) {
             return oldValue != null;
         }
 
-        if (staticStaticParams.isPutIfExists()) {
+        if (staticParams.isPutIfExists()) {
             return oldValue == null;
         }
 
@@ -295,11 +287,7 @@ public class PutMachine {
     }
 
     private Offload offload(State next, boolean isLoad) {
-        return new LoadStoreOffload(operation, next, isLoad);
-    }
-
-    public void setThreadId(long threadId) {
-        this.threadId = threadId;
+        return new LoadStoreOffload(this, next, isLoad);
     }
 
     private class LoadStoreOffload extends Offload {
@@ -351,7 +339,7 @@ public class PutMachine {
     private void doMetaOps() {
         log("PutMachine.meta");
         // Intercept put on owner partition.
-        if (!staticStaticParams.isBackup()) {
+        if (!staticParams.isBackup()) {
             newValue = mapServiceContext.interceptPut(interceptorRegistry, oldValue, newValue);
         }
     }
@@ -374,8 +362,8 @@ public class PutMachine {
             }
         }
 
-        if (!(staticStaticParams.isPutIfAbsent()
-                || staticStaticParams.isPutIfExists())) {
+        if (!(staticParams.isPutIfAbsent()
+                || staticParams.isPutIfExists())) {
             return record;
         }
 
@@ -387,14 +375,14 @@ public class PutMachine {
         // here, we are only publishing events for loaded
         // entries. This is required for notifying query-caches
         // otherwise query-caches cannot see loaded entries
-        if (!staticStaticParams.isBackup() && recordStore.hasQueryCache()) {
+        if (!staticParams.isBackup() && recordStore.hasQueryCache()) {
             recordStore.addEventToQueryCache(key, record);
         }
         return record;
     }
 
     private void publishLoadedEvent(Record record) {
-        if (!staticStaticParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
+        if (!staticParams.isBackup() && mapEventPublisher.hasEventListener(name)) {
             mapEventPublisher.publishEvent(callerAddress, name, EntryEventType.LOADED,
                     key, null, record.getValue(), null);
         }
@@ -403,13 +391,13 @@ public class PutMachine {
     private void notifyMutationObserver(EntryEventType entryEventType) {
         switch (entryEventType) {
             case ADDED:
-                mutationObserver.onPutRecord(key, record, oldValue, staticStaticParams.isBackup());
+                mutationObserver.onPutRecord(key, record, oldValue, staticParams.isBackup());
                 break;
             case UPDATED:
-                mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticStaticParams.isBackup());
+                mutationObserver.onUpdateRecord(key, record, oldValue, newValue, staticParams.isBackup());
                 break;
             case LOADED:
-                mutationObserver.onLoadRecord(key, record, staticStaticParams.isBackup());
+                mutationObserver.onLoadRecord(key, record, staticParams.isBackup());
                 break;
         }
     }
@@ -430,7 +418,7 @@ public class PutMachine {
     private void put() {
         putStorage(newValue);
         putExpirySystem(ttl, maxIdle, expiryTime);
-        notifyMutationObserver(staticStaticParams.isPutFromLoad() ? LOADED : ADDED);
+        notifyMutationObserver(staticParams.isPutFromLoad() ? LOADED : ADDED);
     }
 
     void update() {
@@ -441,10 +429,10 @@ public class PutMachine {
     }
 
     private void updateStats() {
-        recordStore.updateStatsOnPut(staticStaticParams.isCountAsAccess(), now);
+        recordStore.updateStatsOnPut(staticParams.isCountAsAccess(), now);
         record.onUpdate(now);
 
-        if (staticStaticParams.isCountAsAccess()) {
+        if (staticParams.isCountAsAccess()) {
             record.onAccess(now);
         }
     }
@@ -453,9 +441,9 @@ public class PutMachine {
         storage.updateRecordValue(key, record, value);
     }
 
-    PutMachine load() {
+    PutContext load() {
         log("PutInternal.load");
-        if (!staticStaticParams.isLoad()) {
+        if (!staticParams.isLoad()) {
             return this;
         }
         oldValue = recordStore.getMapDataStore().load(key);
@@ -464,13 +452,13 @@ public class PutMachine {
 
     void store() {
         log("PutInternal.store");
-        if (staticStaticParams.isStore()) {
+        if (staticParams.isStore()) {
             long expirationTime = expirySystem.calculateExpirationTime(ttl, maxIdle, now, now);
             newValue = mapDataStore.add(key, newValue, expirationTime, now, txnId);
             return;
         }
 
-        if (staticStaticParams.isTransient()) {
+        if (staticParams.isTransient()) {
             mapDataStore.addTransient(key, now);
             return;
         }
@@ -481,7 +469,7 @@ public class PutMachine {
     }
 
     private void checkIfLoaded() {
-        if (!staticStaticParams.isCheckIfLoaded()) {
+        if (!staticParams.isCheckIfLoaded()) {
             return;
             // TODO ?
         }
@@ -492,7 +480,7 @@ public class PutMachine {
     void readMemory() {
         log("PutMachine.readMemory");
         // Get record by checking expiry, if expired, evict record.
-        record = recordStore.getRecordOrNull(key, now, staticStaticParams.isBackup());
+        record = recordStore.getRecordOrNull(key, now, staticParams.isBackup());
         oldValue = record != null ? record.getValue() : null;
     }
 
@@ -502,7 +490,7 @@ public class PutMachine {
     }
 
     private boolean mustLoadOldValue() {
-        if (!staticStaticParams.isLoad() || record != null) {
+        if (!staticParams.isLoad() || record != null) {
             // we don't want to load old value or
             // we already have old value
             return false;
@@ -546,7 +534,8 @@ public class PutMachine {
 
         log("Resuming next op from waitingMapStoreOperations");
 
-        log("PutInternal.resume: " + operation.getClass().getSimpleName() + ", identity: " + System.identityHashCode(operation));
+        log("PutInternal.resume: " + operation.getClass().getSimpleName()
+                + ", identity: " + System.identityHashCode(operation));
         recordStore.getMapContainer().getMapServiceContext()
                 .getNodeEngine().getOperationService().execute(operation);
 
@@ -554,6 +543,6 @@ public class PutMachine {
 
     private void sendErrorResponse(Throwable t) {
         log("PutInternal.sendErrorResponse");
-        operation.sendResponse(t);
+        this.sendResponse(t);
     }
 }

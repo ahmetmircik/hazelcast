@@ -21,7 +21,6 @@ import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.record.Record;
-import com.hazelcast.map.impl.recordstore.PutMachine;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.nio.ObjectDataInput;
@@ -58,14 +57,14 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
-    protected void init(PutMachine putMachine) {
-        putMachine.setStaticPutParams(StaticParams.SET_PARAMS)
+    protected void initParams() {
+        setStaticPutParams(StaticParams.SET_PARAMS)
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setTtl(ttl)
                 .setTxnId(transactionId)
-                .setOwnerUuid(ownerUuid)
-                .setVersion(version);
+                .ownerUuid(ownerUuid)
+                .version(version);
     }
 
     @Override
@@ -91,7 +90,7 @@ public class TxnSetOperation extends BasePutOperation
 
     @Override
     protected void whenDone() {
-        shouldBackup = putMachine.canTxnProceed();
+        shouldBackup = canTxnProceed();
     }
 
     @Override
