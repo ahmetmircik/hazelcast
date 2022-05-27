@@ -18,43 +18,35 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
-import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.impl.PartitionOperationThread;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
-import org.jetbrains.annotations.NotNull;
 
-import java.util.Queue;
+import javax.annotation.Nonnull;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
+// TODO: only one execution at a time, subsequent executions should wait previous ones.
 public class CascadingStepsMachine extends Offload {
 
     private final int threadId;
-    private final Queue<Runnable> steps = new ConcurrentLinkedQueue<>();
+    private final Supplier<Runnable> stepSupplier;
 
-    /**
-     * Creates a new Offload instance.
-     *
-     * @param offloadedOperation the Operation that is offloaded
-     */
-    public CascadingStepsMachine(Operation offloadedOperation) {
+    public CascadingStepsMachine(Operation offloadedOperation, Supplier<Runnable> stepSupplier) {
         super(offloadedOperation);
+
         ThreadUtil.assertRunningOnPartitionThread();
+
+        this.stepSupplier = stepSupplier;
         this.threadId = ((PartitionOperationThread) Thread.currentThread()).getThreadId();
     }
 
-    public void addStep(Runnable runnable) {
-        steps.offer(runnable);
-    }
-
-    // TODO: Find next step based on current?
     // TODO: What happens in the event of exception?
     @Override
     public void start() throws Exception {
-        Runnable nextStep = steps.poll();
+        Runnable nextStep = stepSupplier.get();
         if (nextStep == null) {
             return;
         }
@@ -70,22 +62,26 @@ public class CascadingStepsMachine extends Offload {
 
     private Executor getExecutor() {
         return nodeEngine.getExecutionService()
-                .getExecutor("Offload::" + threadId);
+                .getExecutor(String.format("MapStoreOffloadingExecutor::%d", threadId));
     }
 
-    @NotNull
+    @Nonnull
     private CompletableFuture executeAsync(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             CompletableFuture completableFuture = new CompletableFuture<>();
-            OperationExecutor operationExecutor = ((OperationServiceImpl) nodeEngine.getOperationService())
-                    .getOperationExecutor();
-            operationExecutor.execute(wrapRunnable(step, completableFuture));
+            PartitionSpecificRunnable runnable = wrapRunnable(step, completableFuture);
+            if (Thread.currentThread().getClass() == PartitionOperationThread.class) {
+                runnable.run();
+            } else {
+                ((OperationServiceImpl) nodeEngine.getOperationService())
+                        .getOperationExecutor().execute(runnable);
+            }
             return completableFuture;
         }
         return CompletableFuture.runAsync(step, getExecutor());
     }
 
-    @NotNull
+    @Nonnull
     private PartitionSpecificRunnable wrapRunnable(Runnable step,
                                                    CompletableFuture completableFuture) {
         return new PartitionSpecificRunnable() {

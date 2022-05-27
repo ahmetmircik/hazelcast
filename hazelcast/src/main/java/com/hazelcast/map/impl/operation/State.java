@@ -50,6 +50,7 @@ public class State {
     UUID ownerUuid;
 
     int partitionId;
+    private volatile boolean stopExecution;
 
 
     public State(RecordStore recordStore, Operation operation) {
@@ -192,5 +193,13 @@ public class State {
 
     public int getPartitionId() {
         return partitionId;
+    }
+
+    public boolean isStopExecution() {
+        return stopExecution;
+    }
+
+    public void setStopExecution(boolean stopExecution) {
+        this.stopExecution = stopExecution;
     }
 }

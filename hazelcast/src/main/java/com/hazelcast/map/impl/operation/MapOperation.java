@@ -106,7 +106,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         canPublishWanEvent = canPublishWanEvent(mapContainer);
-        hasMapStore = recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
+        hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
         offloadEnabled = hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
         && (this instanceof BasePutOperation || this instanceof GetOperation);

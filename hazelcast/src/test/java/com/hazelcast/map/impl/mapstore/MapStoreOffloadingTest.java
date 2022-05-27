@@ -56,7 +56,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public Integer load(Integer key) {
-                sleepSeconds(2);
+                sleepSeconds(5);
                 return (Integer) store.get(key);
             }
 
@@ -87,6 +87,12 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         Object old2 = slowMap.put(1, 2);
         System.out.println("old2 = " + old2);
+
+        Object get1 = slowMap.get(1);
+        System.out.println("get1 = " + get1);
+
+        Object get2 = slowMap.get(2);
+        System.out.println("get2 = " + get2);
 
 
         sleepSeconds(100);

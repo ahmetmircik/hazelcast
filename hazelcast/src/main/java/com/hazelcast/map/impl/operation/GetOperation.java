@@ -23,6 +23,8 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 
+import static com.hazelcast.map.impl.operation.Step.newStepSupplier;
+
 public final class GetOperation extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
 
     private Data result;
@@ -57,11 +59,8 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        CascadingStepsMachine machine = new CascadingStepsMachine(this);
-        for (GetSteps step : GetSteps.VALUES) {
-            machine.addStep(step.createStepWith(state));
-        }
-        return machine;
+        return new CascadingStepsMachine(this,
+                newStepSupplier(state, GetStep.INITIAL));
     }
 
     private boolean noCopyReadAllowed(Object currentValue) {
