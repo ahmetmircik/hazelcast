@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
-public class CascadingRunMachine extends Offload {
+public class CascadingStepsMachine extends Offload {
 
     private final int threadId;
     private final Queue<Runnable> steps = new ConcurrentLinkedQueue<>();
@@ -40,7 +40,7 @@ public class CascadingRunMachine extends Offload {
      *
      * @param offloadedOperation the Operation that is offloaded
      */
-    public CascadingRunMachine(Operation offloadedOperation) {
+    public CascadingStepsMachine(Operation offloadedOperation) {
         super(offloadedOperation);
         ThreadUtil.assertRunningOnPartitionThread();
         this.threadId = ((PartitionOperationThread) Thread.currentThread()).getThreadId();
@@ -50,6 +50,7 @@ public class CascadingRunMachine extends Offload {
         steps.offer(runnable);
     }
 
+    // TODO: Find next step based on current?
     // TODO: What happens in the event of exception?
     @Override
     public void start() throws Exception {

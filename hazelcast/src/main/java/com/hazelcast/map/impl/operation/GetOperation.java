@@ -50,6 +50,20 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
         }
     }
 
+    @Override
+    protected CascadingStepsMachine createCascadingStepsMachine() {
+        State state = new State(recordStore, this);
+        state.setKey(dataKey)
+                .setCallerAddress(getCallerAddress())
+                .setPartitionId(getPartitionId());
+
+        CascadingStepsMachine machine = new CascadingStepsMachine(this);
+        for (GetSteps step : GetSteps.VALUES) {
+            machine.addStep(step.createStepWith(state));
+        }
+        return machine;
+    }
+
     private boolean noCopyReadAllowed(Object currentValue) {
         return currentValue instanceof Data
                 && (!getNodeEngine().getLocalMember().getUuid().equals(getCallerUuid())

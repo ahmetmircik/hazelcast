@@ -39,6 +39,8 @@ import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
+import com.hazelcast.spi.impl.operationservice.BlockingOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
@@ -53,6 +55,9 @@ import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
 
 @SuppressWarnings("checkstyle:methodcount")
 public abstract class MapOperation extends AbstractNamedOperation
@@ -103,7 +108,8 @@ public abstract class MapOperation extends AbstractNamedOperation
         canPublishWanEvent = canPublishWanEvent(mapContainer);
         hasMapStore = recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
         offloadEnabled = hasMapStore
-                && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
+                && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
+        && (this instanceof BasePutOperation || this instanceof GetOperation);
 
         assertNativeMapOnPartitionThread();
 
@@ -124,6 +130,29 @@ public abstract class MapOperation extends AbstractNamedOperation
         } catch (NativeOutOfMemoryError e) {
             rerunWithForcedEviction();
         }
+    }
+
+    @Override
+    public CallStatus call() throws Exception {
+        if (this instanceof BlockingOperation) {
+            BlockingOperation blockingOperation = (BlockingOperation) this;
+            if (blockingOperation.shouldWait()) {
+                return WAIT;
+            }
+        }
+
+        if (offloadEnabled) {
+            // TODO: afterRunInternal
+            // TODO: concurrent map-store load/store ordering
+            return createCascadingStepsMachine();
+        }
+
+        run();
+        return returnsResponse() ? RESPONSE : VOID;
+    }
+
+    protected CascadingStepsMachine createCascadingStepsMachine() {
+        throw new UnsupportedOperationException("Implement to use");
     }
 
     protected void runInternal() {

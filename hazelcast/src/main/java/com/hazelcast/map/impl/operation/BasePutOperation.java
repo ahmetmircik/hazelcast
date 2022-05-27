@@ -22,14 +22,10 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
-import com.hazelcast.spi.impl.operationservice.BlockingOperation;
-import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import org.jetbrains.annotations.NotNull;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
-import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
-import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
-import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
 
 public abstract class BasePutOperation
         extends LockAwareOperation implements BackupAwareOperation {
@@ -49,35 +45,21 @@ public abstract class BasePutOperation
         throw new UnsupportedOperationException();
     }
 
-    public CallStatus call() throws Exception {
-        if (this instanceof BlockingOperation) {
-            BlockingOperation blockingOperation = (BlockingOperation) this;
-            if (blockingOperation.shouldWait()) {
-                return WAIT;
-            }
+    @NotNull
+    protected CascadingStepsMachine createCascadingStepsMachine() {
+        State state = new State(recordStore, this);
+        state.setStaticPutParams(getStaticParams())
+                .setKey(dataKey)
+                .setNewValue(dataValue)
+                .setTtl(getTtl())
+                .setMaxIdle(getMaxIdle())
+                .setPartitionId(getPartitionId());
+
+        CascadingStepsMachine machine = new CascadingStepsMachine(this);
+        for (PutSteps step : PutSteps.VALUES) {
+            machine.addStep(step.createStepWith(state));
         }
-
-        if (offloadEnabled) {
-            // TODO: afterRunInternal
-            // TODO: concurrent map-store load/store ordering
-
-            State state = new State(recordStore, this);
-            state.setStaticPutParams(getStaticParams())
-                    .setKey(dataKey)
-                    .setNewValue(dataValue)
-                    .setTtl(getTtl())
-                    .setMaxIdle(getMaxIdle())
-                    .setPartitionId(getPartitionId());
-
-            CascadingRunMachine machine = new CascadingRunMachine(this);
-            for (PutStep step : PutStep.VALUES) {
-                machine.addStep(step.createExecutionWith(state));
-            }
-            return machine;
-        }
-
-        run();
-        return returnsResponse() ? RESPONSE : VOID;
+        return machine;
     }
 
     @Override

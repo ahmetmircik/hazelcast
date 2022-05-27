@@ -43,7 +43,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
     }
 
     @Test
-    public void name4() {
+    public void smokePut() {
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
         config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
@@ -91,6 +91,48 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         sleepSeconds(100);
     }
+
+    @Test
+    public void smokeGet() {
+        Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
+        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            @Override
+            public Integer load(Integer key) {
+                sleepSeconds(20);
+                return 11;
+            }
+        });
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
+
+        HazelcastInstance node = createHazelcastInstance(config);
+        IMap<Object, Object> slowMap = node.getMap(slowMapName);
+
+        spawn(new Runnable() {
+            @Override
+            public void run() {
+                IMap<Object, Object> fast = node.getMap("fast");
+                for (int i = 0; i < 10; i++) {
+                    fast.set(i, i);
+                }
+
+                System.out.println("===> fast size = " + fast.size());
+            }
+        });
+
+        Object get = slowMap.get(1);
+        System.out.println("==> get = " + get);
+
+
+        sleepSeconds(100);
+    }
+
 
     @Test
     public void name() {

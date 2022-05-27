@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
@@ -25,13 +26,13 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
-public enum PutStep {
+public enum PutSteps {
 
     LOAD() {
         @Override
-        Runnable createExecutionWith(State state) {
+        Runnable createStepWith(State state) {
             return () -> {
-                System.out.println("==> loading old value");
+                System.out.println("==> loading old value"+ " (thread:" + Thread.currentThread().getName() + ")");
                 state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
             };
         }
@@ -39,11 +40,13 @@ public enum PutStep {
 
     AFTER_LOAD() {
         @Override
-        Runnable createExecutionWith(State state) {
+        Runnable createStepWith(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> meta processing");
+                    ThreadUtil.assertRunningOnPartitionThread();
+
+                    System.out.println("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
                     StaticParams staticParams = state.getStaticParams();
                     Object newValue = state.getNewValue();
 
@@ -77,9 +80,9 @@ public enum PutStep {
 
     STORE() {
         @Override
-        Runnable createExecutionWith(State state) {
+        Runnable createStepWith(State state) {
             return () -> {
-                System.out.println("==> store into map-store");
+                System.out.println("==> store into map-store"+ " (thread:" + Thread.currentThread().getName() + ")");
                 ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
                         state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             };
@@ -88,11 +91,13 @@ public enum PutStep {
 
     WRITE() {
         @Override
-        Runnable createExecutionWith(State state) {
+        Runnable createStepWith(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> write into memory");
+                    ThreadUtil.assertRunningOnPartitionThread();
+
+                    System.out.println("==> write into memory"+ " (thread:" + Thread.currentThread().getName() + ")");
                     // TODO: fix event type
                     ((DefaultRecordStore) state.getRecordStore()).writeMemory(state.getKey(), state.getOldValue(),
                             state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
@@ -109,9 +114,9 @@ public enum PutStep {
 
     RESPONSE() {
         @Override
-        Runnable createExecutionWith(State state) {
+        Runnable createStepWith(State state) {
             return () -> {
-                System.out.println("==> sending response");
+                System.out.println("==> sending response"+ " (thread:" + Thread.currentThread().getName() + ")");
                 RecordStore recordStore = state.getRecordStore();
                 MapContainer mapContainer = recordStore.getMapContainer();
                 MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -121,10 +126,10 @@ public enum PutStep {
         }
     };
 
-    public static final PutStep[] VALUES = values();
+    public static final PutSteps[] VALUES = values();
 
-    PutStep() {
+    PutSteps() {
     }
 
-    abstract Runnable createExecutionWith(State state);
+    abstract Runnable createStepWith(State state);
 }
