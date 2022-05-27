@@ -51,6 +51,7 @@ import static com.hazelcast.internal.util.CollectionUtil.isEmpty;
 import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
+import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
 
 @SuppressWarnings("checkstyle:methodcount")
@@ -65,6 +66,8 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient MapServiceContext mapServiceContext;
     protected transient MapEventPublisher mapEventPublisher;
 
+    protected transient boolean hasMapStore;
+    protected transient boolean offloadEnabled;
     protected transient boolean createRecordStoreOnDemand = true;
     protected transient boolean disposeDeferredBlocks = true;
 
@@ -98,6 +101,9 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         canPublishWanEvent = canPublishWanEvent(mapContainer);
+        hasMapStore = recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
+        offloadEnabled = hasMapStore
+                && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
 
         assertNativeMapOnPartitionThread();
 

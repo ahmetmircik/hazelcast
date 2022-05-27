@@ -87,6 +87,10 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         addMutationObservers();
     }
 
+    public ValueComparator getValueComparator() {
+        return valueComparator;
+    }
+
     // Overridden in EE.
     protected void addMutationObservers() {
         // Add observer for event journal

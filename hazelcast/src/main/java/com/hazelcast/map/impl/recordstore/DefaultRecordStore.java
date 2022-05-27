@@ -929,6 +929,15 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
             putIntoMapStore(record, key, newValue, ttl, maxIdle, now, transactionId);
         }
+        writeMemory(key, oldValue, newValue, ttl, maxIdle,
+                expiryTime, now, entryEventType, backup, record);
+        return record;
+    }
+
+    public void writeMemory(Data key, Object oldValue, Object newValue, long ttl, long maxIdle,
+                            long expiryTime, long now, EntryEventType entryEventType,
+                            boolean backup, Record r) {
+        Record record = r == null ? createRecord(key, newValue, now) : r;
         storage.put(key, record);
         expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
 
@@ -937,7 +946,6 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         } else {
             mutationObserver.onPutRecord(key, record, oldValue, backup);
         }
-        return record;
     }
 
     @SuppressWarnings("checkstyle:parameternumber")
@@ -972,15 +980,23 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return loadRecordOrNull(key, backup, callerAddress);
     }
 
-    protected Object putIntoMapStore(Record record, Data key, Object newValue,
-                                     long ttlMillis, long maxIdleMillis,
-                                     long now, UUID transactionId) {
+    public Object putIntoMapStore(Record record, Data key, Object newValue,
+                                  long ttlMillis, long maxIdleMillis,
+                                  long now, UUID transactionId) {
         long expirationTime = expirySystem.calculateExpirationTime(ttlMillis, maxIdleMillis, now, now);
         newValue = mapDataStore.add(key, newValue, expirationTime, now, transactionId);
         if (mapDataStore.isPostProcessingMapStore()) {
             storage.updateRecordValue(key, record, newValue);
         }
         onStore(record);
+        return newValue;
+    }
+
+    public Object putIntoMapStore2(Data key, Object newValue,
+                                   long ttlMillis, long maxIdleMillis,
+                                   long now, UUID transactionId) {
+        long expirationTime = expirySystem.calculateExpirationTime(ttlMillis, maxIdleMillis, now, now);
+        newValue = mapDataStore.add(key, newValue, expirationTime, now, transactionId);
         return newValue;
     }
 
