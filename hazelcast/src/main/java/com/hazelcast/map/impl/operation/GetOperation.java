@@ -59,8 +59,8 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsMachine(this,
-                newStepSupplier(state, GetStep.INITIAL));
+        return new CascadingStepsMachine(getNodeEngine(),
+                newStepSupplier(state, GetStep.INITIAL), getName());
     }
 
     private boolean noCopyReadAllowed(Object currentValue) {

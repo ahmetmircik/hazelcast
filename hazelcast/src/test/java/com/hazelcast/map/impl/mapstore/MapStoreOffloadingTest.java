@@ -99,6 +99,68 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
     }
 
     @Test
+    public void smokePut_concurrent() {
+        Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
+        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            ConcurrentHashMap store = new ConcurrentHashMap<>();
+
+            @Override
+            public Integer load(Integer key) {
+                sleepSeconds(5);
+                return 12;
+            }
+
+            @Override
+            public void store(Integer key, Integer value) {
+                sleepSeconds(5);
+                store.put(key, value);
+            }
+
+            @Override
+            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
+                return null;
+            }
+
+            @Override
+            public Iterable<Integer> loadAllKeys() {
+                return null;
+            }
+        });
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
+
+        HazelcastInstance node = createHazelcastInstance(config);
+        IMap<Object, Object> slowMap = node.getMap(slowMapName);
+
+
+        spawn(new Runnable() {
+            @Override
+            public void run() {
+                sleepSeconds(2);
+                Object old = slowMap.put(1, 1);
+                System.out.println("old = " + old);
+            }
+        });
+
+        spawn(new Runnable() {
+            @Override
+            public void run() {
+                Object old = slowMap.get(1);
+                System.out.println("old = " + old);
+            }
+        });
+
+        sleepSeconds(100);
+    }
+
+
+    @Test
     public void smokeGet() {
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");

@@ -219,6 +219,10 @@ public final class ExecutionServiceImpl implements ExecutionService {
         return ConcurrencyUtil.getOrPutIfAbsent(executors, name, constructor);
     }
 
+    public boolean hasExecutorWith(String name) {
+        return executors.get(name) != null;
+    }
+
     @Override
     public ManagedExecutorService getDurable(String name) {
         return ConcurrencyUtil.getOrPutIfAbsent(durableExecutors, name, durableConstructor);

@@ -20,6 +20,7 @@ import com.hazelcast.internal.nearcache.impl.invalidation.Invalidator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespaceAware;
+import com.hazelcast.internal.util.executor.ExecutorType;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
@@ -37,15 +38,18 @@ import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.map.impl.wan.WanMapEntryView;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import com.hazelcast.spi.impl.executionservice.impl.ExecutionServiceImpl;
 import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
+import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.logging.Level;
 
 import static com.hazelcast.config.InMemoryFormat.NATIVE;
@@ -109,7 +113,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
         offloadEnabled = hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
-        && (this instanceof BasePutOperation || this instanceof GetOperation);
+                && (this instanceof BasePutOperation || this instanceof GetOperation);
 
         assertNativeMapOnPartitionThread();
 
@@ -143,8 +147,20 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (offloadEnabled) {
             // TODO: afterRunInternal
-            // TODO: concurrent map-store load/store ordering
-            return createCascadingStepsMachine();
+            return new Offload(this) {
+                @Override
+                public void start() throws Exception {
+                    String executorName = getName() + "-" + Thread.currentThread().getId()
+                            + "-" + CascadingStepsMachine.class.getName();
+                    ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
+                    if (!service.hasExecutorWith(executorName)) {
+                        service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
+                    }
+                    Executor executor = service.getExecutor(executorName);
+
+                    executor.execute(createCascadingStepsMachine());
+                }
+            };
         }
 
         run();
@@ -171,6 +187,9 @@ public abstract class MapOperation extends AbstractNamedOperation
 
     @Override
     public final void afterRun() throws Exception {
+        if (offloadEnabled) {
+            return;
+        }
         afterRunInternal();
         disposeDeferredBlocks();
         super.afterRun();

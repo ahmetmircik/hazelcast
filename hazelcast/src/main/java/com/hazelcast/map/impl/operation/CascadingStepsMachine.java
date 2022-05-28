@@ -17,10 +17,10 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.util.ThreadUtil;
+import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.impl.PartitionOperationThread;
-import com.hazelcast.spi.impl.operationservice.Offload;
-import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 import javax.annotation.Nonnull;
@@ -28,41 +28,41 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
-// TODO: only one execution at a time, subsequent executions should wait previous ones.
-public class CascadingStepsMachine extends Offload {
+// TODO: only one execution at a time, subsequent executions should wait previous ones finish.
+public class CascadingStepsMachine implements Runnable {
 
-    private final int threadId;
     private final Supplier<Runnable> stepSupplier;
+    private final Executor executor;
+    private final OperationExecutor operationExecutor;
 
-    public CascadingStepsMachine(Operation offloadedOperation, Supplier<Runnable> stepSupplier) {
-        super(offloadedOperation);
+    public CascadingStepsMachine(NodeEngine nodeEngine,
+                                 Supplier<Runnable> stepSupplier,
+                                 String mapName) {
 
         ThreadUtil.assertRunningOnPartitionThread();
 
         this.stepSupplier = stepSupplier;
-        this.threadId = ((PartitionOperationThread) Thread.currentThread()).getThreadId();
+        this.executor = nodeEngine.getExecutionService()
+                .getExecutor(String.format("%s-%d-mapStoreOffloadingExecutor",
+                        mapName, Thread.currentThread().getId()));
+        this.operationExecutor = ((OperationServiceImpl) nodeEngine.getOperationService())
+                .getOperationExecutor();
     }
 
     // TODO: What happens in the event of exception?
     @Override
-    public void start() throws Exception {
-        Runnable nextStep = stepSupplier.get();
-        if (nextStep == null) {
-            return;
-        }
-
-        executeAsync(nextStep).thenRunAsync(() -> {
-            try {
-                start();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+    public void run() {
+        System.out.println("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
+        do {
+            Runnable nextStep = stepSupplier.get();
+            if (nextStep == null) {
+                System.out.println("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
+                return;
             }
-        }, getExecutor());
-    }
 
-    private Executor getExecutor() {
-        return nodeEngine.getExecutionService()
-                .getExecutor(String.format("MapStoreOffloadingExecutor::%d", threadId));
+            executeAsync(nextStep).join();
+        } while (true);
+
     }
 
     @Nonnull
@@ -73,12 +73,11 @@ public class CascadingStepsMachine extends Offload {
             if (Thread.currentThread().getClass() == PartitionOperationThread.class) {
                 runnable.run();
             } else {
-                ((OperationServiceImpl) nodeEngine.getOperationService())
-                        .getOperationExecutor().execute(runnable);
+                operationExecutor.execute(runnable);
             }
             return completableFuture;
         }
-        return CompletableFuture.runAsync(step, getExecutor());
+        return CompletableFuture.runAsync(step, executor);
     }
 
     @Nonnull

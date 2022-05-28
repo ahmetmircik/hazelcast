@@ -56,8 +56,8 @@ public abstract class BasePutOperation
                 .setMaxIdle(getMaxIdle())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsMachine(this,
-                newStepSupplier(state, PutStep.INITIAL));
+        return new CascadingStepsMachine(getNodeEngine(),
+                newStepSupplier(state, PutStep.INITIAL), getName());
     }
 
     @Override

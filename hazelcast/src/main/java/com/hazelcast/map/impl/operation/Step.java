@@ -33,6 +33,9 @@ public interface Step<State> {
             @Override
             public Runnable get() {
                 Step nextStep = current.getNextStep(state);
+                if (nextStep == null) {
+                    return null;
+                }
                 current = nextStep;
                 return nextStep.createStepWith(state);
             }
