@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.internal.serialization.Data;
@@ -44,6 +45,11 @@ public class ReplaceIfSameOperation extends BasePutOperation implements Mutating
         if (successful) {
             oldValue = expect;
         }
+    }
+
+    @Override
+    protected StaticParams getStaticParams() {
+        return StaticParams.REPLACE_IF_SAME_PARAMS;
     }
 
     @Override

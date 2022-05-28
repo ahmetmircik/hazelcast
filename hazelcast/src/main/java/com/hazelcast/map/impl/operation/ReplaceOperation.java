@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 public class ReplaceOperation extends BasePutOperation implements MutatingOperation {
@@ -36,6 +37,11 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
         Object oldValue = recordStore.replace(dataKey, dataValue);
         this.oldValue = mapServiceContext.toData(oldValue);
         successful = oldValue != null;
+    }
+
+    @Override
+    protected StaticParams getStaticParams() {
+        return StaticParams.REPLACE_PARAMS;
     }
 
     @Override

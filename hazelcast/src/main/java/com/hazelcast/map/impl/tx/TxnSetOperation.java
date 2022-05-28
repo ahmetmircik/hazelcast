@@ -23,6 +23,7 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -58,6 +59,11 @@ public class TxnSetOperation extends BasePutOperation
         super(name, dataKey, value);
         this.version = version;
         this.ttl = ttl;
+    }
+
+    @Override
+    protected StaticParams getStaticParams() {
+        return StaticParams.PUT_PARAMS;
     }
 
     @Override

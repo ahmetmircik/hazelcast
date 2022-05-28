@@ -18,9 +18,8 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
-
-import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class PutIfAbsentOperation extends BasePutOperation implements MutatingOperation {
 
@@ -41,12 +40,9 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
         successful = this.oldValue == null;
     }
 
-    protected long getTtl() {
-        return UNSET;
-    }
-
-    protected long getMaxIdle() {
-        return UNSET;
+    @Override
+    protected StaticParams getStaticParams() {
+        return StaticParams.PUT_IF_ABSENT_PARAMS;
     }
 
     @Override
