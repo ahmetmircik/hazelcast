@@ -436,7 +436,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
      * @return loaded value from map-store,
      * when no value found returns null
      */
-    private Object loadValueOf(Data key) {
+    public Object loadValueOf(Data key) {
         Object value = mapDataStore.load(key);
         if (value == null) {
             return null;

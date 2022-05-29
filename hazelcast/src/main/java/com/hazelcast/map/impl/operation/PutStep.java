@@ -64,7 +64,7 @@ public enum PutStep implements Step<State> {
 
         @Override
         public PutStep getNextStep(State state) {
-            return state.getOldValue() != null ? PutStep.LOAD : PutStep.RUN_META_OPS;
+            return state.getOldValue() == null ? PutStep.LOAD : PutStep.RUN_META_OPS;
         }
     },
 
@@ -73,7 +73,7 @@ public enum PutStep implements Step<State> {
         public Runnable createStepWith(State state) {
             return () -> {
                 System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+                state.setOldValue(((DefaultRecordStore) state.getRecordStore()).loadValueOf(state.getKey()));
             };
         }
 
@@ -183,7 +183,7 @@ public enum PutStep implements Step<State> {
                 MapContainer mapContainer = recordStore.getMapContainer();
                 MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                state.getOperation().sendResponse(mapServiceContext.toData(state.oldValue));
+                state.getOperation().sendResponse(mapServiceContext.toData(state.getOldValue()));
             };
         }
 

@@ -63,7 +63,7 @@ public enum GetStep implements Step<State> {
 
         @Override
         public GetStep getNextStep(State state) {
-            return state.getOldValue() != null ? GetStep.RESPONSE : GetStep.LOAD;
+            return state.getOldValue() == null ? GetStep.LOAD : GetStep.RESPONSE;
         }
     },
 
@@ -91,8 +91,9 @@ public enum GetStep implements Step<State> {
                 public void run() {
                     System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     RecordStore recordStore = state.getRecordStore();
-                    ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                    Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                             state.getOldValue(), false, state.getCallerAddress());
+                    state.setOldValue(record.getValue());
                 }
 
                 @Override

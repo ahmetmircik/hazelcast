@@ -62,7 +62,6 @@ public class CascadingStepsMachine implements Runnable {
 
             executeAsync(nextStep).join();
         } while (true);
-
     }
 
     @Nonnull
