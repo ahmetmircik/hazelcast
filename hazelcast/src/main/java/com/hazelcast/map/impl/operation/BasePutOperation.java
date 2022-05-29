@@ -54,6 +54,7 @@ public abstract class BasePutOperation
                 .setNewValue(dataValue)
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle())
+                .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
         return new CascadingStepsMachine(getNodeEngine(),
@@ -62,6 +63,11 @@ public abstract class BasePutOperation
 
     @Override
     protected void afterRunInternal() {
+        afterRunInternal0(dataKey, dataValue, oldValue);
+        super.afterRunInternal();
+    }
+
+    public void afterRunInternal0(Data dataKey, Object dataValue, Object oldValue) {
         Object value = isPostProcessing(recordStore)
                 ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);
@@ -70,7 +76,6 @@ public abstract class BasePutOperation
         invalidateNearCache(dataKey);
         publishWanUpdate(dataKey, value);
         evict(dataKey);
-        super.afterRunInternal();
     }
 
     // overridden in extension classes

@@ -16,11 +16,15 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 public enum GetStep implements Step<State> {
 
@@ -74,7 +78,33 @@ public enum GetStep implements Step<State> {
 
         @Override
         public GetStep getNextStep(State state) {
-            return RESPONSE;
+            return ON_LOAD;
+        }
+    },
+
+
+    ON_LOAD() {
+        @Override
+        public Runnable createStepWith(State state) {
+            return new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    RecordStore recordStore = state.getRecordStore();
+                    ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                            state.getOldValue(), false, state.getCallerAddress());
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return state.getPartitionId();
+                }
+            };
+        }
+
+        @Override
+        public GetStep getNextStep(State state) {
+            return GetStep.RESPONSE;
         }
     },
 
@@ -82,17 +112,48 @@ public enum GetStep implements Step<State> {
         @Override
         public Runnable createStepWith(State state) {
             return () -> {
+
+
                 System.out.println("==> sending response");
                 RecordStore recordStore = state.getRecordStore();
                 MapContainer mapContainer = recordStore.getMapContainer();
                 MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                state.getOperation().sendResponse(mapServiceContext.toData(state.oldValue));
+                Operation operation = state.getOperation();
+                Object oldValue = state.getOldValue();
+                Data result = ((GetOperation) operation).extractResult(oldValue);
+                state.setResult(result);
+
+                operation.sendResponse(result);
             };
         }
 
         @Override
         public GetStep getNextStep(State state) {
+            return AFTER_RUN;
+        }
+    },
+
+    AFTER_RUN() {
+        @Override
+        public Runnable createStepWith(State state) {
+            return new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    ThreadUtil.assertRunningOnPartitionThread();
+
+                    ((GetOperation) state.getOperation()).afterRunInternal0(state.getResult());
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return state.getPartitionId();
+                }
+            };
+        }
+
+        @Override
+        public PutStep getNextStep(State state) {
             return null;
         }
     };

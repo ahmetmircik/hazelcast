@@ -51,6 +51,7 @@ public class State {
 
     int partitionId;
     private volatile boolean stopExecution;
+    private Data result;
 
 
     public State(RecordStore recordStore, Operation operation) {
@@ -201,5 +202,13 @@ public class State {
 
     public void setStopExecution(boolean stopExecution) {
         this.stopExecution = stopExecution;
+    }
+
+    public void setResult(Data result) {
+        this.result = result;
+    }
+
+    public Data getResult() {
+        return result;
     }
 }

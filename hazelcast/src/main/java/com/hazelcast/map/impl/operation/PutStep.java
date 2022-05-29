@@ -189,9 +189,35 @@ public enum PutStep implements Step<State> {
 
         @Override
         public PutStep getNextStep(State state) {
+            return AFTER_RUN;
+        }
+    },
+
+    AFTER_RUN() {
+        @Override
+        public Runnable createStepWith(State state) {
+            return new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    ThreadUtil.assertRunningOnPartitionThread();
+
+                    ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
+                            state.getNewValue(), state.getOldValue());
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return state.getPartitionId();
+                }
+            };
+        }
+
+        @Override
+        public PutStep getNextStep(State state) {
             return null;
         }
     };
+
 
     PutStep() {
     }

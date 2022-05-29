@@ -41,14 +41,18 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     @Override
     protected void runInternal() {
         Object currentValue = recordStore.get(dataKey, false, getCallerAddress());
+        result = extractResult(currentValue);
+    }
+
+    public Data extractResult(Object currentValue) {
         if (noCopyReadAllowed(currentValue)) {
             // in case of a 'remote' call (e.g a client call) we prevent making
             // an on-heap copy of the off-heap data
-            result = (Data) currentValue;
+            return (Data) currentValue;
         } else {
             // in case of a local call, we do make a copy, so we can safely share
             // it with e.g. near cache invalidation
-            result = mapService.getMapServiceContext().toData(currentValue);
+            return  mapService.getMapServiceContext().toData(currentValue);
         }
     }
 
@@ -71,6 +75,10 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
 
     @Override
     protected void afterRunInternal() {
+        afterRunInternal0(result);
+    }
+
+    public void afterRunInternal0(Data result) {
         mapServiceContext.interceptAfterGet(mapContainer.getInterceptorRegistry(), result);
         super.afterRunInternal();
     }
