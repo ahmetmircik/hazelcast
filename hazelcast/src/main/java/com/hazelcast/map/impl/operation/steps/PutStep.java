@@ -199,15 +199,16 @@ public enum PutStep implements Step<State> {
                     DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
 
                     System.out.println("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
+
+                    // TODO: read  record efficiently
+                    Record record = recordStore.getRecord(state.getKey());
                     // TODO: fix event type
-                    if (state.getOldValue() == null) {
-                        Record record = recordStore.writeMemory(state.getKey(), state.getOldValue(),
+                    if (record == null) {
+                        recordStore.writeMemory(state.getKey(), state.getOldValue(),
                                 state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
                                 state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
 
                     } else {
-                        // TODO: read  record efficiently
-                        Record record = recordStore.getRecord(state.getKey());
                         recordStore.updateRecord0(record, state.getKey(), state.getOldValue(), state.getNewValue(),
                                 state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
                                 state.getStaticParams().isBackup());
