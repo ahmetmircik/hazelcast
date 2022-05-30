@@ -20,7 +20,7 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsMachine;
+import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
 import com.hazelcast.map.impl.operation.steps.GetStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
@@ -61,18 +61,18 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
         } else {
             // in case of a local call, we do make a copy, so we can safely share
             // it with e.g. near cache invalidation
-            return  mapService.getMapServiceContext().toData(currentValue);
+            return mapService.getMapServiceContext().toData(currentValue);
         }
     }
 
     @Override
-    protected CascadingStepsMachine createCascadingStepsMachine() {
+    protected CascadingStepsRunner createCascadingStepsMachine() {
         State state = new State(recordStore, this);
         state.setKey(dataKey)
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsMachine(getNodeEngine(),
+        return new CascadingStepsRunner(getNodeEngine(), this,
                 newStepSupplier(state, GetStep.INITIAL), getName());
     }
 

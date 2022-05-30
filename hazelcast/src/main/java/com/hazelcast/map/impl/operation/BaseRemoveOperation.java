@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsMachine;
+import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
 import com.hazelcast.map.impl.operation.steps.DeleteStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
@@ -56,7 +56,7 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
     }
 
     @NotNull
-    protected CascadingStepsMachine createCascadingStepsMachine() {
+    protected CascadingStepsRunner createCascadingStepsMachine() {
         State state = new State(recordStore, this);
         state.setKey(dataKey)
                 .setNewValue(dataValue)
@@ -64,7 +64,7 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
                 .setCallerProvenance(getCallerProvenance())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsMachine(getNodeEngine(),
+        return new CascadingStepsRunner(getNodeEngine(),this,
                 newStepSupplier(state, DeleteStep.INITIAL), getName());
     }
 

@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsMachine;
+import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
 import com.hazelcast.map.impl.operation.steps.PutStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.record.Record;
@@ -50,7 +50,7 @@ public abstract class BasePutOperation
     }
 
     @NotNull
-    protected CascadingStepsMachine createCascadingStepsMachine() {
+    protected CascadingStepsRunner createCascadingStepsMachine() {
         State state = new State(recordStore, this);
         state.setStaticPutParams(getStaticParams())
                 .setKey(dataKey)
@@ -61,7 +61,7 @@ public abstract class BasePutOperation
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsMachine(getNodeEngine(),
+        return new CascadingStepsRunner(getNodeEngine(), this,
                 newStepSupplier(state, PutStep.INITIAL), getName());
     }
 

@@ -32,7 +32,7 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsMachine;
+import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -155,7 +155,7 @@ public abstract class MapOperation extends AbstractNamedOperation
                 @Override
                 public void start() throws Exception {
                     String executorName = getName() + "-" + Thread.currentThread().getId()
-                            + "-" + CascadingStepsMachine.class.getName();
+                            + "-" + CascadingStepsRunner.class.getName();
                     ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
                     if (!service.hasExecutorWith(executorName)) {
                         service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
@@ -171,7 +171,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected CascadingStepsMachine createCascadingStepsMachine() {
+    protected CascadingStepsRunner createCascadingStepsMachine() {
         throw new UnsupportedOperationException("Implement to use");
     }
 
