@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation;
+package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.spi.impl.NodeEngine;

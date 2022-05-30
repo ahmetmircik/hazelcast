@@ -25,7 +25,7 @@ public interface Step<State> {
     Step getNextStep(State state);
 
 
-    static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.State state,
+    static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
                                               Step initial) {
         return new Supplier<Runnable>() {
             private volatile Step current = initial;

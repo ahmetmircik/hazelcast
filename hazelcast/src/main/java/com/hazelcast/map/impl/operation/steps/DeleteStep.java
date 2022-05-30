@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation;
+package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.operation.BasePutOperation;
+import com.hazelcast.map.impl.operation.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
-public enum PutStep implements Step<State> {
+public enum DeleteStep implements Step<State> {
 
     INITIAL() {
         @Override
@@ -36,7 +38,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             return READ;
         }
     },
@@ -63,8 +65,8 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
-            return state.getOldValue() == null ? PutStep.LOAD : PutStep.RUN_META_OPS;
+        public DeleteStep getNextStep(State state) {
+            return state.getOldValue() == null ? DeleteStep.LOAD : DeleteStep.RUN_META_OPS;
         }
     },
 
@@ -84,8 +86,8 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
-            return PutStep.RUN_META_OPS;
+        public DeleteStep getNextStep(State state) {
+            return DeleteStep.RUN_META_OPS;
         }
     },
 
@@ -165,9 +167,9 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             // TODO: when isStopExecution what should be next state?
-            return state.isStopExecution() ? PutStep.RESPONSE : STORE;
+            return state.isStopExecution() ? DeleteStep.RESPONSE : STORE;
         }
     },
 
@@ -182,7 +184,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             return WRITE;
         }
     },
@@ -199,7 +201,7 @@ public enum PutStep implements Step<State> {
                     // TODO: fix event type
                     ((DefaultRecordStore) state.getRecordStore()).writeMemory(state.getKey(), state.getOldValue(),
                             state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
-                            state.getNow(), EntryEventType.ADDED, state.staticParams.isBackup(), null);
+                            state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
                 }
 
                 @Override
@@ -210,7 +212,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             return RESPONSE;
         }
     },
@@ -239,7 +241,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -264,12 +266,12 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public DeleteStep getNextStep(State state) {
             return null;
         }
     };
 
 
-    PutStep() {
+    DeleteStep() {
     }
 }
