@@ -28,6 +28,14 @@ public final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
+    public static final StaticParams TRY_PUT_PARAMS = new StaticParams()
+            .setPutVanilla(true)
+            .setLoad(true)
+            .setStore(true)
+            .setCheckIfLoaded(true)
+            .setCountAsAccess(true)
+            .setTryPut(true);
+
     public static final StaticParams PUT_BACKUP_PARAMS = new StaticParams()
             .setPutVanilla(true)
             .setCountAsAccess(true)
@@ -110,6 +118,7 @@ public final class StaticParams {
     private boolean setTtl;
     private boolean checkIfLoaded;
     private boolean countAsAccess;
+    private boolean tryPut;
 
     private StaticParams() {
     }
@@ -174,6 +183,11 @@ public final class StaticParams {
         return this;
     }
 
+    private StaticParams setTryPut(boolean tryPut) {
+        this.tryPut = tryPut;
+        return this;
+    }
+
     public boolean isBackup() {
         return backup;
     }
@@ -220,5 +234,9 @@ public final class StaticParams {
 
     public boolean isCountAsAccess() {
         return countAsAccess;
+    }
+
+    public boolean isTryPut() {
+        return tryPut;
     }
 }

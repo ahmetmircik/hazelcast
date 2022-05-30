@@ -216,9 +216,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     public void removeReplicatedRecord(Data dataKey) {
         Record record = storage.get(dataKey);
         if (record != null) {
-            mutationObserver.onRemoveRecord(dataKey, record);
-            removeKeyFromExpirySystem(dataKey);
-            storage.removeRecord(dataKey, record);
+            removeRecord0(dataKey, record);
         }
     }
 
@@ -562,9 +560,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         if (record == null) {
             return;
         }
-        mutationObserver.onRemoveRecord(key, record);
-        removeKeyFromExpirySystem(key);
-        storage.removeRecord(key, record);
+        removeRecord0(key, record);
         if (persistenceEnabledFor(provenance)) {
             mapDataStore.removeBackup(key, now, transactionId);
         }
@@ -638,9 +634,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             mapDataStore.remove(key, now, null);
             if (record != null) {
                 onStore(record);
-                mutationObserver.onRemoveRecord(key, record);
-                removeKeyFromExpirySystem(key);
-                storage.removeRecord(key, record);
+                removeRecord0(key, record);
                 updateStatsOnRemove(now);
             }
             removed = true;
@@ -1039,9 +1033,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                     mapDataStore.remove(key, now, null);
                 }
                 onStore(record);
-                mutationObserver.onRemoveRecord(key, record);
-                removeKeyFromExpirySystem(key);
-                storage.removeRecord(key, record);
+                removeRecord0(key, record);
                 return true;
             }
 
@@ -1179,10 +1171,14 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             }
             onStore(record);
         }
+        removeRecord0(key, record);
+        return oldValue;
+    }
+
+    public void removeRecord0(Data key, @Nonnull Record record) {
         mutationObserver.onRemoveRecord(key, record);
         removeKeyFromExpirySystem(key);
         storage.removeRecord(key, record);
-        return oldValue;
     }
 
     @Override
@@ -1200,7 +1196,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return null;
     }
 
-    protected void onStore(Record record) {
+    public void onStore(Record record) {
         if (record == null || mapDataStore == EMPTY_MAP_DATA_STORE) {
             return;
         }

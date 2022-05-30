@@ -125,7 +125,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         return getMapContainer().getMapConfig().getEvictionConfig().getEvictionPolicy();
     }
 
-    protected boolean persistenceEnabledFor(@Nonnull CallerProvenance provenance) {
+    public boolean persistenceEnabledFor(@Nonnull CallerProvenance provenance) {
         switch (provenance) {
             case WAN:
                 return mapContainer.isPersistWanReplicatedData();

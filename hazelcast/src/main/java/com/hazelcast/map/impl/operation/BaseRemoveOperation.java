@@ -18,9 +18,15 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.operation.steps.CascadingStepsMachine;
+import com.hazelcast.map.impl.operation.steps.DeleteStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import org.jetbrains.annotations.NotNull;
+
+import static com.hazelcast.map.impl.operation.Step.newStepSupplier;
 
 public abstract class BaseRemoveOperation extends LockAwareOperation
         implements BackupAwareOperation, MutatingOperation {
@@ -36,6 +42,10 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
 
     @Override
     protected void afterRunInternal() {
+        afterRunInternal0(dataKey, dataOldValue);
+    }
+
+    public void afterRunInternal0(Data dataKey, Object dataOldValue) {
         mapServiceContext.interceptAfterRemove(mapContainer.getInterceptorRegistry(), dataOldValue);
         mapEventPublisher.publishEvent(getCallerAddress(), name,
                 EntryEventType.REMOVED, dataKey, dataOldValue, null);
@@ -43,6 +53,19 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         publishWanRemove(dataKey);
         evict(dataKey);
         super.afterRunInternal();
+    }
+
+    @NotNull
+    protected CascadingStepsMachine createCascadingStepsMachine() {
+        State state = new State(recordStore, this);
+        state.setKey(dataKey)
+                .setNewValue(dataValue)
+                .setCallerAddress(getCallerAddress())
+                .setCallerProvenance(getCallerProvenance())
+                .setPartitionId(getPartitionId());
+
+        return new CascadingStepsMachine(getNodeEngine(),
+                newStepSupplier(state, DeleteStep.INITIAL), getName());
     }
 
     @Override

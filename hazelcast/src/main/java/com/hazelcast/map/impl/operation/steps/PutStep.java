@@ -230,7 +230,9 @@ public enum PutStep implements Step<State> {
                 Object oldValue = state.getOldValue();
 
 
-                if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
+                if (staticParams.isTryPut()) {
+                    state.getOperation().sendResponse(true);
+                } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
                     state.getOperation().sendResponse(oldValue != null);
                 } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
                     state.getOperation().sendResponse(mapServiceContext.toData(oldValue));

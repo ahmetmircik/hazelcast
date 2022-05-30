@@ -22,6 +22,7 @@ import com.hazelcast.internal.util.Clock;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.wan.impl.CallerProvenance;
 
 import java.util.UUID;
 
@@ -48,6 +49,7 @@ public class State {
     StaticParams staticParams;
     UUID txnId;
     UUID ownerUuid;
+    CallerProvenance callerProvenance;
 
     int partitionId;
     private volatile boolean stopExecution;
@@ -136,6 +138,11 @@ public class State {
         return this;
     }
 
+    public State setCallerProvenance(CallerProvenance callerProvenance) {
+        this.callerProvenance = callerProvenance;
+        return this;
+    }
+
     public Object getOldValue() {
         return oldValue;
     }
@@ -194,6 +201,10 @@ public class State {
 
     public int getPartitionId() {
         return partitionId;
+    }
+
+    public CallerProvenance getCallerProvenance() {
+        return callerProvenance;
     }
 
     public boolean isStopExecution() {

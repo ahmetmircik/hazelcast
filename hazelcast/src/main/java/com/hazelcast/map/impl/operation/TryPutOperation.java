@@ -40,7 +40,7 @@ public class TryPutOperation extends BasePutOperation implements MutatingOperati
 
     @Override
     protected StaticParams getStaticParams() {
-        return StaticParams.PUT_PARAMS;
+        return StaticParams.TRY_PUT_PARAMS;
     }
 
     @Override
