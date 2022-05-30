@@ -161,9 +161,7 @@ public enum PutStep implements Step<State> {
                 public int getPartitionId() {
                     return state.getPartitionId();
                 }
-            }
-
-                    ;
+            };
         }
 
         @Override
@@ -178,8 +176,9 @@ public enum PutStep implements Step<State> {
         public Runnable createStepWith(State state) {
             return () -> {
                 System.out.println("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
-                ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
+                Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
                         state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
+                state.setNewValue(newValue);
             };
         }
 
@@ -197,11 +196,22 @@ public enum PutStep implements Step<State> {
                 public void run() {
                     ThreadUtil.assertRunningOnPartitionThread();
 
+                    DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+
                     System.out.println("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
                     // TODO: fix event type
-                    ((DefaultRecordStore) state.getRecordStore()).writeMemory(state.getKey(), state.getOldValue(),
-                            state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
-                            state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
+                    if (state.getOldValue() == null) {
+                        Record record = recordStore.writeMemory(state.getKey(), state.getOldValue(),
+                                state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
+                                state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
+
+                    } else {
+                        // TODO: read  record efficiently
+                        Record record = recordStore.getRecord(state.getKey());
+                        recordStore.updateRecord0(record, state.getKey(), state.getOldValue(), state.getNewValue(),
+                                state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
+                                state.getStaticParams().isBackup());
+                    }
                 }
 
                 @Override

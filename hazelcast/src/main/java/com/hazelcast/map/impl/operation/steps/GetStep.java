@@ -26,6 +26,7 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
+// TODO: what happens if partition is migrating and we offload map load.
 public enum GetStep implements Step<State> {
 
     INITIAL() {

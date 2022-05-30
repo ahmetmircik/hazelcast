@@ -55,6 +55,7 @@ public abstract class BasePutOperation
         state.setStaticPutParams(getStaticParams())
                 .setKey(dataKey)
                 .setNewValue(dataValue)
+                .setExpect(getExpect())
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle())
                 .setCallerAddress(getCallerAddress())
@@ -79,6 +80,11 @@ public abstract class BasePutOperation
         invalidateNearCache(dataKey);
         publishWanUpdate(dataKey, value);
         evict(dataKey);
+    }
+
+    // overridden in extension classes
+    protected Data getExpect() {
+        return null;
     }
 
     // overridden in extension classes

@@ -42,6 +42,12 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+        recordStore.checkIfLoaded();
+    }
+
+    @Override
     protected void runInternal() {
         Object currentValue = recordStore.get(dataKey, false, getCallerAddress());
         result = extractResult(currentValue);

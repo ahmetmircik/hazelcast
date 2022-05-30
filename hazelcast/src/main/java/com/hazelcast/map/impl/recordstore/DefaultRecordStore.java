@@ -932,7 +932,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return record;
     }
 
-    public void writeMemory(Data key, Object oldValue, Object newValue, long ttl, long maxIdle,
+    public Record writeMemory(Data key, Object oldValue, Object newValue, long ttl, long maxIdle,
                             long expiryTime, long now, EntryEventType entryEventType,
                             boolean backup, Record r) {
         Record record = r == null ? createRecord(key, newValue, now) : r;
@@ -944,6 +944,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         } else {
             mutationObserver.onPutRecord(key, record, oldValue, backup);
         }
+
+        return record;
     }
 
     @SuppressWarnings("checkstyle:parameternumber")
@@ -962,10 +964,15 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                     ttl, maxIdle, now, transactionId);
         }
 
+        updateRecord0(record, key, oldValue, newValue, ttl, maxIdle, expiryTime, now, backup);
+        return oldValue;
+    }
+
+    public void updateRecord0(Record record, Data key, Object oldValue, Object newValue,
+                               long ttl, long maxIdle, long expiryTime, long now, boolean backup) {
         storage.updateRecordValue(key, record, newValue);
         expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
         mutationObserver.onUpdateRecord(key, record, oldValue, newValue, backup);
-        return oldValue;
     }
 
     private Record getOrLoadRecord(@Nullable Record record, Data key,
