@@ -41,6 +41,14 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
     }
 
     @Override
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+        if (recordStore != null) {
+            recordStore.checkIfLoaded();
+        }
+    }
+
+    @Override
     protected void afterRunInternal() {
         afterRunInternal0(dataKey, dataOldValue);
     }

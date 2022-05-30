@@ -75,7 +75,7 @@ public class CascadingStepsRunner implements Runnable {
                     return;
                 }
 
-                executeAsync(nextStep).join();
+                executeAsync(nextStep).get();
             } while (true);
         } catch (Throwable t) {
             handleOperationError(operation, t);
@@ -108,14 +108,12 @@ public class CascadingStepsRunner implements Runnable {
 
             @Override
             public void run() {
-                Object response = null;
                 try {
                     step.run();
-                } catch (Throwable throwable) {
-                    response = throwable;
-                    throw ExceptionUtil.rethrow(throwable);
-                } finally {
-                    completableFuture.complete(response);
+                    completableFuture.complete(null);
+                } catch (Throwable t) {
+                    completableFuture.completeExceptionally(t);
+                    throw ExceptionUtil.rethrow(t);
                 }
             }
         };

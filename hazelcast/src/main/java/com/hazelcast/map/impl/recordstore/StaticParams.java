@@ -54,7 +54,7 @@ public final class StaticParams {
             .setCountAsAccess(true);
 
     public static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams(SET_PARAMS)
-            .setCountAsAccess(true);
+            .setCountAsAccess(false);
 
     public static final StaticParams SET_TTL_PARAMS = new StaticParams()
             .setPutIfExists(true)

@@ -63,7 +63,7 @@ public class TxnSetOperation extends BasePutOperation
 
     @Override
     protected StaticParams getStaticParams() {
-        return StaticParams.PUT_PARAMS;
+        return StaticParams.SET_PARAMS;
     }
 
     @Override

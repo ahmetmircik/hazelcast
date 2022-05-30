@@ -45,6 +45,14 @@ public abstract class BasePutOperation
     public BasePutOperation() {
     }
 
+    @Override
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+        if (getStaticParams().isCheckIfLoaded() && recordStore != null) {
+            recordStore.checkIfLoaded();
+        }
+    }
+
     protected StaticParams getStaticParams() {
         throw new UnsupportedOperationException();
     }
