@@ -73,7 +73,13 @@ public enum PutStep implements Step<State> {
         public Runnable createStepWith(State state) {
             return () -> {
                 System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                state.setOldValue(((DefaultRecordStore) state.getRecordStore()).loadValueOf(state.getKey()));
+
+                StaticParams staticParams = state.getStaticParams();
+                if (staticParams.isPutVanilla()) {
+                    state.setOldValue(((DefaultRecordStore) state.getRecordStore()).loadValueOf(state.getKey()));
+                } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
+                    state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+                }
             };
         }
 
@@ -100,10 +106,43 @@ public enum PutStep implements Step<State> {
                     MapContainer mapContainer = recordStore.getMapContainer();
                     MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
+                    if (staticParams.isPutIfAbsent()) {
+                        Record record = null;
+                        Object oldValue = state.getOldValue();
+                        if (oldValue != null) {
+                            record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                                    oldValue, false, state.getCallerAddress());
+                        }
+                        if (record != null) {
+                            state.setOldValue(record.getValue());
+                            state.setStopExecution(true);
+                            return;
+                        }
+                    } else if (staticParams.isPutIfExists()) {
+                        Record record = null;
+                        Object oldValue = state.getOldValue();
+                        if (oldValue != null) {
+                            record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                                    oldValue, false, state.getCallerAddress());
+                        }
+
+                        if (record == null) {
+                            state.setOldValue(null);
+                            state.setStopExecution(true);
+                            return;
+                        }
+
+                        newValue = staticParams.isSetTtl() ? record.getValue() : newValue;
+                        state.setNewValue(newValue);
+                        state.setOldValue(record.getValue());
+                    }
+
                     ValueComparator valueComparator = ((DefaultRecordStore) recordStore).getValueComparator();
                     if (staticParams.isPutIfEqual()
                             && !valueComparator.isEqual(state.getExpect(), state.getOldValue(),
-                            mapServiceContext.getNodeEngine().getSerializationService())) {
+                            mapServiceContext.getNodeEngine().
+
+                                    getSerializationService())) {
                         state.setStopExecution(true);
                         return;
                     }
@@ -120,7 +159,9 @@ public enum PutStep implements Step<State> {
                 public int getPartitionId() {
                     return state.getPartitionId();
                 }
-            };
+            }
+
+                    ;
         }
 
         @Override
@@ -183,7 +224,17 @@ public enum PutStep implements Step<State> {
                 MapContainer mapContainer = recordStore.getMapContainer();
                 MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                state.getOperation().sendResponse(mapServiceContext.toData(state.getOldValue()));
+                StaticParams staticParams = state.getStaticParams();
+                Object oldValue = state.getOldValue();
+
+
+                if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
+                    state.getOperation().sendResponse(oldValue != null);
+                } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
+                    state.getOperation().sendResponse(mapServiceContext.toData(oldValue));
+                } else if (staticParams.isPutIfEqual()) {
+                    state.getOperation().sendResponse(oldValue != null);
+                }
             };
         }
 

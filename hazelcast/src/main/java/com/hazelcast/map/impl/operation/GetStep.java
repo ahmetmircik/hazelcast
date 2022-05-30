@@ -18,8 +18,6 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.map.impl.MapContainer;
-import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -78,7 +76,7 @@ public enum GetStep implements Step<State> {
 
         @Override
         public GetStep getNextStep(State state) {
-            return ON_LOAD;
+            return state.getOldValue() == null ? GetStep.RESPONSE : GetStep.ON_LOAD;
         }
     },
 
@@ -93,7 +91,7 @@ public enum GetStep implements Step<State> {
                     RecordStore recordStore = state.getRecordStore();
                     Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                             state.getOldValue(), false, state.getCallerAddress());
-                    state.setOldValue(record.getValue());
+                    state.setOldValue(record == null ? null : record.getValue());
                 }
 
                 @Override
@@ -113,12 +111,7 @@ public enum GetStep implements Step<State> {
         @Override
         public Runnable createStepWith(State state) {
             return () -> {
-
-
                 System.out.println("==> sending response");
-                RecordStore recordStore = state.getRecordStore();
-                MapContainer mapContainer = recordStore.getMapContainer();
-                MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
                 Operation operation = state.getOperation();
                 Object oldValue = state.getOldValue();
