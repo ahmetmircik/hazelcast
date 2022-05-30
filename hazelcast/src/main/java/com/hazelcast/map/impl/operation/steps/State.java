@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -54,6 +55,7 @@ public class State {
     int partitionId;
     private volatile boolean stopExecution;
     private Data result;
+    private Record record;
 
 
     public State(RecordStore recordStore, Operation operation) {
@@ -86,6 +88,11 @@ public class State {
 
     public State setOldValue(Object oldValue) {
         this.oldValue = oldValue;
+        return this;
+    }
+
+    public State setRecord(Record record) {
+        this.record = record;
         return this;
     }
 
@@ -141,6 +148,10 @@ public class State {
     public State setCallerProvenance(CallerProvenance callerProvenance) {
         this.callerProvenance = callerProvenance;
         return this;
+    }
+
+    public Record getRecord() {
+        return record;
     }
 
     public Object getOldValue() {

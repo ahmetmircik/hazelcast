@@ -54,6 +54,7 @@ public enum PutStep implements Step<State> {
                     Record record = recordStore.getRecordOrNull(state.getKey());
                     if (record != null) {
                         state.setOldValue(record.getValue());
+                        state.setRecord(record);
                     }
                 }
 
@@ -109,23 +110,22 @@ public enum PutStep implements Step<State> {
                     MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
                     if (staticParams.isPutIfAbsent()) {
-                        Record record = null;
-                        Object oldValue = state.getOldValue();
-                        if (oldValue != null) {
+                        Record record = state.getRecord();
+                        if (record == null && state.getOldValue() != null) {
                             record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                                    oldValue, false, state.getCallerAddress());
+                                    state.getOldValue(), false, state.getCallerAddress());
                         }
+
                         if (record != null) {
                             state.setOldValue(record.getValue());
                             state.setStopExecution(true);
                             return;
                         }
                     } else if (staticParams.isPutIfExists()) {
-                        Record record = null;
-                        Object oldValue = state.getOldValue();
-                        if (oldValue != null) {
+                        Record record = state.getRecord();
+                        if (record == null && state.getOldValue() != null) {
                             record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                                    oldValue, false, state.getCallerAddress());
+                                    state.getOldValue(), false, state.getCallerAddress());
                         }
 
                         if (record == null) {

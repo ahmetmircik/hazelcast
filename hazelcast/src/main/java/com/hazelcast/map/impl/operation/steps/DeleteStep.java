@@ -148,8 +148,10 @@ public enum DeleteStep implements Step<State> {
                     ThreadUtil.assertRunningOnPartitionThread();
 
                     // TODO: prevent unneeded serialization for oldValue
-                    ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(),
-                            state.getOldValue());
+                    Object oldValue = state.getOldValue();
+                    if(oldValue != null){
+                        ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), oldValue);
+                    }
                 }
 
                 @Override
