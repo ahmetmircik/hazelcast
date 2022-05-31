@@ -35,7 +35,7 @@ public enum DeleteStep implements Step<State> {
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
+        public Step getNextStep(State state) {
             return READ;
         }
     },
@@ -53,6 +53,7 @@ public enum DeleteStep implements Step<State> {
 
                     Record record = recordStore.getRecordOrNull(state.getKey());
                     state.setOldValue(record == null ? null : record.getValue());
+                    state.setRecordNull(record == null);
 
                     if (record != null) {
                         Object oldValue = record.getValue();
@@ -71,10 +72,8 @@ public enum DeleteStep implements Step<State> {
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
-            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-            return recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    && state.getOldValue() != null ? DeleteStep.DELETE : DeleteStep.RESPONSE;
+        public Step getNextStep(State state) {
+            return DeleteStep.DELETE;
         }
     },
 
@@ -84,14 +83,17 @@ public enum DeleteStep implements Step<State> {
             return () -> {
                 System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
 
-                MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
-                mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+                DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+                if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
+                    MapDataStore mapDataStore = recordStore.getMapDataStore();
+                    mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+                }
             };
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
-            return DeleteStep.ON_DELETE;
+        public Step getNextStep(State state) {
+            return state.isNullRecord() ? DeleteStep.RESPONSE : DeleteStep.ON_DELETE;
         }
     },
 
@@ -118,7 +120,7 @@ public enum DeleteStep implements Step<State> {
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
+        public Step getNextStep(State state) {
             return DeleteStep.RESPONSE;
         }
     },
@@ -129,12 +131,12 @@ public enum DeleteStep implements Step<State> {
             return () -> {
                 System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 Object oldValue = state.getOldValue();
-                state.getOperation().sendResponse(oldValue);
+                state.getOperation().sendResponse(oldValue != null);
             };
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
+        public Step getNextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -147,10 +149,13 @@ public enum DeleteStep implements Step<State> {
                 public void run() {
                     ThreadUtil.assertRunningOnPartitionThread();
 
+
                     // TODO: prevent unneeded serialization for oldValue
-                    Object oldValue = state.getOldValue();
-                    if(oldValue != null){
-                        ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), oldValue);
+                    if (!state.isNullRecord()) {
+                        System.out.println("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                        ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
+                    } else {
+                        System.out.println("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
                     }
                 }
 
@@ -162,7 +167,7 @@ public enum DeleteStep implements Step<State> {
         }
 
         @Override
-        public DeleteStep getNextStep(State state) {
+        public Step getNextStep(State state) {
             return null;
         }
     };

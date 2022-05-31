@@ -117,7 +117,7 @@ public abstract class MapOperation extends AbstractNamedOperation
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
                 && (this instanceof BasePutOperation
                     || this instanceof GetOperation
-                    || this instanceof DeleteOperation);
+                    || this instanceof BaseRemoveOperation);
 
         assertNativeMapOnPartitionThread();
 
@@ -153,7 +153,7 @@ public abstract class MapOperation extends AbstractNamedOperation
             // TODO: afterRunInternal
             return new Offload(this) {
                 @Override
-                public void start() throws Exception {
+                public void start() {
                     String executorName = getName() + "-" + Thread.currentThread().getId()
                             + "-" + CascadingStepsRunner.class.getName();
                     ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());

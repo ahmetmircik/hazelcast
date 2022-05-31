@@ -54,7 +54,6 @@ public enum PutStep implements Step<State> {
                     Record record = recordStore.getRecordOrNull(state.getKey());
                     if (record != null) {
                         state.setOldValue(record.getValue());
-                        state.setRecord(record);
                     }
                 }
 
@@ -110,7 +109,7 @@ public enum PutStep implements Step<State> {
                     MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
                     if (staticParams.isPutIfAbsent()) {
-                        Record record = state.getRecord();
+                        Record record = recordStore.getRecord(state.getKey());
                         if (record == null && state.getOldValue() != null) {
                             record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                                     state.getOldValue(), false, state.getCallerAddress());
@@ -122,7 +121,7 @@ public enum PutStep implements Step<State> {
                             return;
                         }
                     } else if (staticParams.isPutIfExists()) {
-                        Record record = state.getRecord();
+                        Record record = recordStore.getRecord(state.getKey());
                         if (record == null && state.getOldValue() != null) {
                             record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                                     state.getOldValue(), false, state.getCallerAddress());

@@ -139,7 +139,7 @@ public enum GetStep implements Step<State> {
                 public void run() {
                     ThreadUtil.assertRunningOnPartitionThread();
 
-                    ((GetOperation) state.getOperation()).afterRunInternal0(state.getResult());
+                    ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getResult());
                 }
 
                 @Override

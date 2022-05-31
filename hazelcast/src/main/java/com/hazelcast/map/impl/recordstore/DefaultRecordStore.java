@@ -613,7 +613,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     @Override
-    public boolean remove(Data key, Object testValue) {
+    public boolean remove(Data key, Object expect) {
         checkIfLoaded();
         long now = getNow();
 
@@ -629,7 +629,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             oldValue = record.getValue();
         }
 
-        if (valueComparator.isEqual(testValue, oldValue, serializationService)) {
+        if (valueComparator.isEqual(expect, oldValue, serializationService)) {
             mapServiceContext.interceptRemove(interceptorRegistry, oldValue);
             mapDataStore.remove(key, now, null);
             if (record != null) {

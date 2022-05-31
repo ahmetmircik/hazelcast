@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
-import com.hazelcast.map.impl.operation.steps.DeleteStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
@@ -68,13 +67,21 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         State state = new State(recordStore, this);
         state.setKey(dataKey)
                 .setNewValue(dataValue)
+                .setExpect(getExpect())
                 .setCallerAddress(getCallerAddress())
                 .setCallerProvenance(getCallerProvenance())
                 .setPartitionId(getPartitionId());
 
         return new CascadingStepsRunner(getNodeEngine(),this,
-                newStepSupplier(state, DeleteStep.INITIAL), getName());
+                newStepSupplier(state, getOffloadStartingStep()), getName());
     }
+
+    protected Object getExpect() {
+        return null;
+    }
+
+    @NotNull
+    abstract protected Step getOffloadStartingStep();
 
     @Override
     public Object getResponse() {

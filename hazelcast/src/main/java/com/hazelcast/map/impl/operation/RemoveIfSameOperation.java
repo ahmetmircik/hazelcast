@@ -17,16 +17,17 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.nio.IOUtil;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.RemoveIfSameStep;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.internal.serialization.Data;
 
 import java.io.IOException;
 
 public class RemoveIfSameOperation extends BaseRemoveOperation {
 
-    private Data testValue;
+    private Data expect;
     private boolean successful;
 
     public RemoveIfSameOperation() {
@@ -34,20 +35,30 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
 
     public RemoveIfSameOperation(String name, Data dataKey, Data value) {
         super(name, dataKey);
-        testValue = value;
+        expect = value;
     }
 
     @Override
     protected void runInternal() {
-        successful = recordStore.remove(dataKey, testValue);
+        successful = recordStore.remove(dataKey, expect);
     }
 
     @Override
     protected void afterRunInternal() {
         if (successful) {
-            dataOldValue = testValue;
+            dataOldValue = expect;
             super.afterRunInternal();
         }
+    }
+
+    @Override
+    protected Step getOffloadStartingStep() {
+        return RemoveIfSameStep.INITIAL;
+    }
+
+    @Override
+    public Data getExpect() {
+        return expect;
     }
 
     @Override
@@ -68,13 +79,13 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
-        IOUtil.writeData(out, testValue);
+        IOUtil.writeData(out, expect);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
-        testValue = IOUtil.readData(in);
+        expect = IOUtil.readData(in);
     }
 
     @Override
