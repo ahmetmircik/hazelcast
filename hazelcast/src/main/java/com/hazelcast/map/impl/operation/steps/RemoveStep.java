@@ -177,7 +177,7 @@ public enum RemoveStep implements Step<State> {
                 Object oldValue = state.getOldValue();
                 Operation operation = state.getOperation();
                 state.getOperation().sendResponse(operation instanceof TryRemoveOperation
-                        ? oldValue != null :  mapServiceContext.toData(oldValue));
+                        ? oldValue != null : mapServiceContext.toData(oldValue));
             };
         }
 

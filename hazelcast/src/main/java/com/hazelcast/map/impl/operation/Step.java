@@ -33,9 +33,15 @@ public interface Step<State> {
             @Override
             public Runnable get() {
                 Step nextStep = current.getNextStep(state);
+
                 if (nextStep == null) {
                     return null;
                 }
+
+                assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
+                        : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
+                        nextStep.getClass().getSuperclass());
+
                 current = nextStep;
                 return nextStep.createStepWith(state);
             }
