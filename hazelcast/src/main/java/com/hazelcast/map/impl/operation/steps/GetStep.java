@@ -35,7 +35,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep nextStep(State state) {
+        public Step nextStep(State state) {
             return READ;
         }
     },
@@ -62,7 +62,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null ? GetStep.LOAD : GetStep.RESPONSE;
         }
     },
@@ -77,7 +77,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null ? GetStep.RESPONSE : GetStep.ON_LOAD;
         }
     },
@@ -104,7 +104,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep nextStep(State state) {
+        public Step nextStep(State state) {
             return GetStep.RESPONSE;
         }
     },
@@ -125,7 +125,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep nextStep(State state) {
+        public Step nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -149,7 +149,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };

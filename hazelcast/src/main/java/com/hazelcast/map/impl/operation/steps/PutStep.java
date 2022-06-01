@@ -37,7 +37,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return READ;
         }
     },
@@ -64,7 +64,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null ? PutStep.LOAD : PutStep.RUN_META_OPS;
         }
     },
@@ -85,7 +85,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return PutStep.RUN_META_OPS;
         }
     },
@@ -163,7 +163,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             return state.isStopExecution() ? PutStep.RESPONSE : STORE;
         }
@@ -181,7 +181,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return WRITE;
         }
     },
@@ -221,7 +221,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -252,7 +252,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -277,7 +277,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };

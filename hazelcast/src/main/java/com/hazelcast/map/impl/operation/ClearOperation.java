@@ -18,12 +18,16 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.ClearStep;
+import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
+import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
-import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
+import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 
 public class ClearOperation extends MapOperation
         implements BackupAwareOperation, PartitionAwareOperation, MutatingOperation {
@@ -51,13 +55,24 @@ public class ClearOperation extends MapOperation
     }
 
     @Override
+    protected StepRunner newStepRunner() {
+        State state = new State(recordStore, this);
+        return new StepRunner(getNodeEngine(), this,
+                newStepSupplier(state, ClearStep.INITIAL), getName());
+    }
+
+    @Override
     protected void afterRunInternal() {
-        invalidateAllKeysInNearCaches();
-        hintMapEvent();
+        afterRunInternal0(numberOfClearedEntries);
         super.afterRunInternal();
     }
 
-    private void hintMapEvent() {
+    public void afterRunInternal0(int numberOfClearedEntries) {
+        invalidateAllKeysInNearCaches();
+        hintMapEvent(numberOfClearedEntries);
+    }
+
+    private void hintMapEvent(int numberOfClearedEntries) {
         mapEventPublisher.hintMapEvent(getCallerAddress(), name, EntryEventType.CLEAR_ALL,
                 numberOfClearedEntries, getPartitionId());
     }

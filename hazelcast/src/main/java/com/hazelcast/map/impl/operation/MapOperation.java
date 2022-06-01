@@ -114,6 +114,7 @@ public abstract class MapOperation extends AbstractNamedOperation
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
                 && (this instanceof BasePutOperation
                 || this instanceof GetOperation
+                || this instanceof ClearOperation
                 || this instanceof BaseRemoveOperation);
 
         assertNativeMapOnPartitionThread();
@@ -147,6 +148,8 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         if (offloadEnabled) {
+            assert recordStore != null;
+
             return new StepOffload(this, getName(), newStepRunner());
         }
 

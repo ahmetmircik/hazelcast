@@ -358,6 +358,30 @@ public class MapStoreTest extends AbstractMapStoreTest {
         assertEquals(0, localMapStats.getDirtyEntryCount());
     }
 
+    @Test
+    public void clear() {
+        final ConcurrentMap<Long, String> STORE = new ConcurrentHashMap<>();
+        STORE.put(1L, "Event1");
+        STORE.put(2L, "Event2");
+        STORE.put(3L, "Event3");
+        STORE.put(4L, "Event4");
+        STORE.put(5L, "Event5");
+        STORE.put(6L, "Event6");
+
+        Config config = getConfig();
+        config.getMapConfig("map")
+                .setMapStoreConfig(new MapStoreConfig()
+                        .setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER)
+                        .setImplementation(new SimpleMapStore<>(STORE)));
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(3);
+
+        HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
+        IMap map = instance.getMap("map");
+        map.clear();
+
+        assertEquals(0, map.size());
+    }
+
     @Test(timeout = 120000)
     public void testIssue583MapReplaceShouldTriggerMapStore() {
         final ConcurrentMap<String, Long> store = new ConcurrentHashMap<>();

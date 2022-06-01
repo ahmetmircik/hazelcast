@@ -19,11 +19,13 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.wan.impl.CallerProvenance;
 
+import java.util.ArrayList;
 import java.util.UUID;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -55,6 +57,8 @@ public class State {
     private volatile boolean stopExecution;
     private Object result;
     private volatile boolean nullRecord;
+    private ArrayList<Data> keys;
+    private ArrayList<Record> records;
 
 
     public State(RecordStore recordStore, Operation operation) {
@@ -231,5 +235,21 @@ public class State {
 
     public Object getResult() {
         return result;
+    }
+
+    public void setKeys(ArrayList<Data> keys) {
+        this.keys = keys;
+    }
+
+    public ArrayList<Data> getKeys() {
+        return keys;
+    }
+
+    public void setRecords(ArrayList<Record> records) {
+        this.records = records;
+    }
+
+    public ArrayList<Record> getRecords() {
+        return records;
     }
 }

@@ -494,7 +494,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return definedExpirationTime - System.currentTimeMillis();
     }
 
-    protected int removeBulk(ArrayList<Data> dataKeys, ArrayList<Record> records) {
+    public int removeBulk(ArrayList<Data> dataKeys, ArrayList<Record> records) {
         return removeOrEvictEntries(dataKeys, records, false);
     }
 
