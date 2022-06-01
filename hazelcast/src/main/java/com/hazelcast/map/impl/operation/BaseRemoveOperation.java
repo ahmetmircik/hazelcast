@@ -20,12 +20,13 @@ import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
 import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.Step;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import org.jetbrains.annotations.NotNull;
 
-import static com.hazelcast.map.impl.operation.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 
 public abstract class BaseRemoveOperation extends LockAwareOperation
         implements BackupAwareOperation, MutatingOperation {

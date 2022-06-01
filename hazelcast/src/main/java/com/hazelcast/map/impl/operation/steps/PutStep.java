@@ -22,7 +22,6 @@ import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -33,19 +32,19 @@ public enum PutStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return READ;
         }
     },
 
     READ() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -65,14 +64,14 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return state.getOldValue() == null ? PutStep.LOAD : PutStep.RUN_META_OPS;
         }
     },
 
     LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
@@ -86,14 +85,14 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return PutStep.RUN_META_OPS;
         }
     },
 
     RUN_META_OPS() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -164,7 +163,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             return state.isStopExecution() ? PutStep.RESPONSE : STORE;
         }
@@ -172,7 +171,7 @@ public enum PutStep implements Step<State> {
 
     STORE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
                 Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
@@ -182,14 +181,14 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return WRITE;
         }
     },
 
     WRITE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -222,14 +221,14 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 RecordStore recordStore = state.getRecordStore();
@@ -253,14 +252,14 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
 
     AFTER_RUN() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -278,7 +277,7 @@ public enum PutStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return null;
         }
     };

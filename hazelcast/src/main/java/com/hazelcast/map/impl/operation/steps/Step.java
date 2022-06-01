@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation;
+package com.hazelcast.map.impl.operation.steps;
 
 import java.util.function.Supplier;
 
 public interface Step<State> {
 
-    Runnable createStepWith(State state);
+    Runnable createStep(State state);
 
-    Step getNextStep(State state);
+    Step nextStep(State state);
 
 
     static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
@@ -32,18 +32,21 @@ public interface Step<State> {
 
             @Override
             public Runnable get() {
-                Step nextStep = current.getNextStep(state);
-
+                Step nextStep = current.nextStep(state);
                 if (nextStep == null) {
                     return null;
                 }
 
+                assertStepTypeSameWithInitial(nextStep);
+
+                current = nextStep;
+                return nextStep.createStep(state);
+            }
+
+            private void assertStepTypeSameWithInitial(Step nextStep) {
                 assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
                         : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
                         nextStep.getClass().getSuperclass());
-
-                current = nextStep;
-                return nextStep.createStepWith(state);
             }
         };
     }

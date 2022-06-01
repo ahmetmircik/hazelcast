@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.GetOperation;
-import com.hazelcast.map.impl.operation.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -31,19 +30,19 @@ public enum GetStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public GetStep getNextStep(State state) {
+        public GetStep nextStep(State state) {
             return READ;
         }
     },
 
     READ() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -63,14 +62,14 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep getNextStep(State state) {
+        public GetStep nextStep(State state) {
             return state.getOldValue() == null ? GetStep.LOAD : GetStep.RESPONSE;
         }
     },
 
     LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> loading old value");
                 state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
@@ -78,7 +77,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep getNextStep(State state) {
+        public GetStep nextStep(State state) {
             return state.getOldValue() == null ? GetStep.RESPONSE : GetStep.ON_LOAD;
         }
     },
@@ -86,7 +85,7 @@ public enum GetStep implements Step<State> {
 
     ON_LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -105,14 +104,14 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep getNextStep(State state) {
+        public GetStep nextStep(State state) {
             return GetStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> sending response");
 
@@ -126,14 +125,14 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public GetStep getNextStep(State state) {
+        public GetStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
 
     AFTER_RUN() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -150,7 +149,7 @@ public enum GetStep implements Step<State> {
         }
 
         @Override
-        public PutStep getNextStep(State state) {
+        public PutStep nextStep(State state) {
             return null;
         }
     };

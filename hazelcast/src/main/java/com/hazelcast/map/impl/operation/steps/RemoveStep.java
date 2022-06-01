@@ -21,7 +21,6 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.Step;
 import com.hazelcast.map.impl.operation.TryRemoveOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -32,19 +31,19 @@ public enum RemoveStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return READ;
         }
     },
 
     READ() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -71,7 +70,7 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             return state.isNullRecord() ? RemoveStep.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
@@ -81,7 +80,7 @@ public enum RemoveStep implements Step<State> {
 
     LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> loading old value");
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
@@ -94,14 +93,14 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return state.getOldValue() == null ? RemoveStep.RESPONSE : RemoveStep.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -118,14 +117,14 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return RemoveStep.RESPONSE;
         }
     },
 
     DELETE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
                 MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
@@ -134,14 +133,14 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return RemoveStep.ON_DELETE;
         }
     },
 
     ON_DELETE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -162,14 +161,14 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return RemoveStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
@@ -182,14 +181,14 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
 
     AFTER_RUN() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -210,7 +209,7 @@ public enum RemoveStep implements Step<State> {
         }
 
         @Override
-        public RemoveStep getNextStep(State state) {
+        public RemoveStep nextStep(State state) {
             return null;
         }
     };

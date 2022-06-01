@@ -28,7 +28,7 @@ import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import org.jetbrains.annotations.NotNull;
 
-import static com.hazelcast.map.impl.operation.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public abstract class BasePutOperation

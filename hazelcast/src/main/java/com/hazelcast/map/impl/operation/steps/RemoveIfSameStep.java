@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -33,19 +32,19 @@ public enum RemoveIfSameStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return READ;
         }
     },
 
     READ() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -72,14 +71,14 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return state.isNullRecord() ? RemoveIfSameStep.LOAD : RemoveIfSameStep.ON_LOAD;
         }
     },
 
     LOAD() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> loading old value");
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
@@ -94,7 +93,7 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return state.getOldValue() == null ? RemoveIfSameStep.RESPONSE : RemoveIfSameStep.ON_LOAD;
         }
     },
@@ -103,7 +102,7 @@ public enum RemoveIfSameStep implements Step<State> {
         private boolean goToDelete = false;
 
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -134,14 +133,14 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return goToDelete ? RemoveIfSameStep.DELETE : RemoveIfSameStep.RESPONSE;
         }
     },
 
     DELETE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
                 MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
@@ -150,14 +149,14 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return RemoveIfSameStep.ON_DELETE;
         }
     },
 
     ON_DELETE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -184,14 +183,14 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return RemoveIfSameStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return () -> {
                 System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 Object result = state.getResult();
@@ -200,14 +199,14 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
 
     AFTER_RUN() {
         @Override
-        public Runnable createStepWith(State state) {
+        public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
@@ -227,7 +226,7 @@ public enum RemoveIfSameStep implements Step<State> {
         }
 
         @Override
-        public RemoveIfSameStep getNextStep(State state) {
+        public RemoveIfSameStep nextStep(State state) {
             return null;
         }
     };

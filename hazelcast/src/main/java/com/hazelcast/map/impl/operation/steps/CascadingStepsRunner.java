@@ -37,7 +37,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public class CascadingStepsRunner implements Runnable {
+public final class CascadingStepsRunner implements Runnable {
 
     private final Node node;
     private final ILogger logger;
