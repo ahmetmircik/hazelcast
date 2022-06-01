@@ -20,7 +20,6 @@ import com.hazelcast.internal.nearcache.impl.invalidation.Invalidator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespaceAware;
-import com.hazelcast.internal.util.executor.ExecutorType;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
@@ -32,25 +31,23 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
+import com.hazelcast.map.impl.operation.steps.StepOffload;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.map.impl.wan.WanMapEntryView;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
-import com.hazelcast.spi.impl.executionservice.impl.ExecutionServiceImpl;
 import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
-import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
 import java.util.List;
-import java.util.concurrent.Executor;
 import java.util.logging.Level;
 
 import static com.hazelcast.config.InMemoryFormat.NATIVE;
@@ -116,8 +113,8 @@ public abstract class MapOperation extends AbstractNamedOperation
         offloadEnabled = hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
                 && (this instanceof BasePutOperation
-                    || this instanceof GetOperation
-                    || this instanceof BaseRemoveOperation);
+                || this instanceof GetOperation
+                || this instanceof BaseRemoveOperation);
 
         assertNativeMapOnPartitionThread();
 
@@ -150,28 +147,14 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         if (offloadEnabled) {
-            // TODO: afterRunInternal
-            return new Offload(this) {
-                @Override
-                public void start() {
-                    String executorName = getName() + "-" + Thread.currentThread().getId()
-                            + "-" + CascadingStepsRunner.class.getName();
-                    ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
-                    if (!service.hasExecutorWith(executorName)) {
-                        service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
-                    }
-                    Executor executor = service.getExecutor(executorName);
-
-                    executor.execute(createCascadingStepsMachine());
-                }
-            };
+            return new StepOffload(this, getName(), newStepRunner());
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected CascadingStepsRunner createCascadingStepsMachine() {
+    protected StepRunner newStepRunner() {
         throw new UnsupportedOperationException("Implement to use");
     }
 

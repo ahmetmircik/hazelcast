@@ -20,7 +20,7 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.CascadingStepsRunner;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.map.impl.operation.steps.GetStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
@@ -66,13 +66,13 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    protected CascadingStepsRunner createCascadingStepsMachine() {
+    protected StepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setKey(dataKey)
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new CascadingStepsRunner(getNodeEngine(), this,
+        return new StepRunner(getNodeEngine(), this,
                 newStepSupplier(state, GetStep.INITIAL), getName());
     }
 

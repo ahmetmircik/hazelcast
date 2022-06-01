@@ -219,7 +219,7 @@ public final class ExecutionServiceImpl implements ExecutionService {
         return ConcurrencyUtil.getOrPutIfAbsent(executors, name, constructor);
     }
 
-    public boolean hasExecutorWith(String name) {
+    public boolean hasExecutorWithName(String name) {
         return executors.get(name) != null;
     }
 

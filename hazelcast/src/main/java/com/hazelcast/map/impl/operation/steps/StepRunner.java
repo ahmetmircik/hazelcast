@@ -37,7 +37,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public final class CascadingStepsRunner implements Runnable {
+public final class StepRunner implements Runnable {
 
     private final Node node;
     private final ILogger logger;
@@ -46,9 +46,9 @@ public final class CascadingStepsRunner implements Runnable {
     private final OperationExecutor operationExecutor;
     private final Operation operation;
 
-    public CascadingStepsRunner(NodeEngine nodeEngine, Operation operation,
-                                Supplier<Runnable> stepSupplier,
-                                String mapName) {
+    public StepRunner(NodeEngine nodeEngine, Operation operation,
+                      Supplier<Runnable> stepSupplier,
+                      String mapName) {
         this.operation = operation;
 
         ThreadUtil.assertRunningOnPartitionThread();
