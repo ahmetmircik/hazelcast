@@ -19,10 +19,12 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.EntryProcessor;
+import com.hazelcast.map.impl.operation.EntryOperator;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import java.util.ArrayList;
@@ -36,7 +38,7 @@ public class State {
     protected volatile Object newValue;
 
     private final RecordStore recordStore;
-    private final Operation operation;
+    private final MapOperation operation;
 
     // params
     boolean putTransient;
@@ -59,9 +61,11 @@ public class State {
     private volatile boolean nullRecord;
     private ArrayList<Data> keys;
     private ArrayList<Record> records;
+    private EntryProcessor entryProcessor;
+    private EntryOperator operator;
 
 
-    public State(RecordStore recordStore, Operation operation) {
+    public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
         this.operation = operation;
     }
@@ -70,7 +74,7 @@ public class State {
         return recordStore;
     }
 
-    public Operation getOperation() {
+    public MapOperation getOperation() {
         return operation;
     }
 
@@ -151,6 +155,15 @@ public class State {
     public State setCallerProvenance(CallerProvenance callerProvenance) {
         this.callerProvenance = callerProvenance;
         return this;
+    }
+
+    public State setEntryProcessor(EntryProcessor entryProcessor) {
+        this.entryProcessor = entryProcessor;
+        return this;
+    }
+
+    public EntryProcessor getEntryProcessor() {
+        return entryProcessor;
     }
 
     public boolean isNullRecord() {
@@ -251,5 +264,13 @@ public class State {
 
     public ArrayList<Record> getRecords() {
         return records;
+    }
+
+    public void setEntryOperator(EntryOperator operator) {
+        this.operator = operator;
+    }
+
+    public EntryOperator getOperator() {
+        return operator;
     }
 }

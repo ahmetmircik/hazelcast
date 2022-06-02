@@ -24,6 +24,10 @@ public interface Step<State> {
 
     Step nextStep(State state);
 
+    default void runStepDirect(State state) {
+        return;
+    }
+
 
     static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
                                               Step initial) {

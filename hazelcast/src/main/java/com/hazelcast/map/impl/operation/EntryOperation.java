@@ -30,6 +30,10 @@ import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.ExecutorStats;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.EPStep;
+import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.StepOffload;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
@@ -44,6 +48,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.OperationAccessor;
 import com.hazelcast.spi.impl.operationservice.OperationResponseHandler;
 import com.hazelcast.spi.impl.operationservice.impl.responses.CallTimeoutResponse;
+import com.hazelcast.wan.impl.CallerProvenance;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
@@ -54,6 +59,7 @@ import static com.hazelcast.core.Offloadable.NO_OFFLOADING;
 import static com.hazelcast.internal.util.ExceptionUtil.sneakyThrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
+import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.OFFLOADABLE_EXECUTOR;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
@@ -139,8 +145,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * GOTCHA: This operation LOADS missing keys from map-store, in contrast with PartitionWideEntryOperation.
  */
 @SuppressWarnings("checkstyle:methodcount")
-public class
-EntryOperation extends LockAwareOperation
+public class EntryOperation extends LockAwareOperation
         implements BackupAwareOperation, BlockingOperation, MutatingOperation {
 
     private static final int SET_UNLOCK_FAST_RETRY_LIMIT = 10;
@@ -177,6 +182,7 @@ EntryOperation extends LockAwareOperation
         entryProcessor = (EntryProcessor) managedContext.initialize(entryProcessor);
     }
 
+    // TODO: EP no forced eviction for EP?
     @Override
     public CallStatus call() {
         if (shouldWait()) {
@@ -189,12 +195,30 @@ EntryOperation extends LockAwareOperation
         if (offload) {
             return new EntryOperationOffload(getCallerAddress());
         } else {
+            if (mapStoreOffloadEnabled) {
+                assert recordStore != null;
+
+                return new StepOffload(this, getName(), newStepRunner());
+            }
             response = operator(this, entryProcessor)
                     .operateOnKey(dataKey)
                     .doPostOperateOps()
                     .getResult();
             return RESPONSE;
         }
+    }
+
+    @Override
+    protected StepRunner newStepRunner() {
+        State state = new State(recordStore, this);
+        state.setKey(dataKey)
+                .setCallerProvenance(CallerProvenance.NOT_WAN)
+                .setEntryProcessor(entryProcessor)
+                .setCallerAddress(getCallerAddress())
+                .setPartitionId(getPartitionId());
+
+        return new StepRunner(getNodeEngine(), this,
+                newStepSupplier(state, EPStep.INITIAL), getName());
     }
 
     @Override

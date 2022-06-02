@@ -173,44 +173,31 @@ public enum PutStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
-                Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
-                        state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
-                state.setNewValue(newValue);
+               runStepDirect(state);
             };
         }
 
         @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
+            Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
+                    state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
+            state.setNewValue(newValue);
+        }
+
+        @Override
         public Step nextStep(State state) {
-            return WRITE;
+            return ON_STORE;
         }
     },
 
-    WRITE() {
+    ON_STORE() {
         @Override
         public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
-
-                    DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-
-                    System.out.println("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
-
-                    // TODO: read  record efficiently
-                    Record record = recordStore.getRecord(state.getKey());
-                    // TODO: fix event type
-                    if (record == null) {
-                        recordStore.writeMemory(state.getKey(), state.getOldValue(),
-                                state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
-                                state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
-
-                    } else {
-                        recordStore.updateRecord0(record, state.getKey(), state.getOldValue(), state.getNewValue(),
-                                state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
-                                state.getStaticParams().isBackup());
-                    }
+                   runStepDirect(state);
                 }
 
                 @Override
@@ -218,6 +205,29 @@ public enum PutStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
+
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+
+            System.out.println("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
+
+            // TODO: read  record efficiently
+            Record record = recordStore.getRecord(state.getKey());
+            // TODO: fix event type
+            if (record == null) {
+                recordStore.putMemory(state.getKey(), state.getOldValue(),
+                        state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
+                        state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
+
+            } else {
+                recordStore.updateMemory(record, state.getKey(), state.getOldValue(), state.getNewValue(),
+                        state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
+                        state.getStaticParams().isBackup());
+            }
         }
 
         @Override

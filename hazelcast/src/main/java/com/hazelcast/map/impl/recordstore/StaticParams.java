@@ -28,7 +28,8 @@ public final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    public static final StaticParams TRY_PUT_PARAMS = new StaticParams(PUT_PARAMS)
+    public static final StaticParams TRY_PUT_PARAMS = new StaticParams()
+            .importFrom(PUT_PARAMS)
             .setTryPut(true);
 
     public static final StaticParams PUT_BACKUP_PARAMS = new StaticParams()
@@ -36,7 +37,8 @@ public final class StaticParams {
             .setCountAsAccess(true)
             .setBackup(true);
 
-    public static final StaticParams PUT_IF_ABSENT_PARAMS = new StaticParams(PUT_PARAMS)
+    public static final StaticParams PUT_IF_ABSENT_PARAMS = new StaticParams()
+            .importFrom(PUT_PARAMS)
             .setPutVanilla(false)
             .setPutIfAbsent(true);
 
@@ -44,7 +46,8 @@ public final class StaticParams {
             .setPutVanilla(true)
             .setPutFromLoad(true);
 
-    public static final StaticParams PUT_FROM_LOAD_BACKUP_PARAMS = new StaticParams(PUT_FROM_LOAD_PARAMS)
+    public static final StaticParams PUT_FROM_LOAD_BACKUP_PARAMS = new StaticParams()
+            .importFrom(PUT_FROM_LOAD_PARAMS)
             .setBackup(true);
 
     public static final StaticParams SET_PARAMS = new StaticParams()
@@ -53,7 +56,8 @@ public final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    public static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams(SET_PARAMS)
+    public static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams()
+            .importFrom(SET_PARAMS)
             .setCountAsAccess(false);
 
     public static final StaticParams SET_TTL_PARAMS = new StaticParams()
@@ -64,7 +68,8 @@ public final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    public static final StaticParams SET_TTL_BACKUP_PARAMS = new StaticParams(SET_TTL_PARAMS)
+    public static final StaticParams SET_TTL_BACKUP_PARAMS = new StaticParams()
+            .importFrom(SET_TTL_PARAMS)
             .setBackup(true);
 
     public static final StaticParams PUT_TRANSIENT_PARAMS = new StaticParams()
@@ -80,7 +85,8 @@ public final class StaticParams {
             .setCheckIfLoaded(true)
             .setCountAsAccess(true);
 
-    public static final StaticParams REPLACE_IF_SAME_PARAMS = new StaticParams(REPLACE_PARAMS)
+    public static final StaticParams REPLACE_IF_SAME_PARAMS = new StaticParams()
+            .importFrom(REPLACE_PARAMS)
             .setPutIfEqual(true);
 
     private boolean backup;
@@ -100,20 +106,20 @@ public final class StaticParams {
     private StaticParams() {
     }
 
-    private StaticParams(StaticParams staticParams) {
-        setBackup(staticParams.isBackup())
-                .setLoad(staticParams.isLoad())
-                .setStore(staticParams.isStore())
-                .setPutVanilla(staticParams.isPutVanilla())
-                .setPutIfAbsent(staticParams.isPutIfAbsent())
-                .setPutIfExists(staticParams.isPutIfExists())
-                .setPutIfEqual(staticParams.isPutIfEqual())
-                .setPutFromLoad(staticParams.isPutFromLoad())
-                .setTransient(staticParams.isTransient())
-                .setSetTtl(staticParams.isSetTtl())
-                .setCheckIfLoaded(staticParams.isCheckIfLoaded())
-                .setCountAsAccess(staticParams.isCountAsAccess())
-                .setTryPut(staticParams.isTryPut());
+    private StaticParams importFrom(StaticParams importingFrom){
+        return setBackup(importingFrom.isBackup())
+                .setLoad(importingFrom.isLoad())
+                .setStore(importingFrom.isStore())
+                .setPutVanilla(importingFrom.isPutVanilla())
+                .setPutIfAbsent(importingFrom.isPutIfAbsent())
+                .setPutIfExists(importingFrom.isPutIfExists())
+                .setPutIfEqual(importingFrom.isPutIfEqual())
+                .setPutFromLoad(importingFrom.isPutFromLoad())
+                .setTransient(importingFrom.isTransient())
+                .setSetTtl(importingFrom.isSetTtl())
+                .setCheckIfLoaded(importingFrom.isCheckIfLoaded())
+                .setCountAsAccess(importingFrom.isCountAsAccess())
+                .setTryPut(importingFrom.isTryPut());
     }
 
     public StaticParams setBackup(boolean backup) {

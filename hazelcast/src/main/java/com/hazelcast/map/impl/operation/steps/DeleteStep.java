@@ -45,22 +45,7 @@ public enum DeleteStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-
-                    Record record = recordStore.getRecordOrNull(state.getKey());
-                    state.setOldValue(record == null ? null : record.getValue());
-                    state.setRecordNull(record == null);
-
-                    if (record != null) {
-                        Object oldValue = record.getValue();
-                        oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                        if (oldValue != null) {
-                            state.setOldValue(oldValue);
-                        }
-                    }
+                    runStepDirect(state);
                 }
 
                 @Override
@@ -68,6 +53,27 @@ public enum DeleteStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+
+            Record record = recordStore.getRecordOrNull(state.getKey());
+            state.setOldValue(record == null ? null : record.getValue());
+            state.setRecordNull(record == null);
+
+            if (record != null) {
+                Object oldValue = record.getValue();
+                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+                if (oldValue != null) {
+                    state.setOldValue(oldValue);
+                }
+            }
         }
 
         @Override
@@ -80,14 +86,19 @@ public enum DeleteStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
-
-                DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
-                    MapDataStore mapDataStore = recordStore.getMapDataStore();
-                    mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
-                }
+               runStepDirect(state);
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
+                MapDataStore mapDataStore = recordStore.getMapDataStore();
+                mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+            }
         }
 
         @Override
@@ -102,13 +113,7 @@ public enum DeleteStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
-
-                    System.out.println("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-                    Record record = recordStore.getRecord(state.getKey());
-                    recordStore.removeRecord0(state.getKey(), record);
-                    recordStore.onStore(record);
+                   runStepDirect(state);
                 }
 
                 @Override
@@ -116,6 +121,17 @@ public enum DeleteStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
+
+            System.out.println("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            Record record = recordStore.getRecord(state.getKey());
+            recordStore.removeRecord0(state.getKey(), record);
+            recordStore.onStore(record);
         }
 
         @Override

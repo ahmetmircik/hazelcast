@@ -40,18 +40,14 @@ public enum GetStep implements Step<State> {
         }
     },
 
+    // TODO add touch record test?
     READ() {
         @Override
         public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    RecordStore recordStore = state.getRecordStore();
-                    Record record = recordStore.getRecordOrNull(state.getKey());
-                    if (record != null) {
-                        state.setOldValue(record.getValue());
-                    }
+                   runStepDirect(state);
                 }
 
                 @Override
@@ -59,6 +55,17 @@ public enum GetStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore recordStore = state.getRecordStore();
+            Record record = recordStore.getRecordOrNull(state.getKey());
+            if (record != null) {
+                state.setOldValue(record.getValue());
+                recordStore.accessRecord(state.getKey(), record, state.getNow());
+            }
         }
 
         @Override
@@ -71,9 +78,14 @@ public enum GetStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> loading old value");
-                state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+                runStepDirect(state);
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> loading old value");
+            state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
         }
 
         @Override
@@ -89,11 +101,7 @@ public enum GetStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    RecordStore recordStore = state.getRecordStore();
-                    Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                            state.getOldValue(), false, state.getCallerAddress());
-                    state.setOldValue(record == null ? null : record.getValue());
+                   runStepDirect(state);
                 }
 
                 @Override
@@ -101,6 +109,15 @@ public enum GetStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore recordStore = state.getRecordStore();
+            Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                    state.getOldValue(), false, state.getCallerAddress());
+            state.setOldValue(record == null ? null : record.getValue());
         }
 
         @Override

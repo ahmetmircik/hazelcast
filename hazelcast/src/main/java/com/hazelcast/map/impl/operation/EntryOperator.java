@@ -190,13 +190,17 @@ public final class EntryOperator {
             return this;
         }
 
+        operateOnKeyValueInternal0();
+        return this;
+    }
+
+    public void operateOnKeyValueInternal0() {
         process(entry);
         findModificationType(entry);
 
         if (readOnly && entryWasModified()) {
             throwModificationInReadOnlyException();
         }
-        return this;
     }
 
     private boolean entryWasModified() {
@@ -244,6 +248,11 @@ public final class EntryOperator {
                 throw new IllegalArgumentException("Unexpected event found:" + eventType);
         }
 
+        doPostOperateOps0();
+        return this;
+    }
+
+    public void doPostOperateOps0() {
         if (wanReplicationEnabled) {
             publishWanReplicationEvent();
         }
@@ -256,12 +265,10 @@ public final class EntryOperator {
         }
 
         mapOperation.evict(dataKey);
-        return this;
     }
 
     private void onAddedOrUpdated() {
-        Object newValue = inMemoryFormat == OBJECT
-                ? entry.getValue() : entry.getByPrioritizingDataValue();
+        Object newValue = extractNewValue();
         if (backup) {
             recordStore.putBackup(dataKey, newValue, entry.getNewTtl(), UNSET, UNSET, NOT_WAN);
         } else {
@@ -271,9 +278,18 @@ public final class EntryOperator {
                 newValue = record == null ? null : record.getValue();
                 entry.setValueByInMemoryFormat(inMemoryFormat, newValue);
             }
-            mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), newValue);
-            stats.incrementPutLatencyNanos(Timer.nanosElapsed(startTimeNanos));
+            onAddedOrUpdated0(newValue);
         }
+    }
+
+    public void onAddedOrUpdated0(Object newValue) {
+        mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), newValue);
+        stats.incrementPutLatencyNanos(Timer.nanosElapsed(startTimeNanos));
+    }
+
+    public Object extractNewValue() {
+        return inMemoryFormat == OBJECT
+                ? entry.getValue() : entry.getByPrioritizingDataValue();
     }
 
     private void onRemove() {
@@ -281,9 +297,13 @@ public final class EntryOperator {
             recordStore.removeBackup(dataKey, NOT_WAN);
         } else {
             recordStore.delete(dataKey, NOT_WAN);
-            mapServiceContext.interceptAfterRemove(mapContainer.getInterceptorRegistry(), oldValue);
-            stats.incrementRemoveLatencyNanos(Timer.nanosElapsed(startTimeNanos));
+            onRemove0();
         }
+    }
+
+    public void onRemove0() {
+        mapServiceContext.interceptAfterRemove(mapContainer.getInterceptorRegistry(), oldValue);
+        stats.incrementRemoveLatencyNanos(Timer.nanosElapsed(startTimeNanos));
     }
 
     private Object clonedOrRawOldValue() {
@@ -291,7 +311,7 @@ public final class EntryOperator {
     }
 
     // Needed for MultipleEntryOperation.
-    private boolean belongsAnotherPartition(Data key) {
+    public boolean belongsAnotherPartition(Data key) {
         return partitionService.getPartitionId(key) != partitionId;
     }
 
@@ -305,7 +325,7 @@ public final class EntryOperator {
         return predicate == Predicates.alwaysFalse() || !predicate.apply(entry);
     }
 
-    private void findModificationType(LazyMapEntry mapEntry) {
+    public void findModificationType(LazyMapEntry mapEntry) {
         if (!mapEntry.isModified()
                 || (oldValue == null && mapEntry.hasNullValue())) {
             // read only
@@ -321,7 +341,7 @@ public final class EntryOperator {
         eventType = oldValue == null ? ADDED : UPDATED;
     }
 
-    private void onTouched() {
+    public void onTouched() {
         // updates access time if record exists
         Record record = recordStore.getRecord(dataKey);
         if (record != null) {
@@ -329,7 +349,7 @@ public final class EntryOperator {
         }
     }
 
-    private void process(ExtendedMapEntry entry) {
+    public void process(ExtendedMapEntry entry) {
         if (backup) {
             backupProcessor.process(entry);
             return;
