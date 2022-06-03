@@ -30,11 +30,6 @@ public enum GetStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Step nextStep(State state) {
             return READ;
         }
@@ -113,10 +108,11 @@ public enum GetStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());
+            record = recordStore.evictIfExpired(state.getKey(), state.getNow(), false) ? null : record;
             state.setOldValue(record == null ? null : record.getValue());
         }
 

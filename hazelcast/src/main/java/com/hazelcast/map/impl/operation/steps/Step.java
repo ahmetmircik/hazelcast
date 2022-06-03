@@ -20,14 +20,15 @@ import java.util.function.Supplier;
 
 public interface Step<State> {
 
-    Runnable createStep(State state);
+    default Runnable createStep(State state) {
+        throw new UnsupportedOperationException();
+    }
 
     Step nextStep(State state);
 
     default void runStepDirect(State state) {
-        return;
+        throw new UnsupportedOperationException();
     }
-
 
     static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
                                               Step initial) {

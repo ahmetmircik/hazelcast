@@ -34,11 +34,6 @@ public enum ClearStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Step nextStep(State state) {
             return CLEAR_MEMORY;
         }

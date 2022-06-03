@@ -37,7 +37,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public final class StepRunner implements Runnable {
+public class StepRunner implements Runnable {
 
     private final Node node;
     private final ILogger logger;

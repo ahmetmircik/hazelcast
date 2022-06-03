@@ -32,11 +32,6 @@ public enum RemoveIfSameStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public RemoveIfSameStep nextStep(State state) {
             return READ;
         }

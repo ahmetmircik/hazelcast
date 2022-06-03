@@ -34,11 +34,6 @@ public enum EPStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Step nextStep(State state) {
             return EP_START;
         }
@@ -173,15 +168,15 @@ public enum EPStep implements Step<State> {
                 return RESPONSE;
             }
 
-            if (eventType == EntryEventType.ADDED || eventType == EntryEventType.UPDATED) {
-                return STORE;
+            switch (eventType) {
+                case ADDED:
+                case UPDATED:
+                    return STORE;
+                case REMOVED:
+                    return DELETE;
+                default:
+                    throw new IllegalArgumentException("Unexpected event found:" + eventType);
             }
-
-            if (eventType == EntryEventType.REMOVED) {
-                return DELETE;
-            }
-
-            throw new IllegalArgumentException("Unexpected event found:" + eventType);
         }
     },
 

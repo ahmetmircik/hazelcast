@@ -31,11 +31,6 @@ public enum RemoveStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public RemoveStep nextStep(State state) {
             return READ;
         }

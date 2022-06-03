@@ -32,11 +32,6 @@ public enum PutStep implements Step<State> {
 
     INITIAL() {
         @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Step nextStep(State state) {
             return READ;
         }
@@ -247,7 +242,6 @@ public enum PutStep implements Step<State> {
 
                 StaticParams staticParams = state.getStaticParams();
                 Object oldValue = state.getOldValue();
-
 
                 if (staticParams.isTryPut()) {
                     state.getOperation().sendResponse(true);
