@@ -1061,6 +1061,70 @@ public class MapStoreTest extends AbstractMapStoreTest {
         assertTrueEventually(() -> assertNull(oldValue.get()));
     }
 
+    @Test(timeout = 120000)
+    public void testMultipleKeysEntryProcessor() {
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
+        Config config = getConfig();
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            Map<Integer, Integer> store = new ConcurrentHashMap<>();
+
+            {
+                for (int i = 0; i < 10_000; i++) {
+                    store.put(i, i);
+                }
+            }
+
+            public Integer load(Integer key) {
+                return store.get(key);
+            }
+
+            @Override
+            public void store(Integer key, Integer value) {
+                store.put(key, value);
+            }
+
+            @Override
+            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
+                Map<Integer, Integer> map = new HashMap<>();
+                for (Integer key : keys) {
+                    map.put(key, store.get(key));
+                }
+                return map;
+            }
+
+            @Override
+            public void storeAll(Map<Integer, Integer> map) {
+                for (Map.Entry<Integer, Integer> entry : map.entrySet()) {
+                    store(entry.getKey(), entry.getValue());
+                }
+            }
+        });
+        String mapName = "default";
+        config.getMapConfig(mapName).setMapStoreConfig(mapStoreConfig);
+
+        HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
+        nodeFactory.newHazelcastInstance(config);
+
+        IMap<Integer, Integer> map = instance.getMap(mapName);
+
+        final HashSet<Integer> keys = new HashSet<>(3);
+        for (int i = 0; i < 15_000; i++) {
+            keys.add(i);
+        }
+
+        Map<Integer, Integer> result = map.executeOnKeys(keys,
+                (EntryProcessor<Integer, Integer, Integer>) entry -> entry.setValue(0));
+
+        for (Integer key : map.keySet()) {
+            assertEquals(result.toString(),0, map.get(key).intValue());
+        }
+
+        assertEquals(15_000, map.size());
+    }
+
     public Config newConfig(Object storeImpl) {
         return newConfig("default", storeImpl, 0, MapStoreConfig.InitialLoadMode.LAZY);
     }

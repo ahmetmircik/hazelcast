@@ -45,7 +45,7 @@ public enum EPStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
                     EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
                     operator.init(state.getKey(), null, null, null, null, null, UNSET);
@@ -129,7 +129,7 @@ public enum EPStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -279,7 +279,7 @@ public enum EPStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> sending response");
+            Step.log("==> sending response");
 
             Operation operation = state.getOperation();
             Data result = state.getOperator().getResult();

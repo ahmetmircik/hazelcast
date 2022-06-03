@@ -57,7 +57,7 @@ public enum DeleteStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -92,7 +92,7 @@ public enum DeleteStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
@@ -127,7 +127,7 @@ public enum DeleteStep implements Step<State> {
         public void runStepDirect(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            System.out.println("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);
@@ -144,7 +144,7 @@ public enum DeleteStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 Object oldValue = state.getOldValue();
                 state.getOperation().sendResponse(oldValue != null);
             };
@@ -167,10 +167,10 @@ public enum DeleteStep implements Step<State> {
 
                     // TODO: prevent unneeded serialization for oldValue
                     if (!state.isNullRecord()) {
-                        System.out.println("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                        Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
                         ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
                     } else {
-                        System.out.println("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                        Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
                     }
                 }
 

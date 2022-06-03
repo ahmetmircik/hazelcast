@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
+import com.hazelcast.internal.partition.IPartitionService;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
@@ -26,14 +27,15 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO: what happens if partition is migrating and we offload map load.
 public enum MultipleKeyEPStep implements Step<State> {
@@ -46,27 +48,28 @@ public enum MultipleKeyEPStep implements Step<State> {
     },
 
     FIND_KEYS_TO_LOAD() {
-        private ArrayList<Data> keysToLoad = new ArrayList<>();
-
         @Override
         public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> EP start" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> EP start" + " (thread:" + Thread.currentThread().getName() + ")");
 
                     RecordStore recordStore = state.getRecordStore();
+                    IPartitionService partitionService = recordStore.getMapContainer()
+                            .getMapServiceContext().getNodeEngine().getPartitionService();
 
+                    List<Data> keysToLoad = new ArrayList<>();
                     Collection<Data> keys = state.getKeys();
                     for (Data key : keys) {
-                        if (recordStore.getRecord(key) == null) {
+                        if (partitionService.getPartitionId(key) == state.getPartitionId()
+                                && recordStore.getRecord(key) == null) {
                             keysToLoad.add(key);
                         }
                     }
 
                     if (!keysToLoad.isEmpty()) {
-                        state.setKeysToLoad(keysToLoad);
-                        return;
+                        state.setKeysToLoad(Collections.unmodifiableList(keysToLoad));
                     }
                 }
 
@@ -79,7 +82,7 @@ public enum MultipleKeyEPStep implements Step<State> {
 
         @Override
         public Step nextStep(State state) {
-            if (!keysToLoad.isEmpty()) {
+            if (!state.getKeysToLoad().isEmpty()) {
                 return MultipleKeyEPStep.LOAD_ALL;
             }
             // FIXME
@@ -109,7 +112,7 @@ public enum MultipleKeyEPStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> on old all"
+                    Step.log("==> on old all"
                             + " (thread:" + Thread.currentThread().getName() + ")");
 
                     RecordStore recordStore = state.getRecordStore();
@@ -150,7 +153,7 @@ public enum MultipleKeyEPStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
                     RecordStore recordStore = state.getRecordStore();
 
                     List<State> toStore = new ArrayList<>();
@@ -176,8 +179,6 @@ public enum MultipleKeyEPStep implements Step<State> {
 
                         EntryOperator operator = operator(singleKeyState.getOperation(),
                                 singleKeyState.getEntryProcessor(), singleKeyState.getPredicate());
-                        operator.init(singleKeyState.getKey(), singleKeyState.getOldValue(),
-                                null, null, null, null, UNSET);
                         singleKeyState.setEntryOperator(operator);
 
                         EPStep.PROCESS.runStepDirect(singleKeyState);
@@ -191,8 +192,10 @@ public enum MultipleKeyEPStep implements Step<State> {
                                 case ADDED:
                                 case UPDATED:
                                     toStore.add(singleKeyState);
+                                    break;
                                 case REMOVED:
                                     toRemove.add(singleKeyState);
+                                    break;
                                 default:
                                     throw new IllegalArgumentException("Unexpected event found:" + eventType);
                             }
@@ -266,7 +269,8 @@ public enum MultipleKeyEPStep implements Step<State> {
                         ((MapEntries) state.getResult()).add(s.getKey(), result);
                     }
 
-                    EPStep.RESPONSE.runStepDirect(state);
+                    Operation operation = state.getOperation();
+                    operation.sendResponse(state.getResult());
                 }
 
                 @Override

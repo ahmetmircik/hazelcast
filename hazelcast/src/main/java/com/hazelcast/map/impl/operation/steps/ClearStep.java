@@ -45,7 +45,7 @@ public enum ClearStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
                     recordStore.checkIfLoaded();
 
@@ -86,7 +86,7 @@ public enum ClearStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> clearing map store");
+                Step.log("==> clearing map store");
                 DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
                 Collection<Data> keys = state.getKeys();
                 recordStore.getMapDataStore().removeAll(keys);
@@ -106,7 +106,7 @@ public enum ClearStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
                     int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
                     if (removedKeyCount > 0) {
@@ -132,7 +132,7 @@ public enum ClearStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> clear all sending response");
+                Step.log("==> clear all sending response");
 
                 state.getOperation().sendResponse(state.getResult());
             };

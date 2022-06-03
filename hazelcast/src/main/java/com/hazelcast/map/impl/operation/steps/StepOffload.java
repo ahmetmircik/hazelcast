@@ -48,7 +48,7 @@ public class StepOffload extends Offload {
         ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
         if (!service.hasExecutorWithName(executorName)) {
             service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
-            System.out.println("---> New executorName = " + executorName);
+            Step.log("---> New executorName = " + executorName);
         }
         return service.getExecutor(executorName);
     }

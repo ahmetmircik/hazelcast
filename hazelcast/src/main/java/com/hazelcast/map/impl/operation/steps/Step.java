@@ -30,6 +30,10 @@ public interface Step<State> {
         throw new UnsupportedOperationException();
     }
 
+    static void log(String msg) {
+        //S(msg);
+    }
+
     static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
                                               Step initial) {
         return new Supplier<Runnable>() {

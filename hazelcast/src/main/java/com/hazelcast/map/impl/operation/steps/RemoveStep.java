@@ -42,7 +42,7 @@ public enum RemoveStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
                     MapContainer mapContainer = recordStore.getMapContainer();
                     MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -77,7 +77,7 @@ public enum RemoveStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> loading old value");
+                Step.log("==> loading old value");
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
                 Object oldValue = recordStore.loadValueOf(state.getKey());
                 if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
@@ -99,7 +99,7 @@ public enum RemoveStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
                     recordStore.updateStatsOnRemove(state.getNow());
                 }
@@ -121,7 +121,7 @@ public enum RemoveStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+                Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
                 MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
                 mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
             };
@@ -141,7 +141,7 @@ public enum RemoveStep implements Step<State> {
                 public void run() {
                     ThreadUtil.assertRunningOnPartitionThread();
 
-                    System.out.println("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
                     Record record = recordStore.getRecord(state.getKey());
                     recordStore.removeRecord0(state.getKey(), record);
@@ -165,7 +165,7 @@ public enum RemoveStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
                 MapServiceContext mapServiceContext = recordStore.getMapContainer().getMapServiceContext();
                 Object oldValue = state.getOldValue();

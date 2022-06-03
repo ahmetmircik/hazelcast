@@ -54,7 +54,7 @@ public enum GetStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
@@ -79,7 +79,7 @@ public enum GetStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> loading old value");
+            Step.log("==> loading old value");
             state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
         }
 
@@ -107,7 +107,7 @@ public enum GetStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());
@@ -125,7 +125,7 @@ public enum GetStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> sending response");
+                Step.log("==> sending response");
 
                 Operation operation = state.getOperation();
                 Object oldValue = state.getOldValue();

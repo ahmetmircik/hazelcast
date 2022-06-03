@@ -66,12 +66,12 @@ public class StepRunner implements Runnable {
     // TODO: What happens in the event of exception?
     @Override
     public void run() {
-        System.out.println("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
+        Step.log("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
         try {
             do {
                 Runnable nextStep = stepSupplier.get();
                 if (nextStep == null) {
-                    System.out.println("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
+                    Step.log("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
                     return;
                 }
 

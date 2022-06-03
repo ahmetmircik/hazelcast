@@ -44,7 +44,7 @@ public enum PutStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     RecordStore recordStore = state.getRecordStore();
                     Record record = recordStore.getRecordOrNull(state.getKey());
                     if (record != null) {
@@ -69,7 +69,7 @@ public enum PutStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+                Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
                 StaticParams staticParams = state.getStaticParams();
                 if (staticParams.isPutVanilla()) {
@@ -94,7 +94,7 @@ public enum PutStep implements Step<State> {
                 public void run() {
                     ThreadUtil.assertRunningOnPartitionThread();
 
-                    System.out.println("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
+                    Step.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
                     StaticParams staticParams = state.getStaticParams();
                     Object newValue = state.getNewValue();
 
@@ -175,7 +175,7 @@ public enum PutStep implements Step<State> {
 
         @Override
         public void runStepDirect(State state) {
-            System.out.println("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
             Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             state.setNewValue(newValue);
@@ -209,7 +209,7 @@ public enum PutStep implements Step<State> {
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
 
-            System.out.println("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
 
             // TODO: read  record efficiently
             Record record = recordStore.getRecord(state.getKey());
@@ -236,7 +236,7 @@ public enum PutStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
                 RecordStore recordStore = state.getRecordStore();
                 MapContainer mapContainer = recordStore.getMapContainer();
                 MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

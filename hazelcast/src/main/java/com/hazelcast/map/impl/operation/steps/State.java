@@ -64,15 +64,15 @@ public class State {
     private volatile boolean stopExecution;
     private Object result;
     private volatile boolean nullRecord;
-    private Collection<Data> keysToLoad = Collections.emptyList();
-    private Map loadedKeyValuePairs = Collections.emptyMap();
-    private Collection<Data> keys;
-    private ArrayList<Record> records;
-    private EntryProcessor entryProcessor;
-    private EntryOperator operator;
-    private List<State> toStore;
-    private List<State> toRemove;
-    private Predicate predicate;
+    private volatile Collection<Data> keysToLoad = Collections.emptyList();
+    private volatile Map loadedKeyValuePairs = Collections.emptyMap();
+    private volatile Collection<Data> keys;
+    private volatile ArrayList<Record> records;
+    private volatile EntryProcessor entryProcessor;
+    private volatile EntryOperator operator;
+    private volatile List<State> toStore;
+    private volatile List<State> toRemove;
+    private volatile Predicate predicate;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
