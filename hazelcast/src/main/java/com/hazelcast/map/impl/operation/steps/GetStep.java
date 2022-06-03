@@ -42,7 +42,7 @@ public enum GetStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                   runStepDirect(state);
+                    runStepDirect(state);
                 }
 
                 @Override
@@ -89,14 +89,13 @@ public enum GetStep implements Step<State> {
         }
     },
 
-
     ON_LOAD() {
         @Override
         public Runnable createStep(State state) {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                   runStepDirect(state);
+                    runStepDirect(state);
                 }
 
                 @Override

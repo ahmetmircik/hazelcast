@@ -89,7 +89,6 @@ public enum EPStep implements Step<State> {
         }
     },
 
-
     ON_LOAD() {
         @Override
         public Runnable createStep(State state) {
@@ -118,40 +117,7 @@ public enum EPStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    System.out.println("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
-                    RecordStore recordStore = state.getRecordStore();
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-
-                    EntryOperator entryOperator = state.getOperator();
-                    entryOperator.init(state.getKey(), state.getOldValue(), null, null, null, null, UNSET);
-                    entryOperator.operateOnKeyValueInternal0();
-
-                    EntryEventType eventType = entryOperator.getEventType();
-                    if (eventType == null) {
-                        entryOperator.onTouched();
-                        state.setStopExecution(true);
-                    } else {
-                        switch (eventType) {
-                            case ADDED:
-                            case UPDATED:
-                                state.setStaticPutParams(StaticParams.SET_WTH_NO_ACCESS_PARAMS);
-                                if (eventType == EntryEventType.UPDATED) {
-                                    entryOperator.onTouched();
-                                }
-                                Object newValue = entryOperator.extractNewValue();
-                                newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
-                                        state.getOldValue(), newValue);
-                                state.setNewValue(newValue);
-                                state.setTtl(entryOperator.getEntry().getNewTtl());
-                                break;
-                            case REMOVED:
-                                DeleteStep.READ.runStepDirect(state);
-                                break;
-                            default:
-                                throw new IllegalArgumentException("Unexpected event found:" + eventType);
-                        }
-                    }
+                    runStepDirect(state);
                 }
 
                 @Override
@@ -159,6 +125,49 @@ public enum EPStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+
+            EntryOperator entryOperator = state.getOperator();
+            entryOperator.init(state.getKey(), state.getOldValue(), null, null, null, null, UNSET);
+            if (!entryOperator.checkCanProceed()) {
+                entryOperator.onTouched();
+                state.setStopExecution(true);
+                return;
+            }
+            entryOperator.operateOnKeyValue(state.getKey(), state.getOldValue());
+
+            EntryEventType eventType = entryOperator.getEventType();
+            if (eventType == null) {
+                entryOperator.onTouched();
+                state.setStopExecution(true);
+            } else {
+                switch (eventType) {
+                    case ADDED:
+                    case UPDATED:
+                        state.setStaticPutParams(StaticParams.SET_WTH_NO_ACCESS_PARAMS);
+                        if (eventType == EntryEventType.UPDATED) {
+                            entryOperator.onTouched();
+                        }
+                        Object newValue = entryOperator.extractNewValue();
+                        newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
+                                state.getOldValue(), newValue);
+                        state.setNewValue(newValue);
+                        state.setTtl(entryOperator.getEntry().getNewTtl());
+                        break;
+                    case REMOVED:
+                        DeleteStep.READ.runStepDirect(state);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unexpected event found:" + eventType);
+                }
+            }
         }
 
         @Override
@@ -264,12 +273,17 @@ public enum EPStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-                System.out.println("==> sending response");
-
-                Operation operation = state.getOperation();
-                Data result = state.getOperator().getResult();
-                operation.sendResponse(result);
+                runStepDirect(state);
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            System.out.println("==> sending response");
+
+            Operation operation = state.getOperation();
+            Data result = state.getOperator().getResult();
+            operation.sendResponse(result);
         }
 
         @Override

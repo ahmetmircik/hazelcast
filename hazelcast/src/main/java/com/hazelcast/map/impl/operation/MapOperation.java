@@ -116,7 +116,8 @@ public abstract class MapOperation extends AbstractNamedOperation
                 || this instanceof GetOperation
                 || this instanceof ClearOperation
                 || this instanceof BaseRemoveOperation
-                || this instanceof EntryOperation);
+                || this instanceof EntryOperation
+                || this instanceof MultipleEntryOperation);
 
         assertNativeMapOnPartitionThread();
 

@@ -176,6 +176,21 @@ public final class EntryOperator {
         return operateOnKeyValueInternal(dataKey, clonedOrRawOldValue(), locked);
     }
 
+    public boolean checkCanProceed() {
+        if (belongsAnotherPartition(dataKey)) {
+            return false;
+        }
+
+        // predicated entry processors can only be applied to existing entries
+        // so if we have a predicate and somehow(due to expiration or split-brain healing)
+        // we found value null, we should skip that entry.
+        if (predicate != null && oldValue == null) {
+            return false;
+        }
+
+        return true;
+    }
+
     public EntryOperator operateOnKeyValue(Data dataKey, Object oldValue) {
         return operateOnKeyValueInternal(dataKey, oldValue, null);
     }

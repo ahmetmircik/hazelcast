@@ -25,9 +25,14 @@ import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
+import com.hazelcast.query.Predicate;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -59,11 +64,15 @@ public class State {
     private volatile boolean stopExecution;
     private Object result;
     private volatile boolean nullRecord;
-    private ArrayList<Data> keys;
+    private Collection<Data> keysToLoad = Collections.emptyList();
+    private Map loadedKeyValuePairs = Collections.emptyMap();
+    private Collection<Data> keys;
     private ArrayList<Record> records;
     private EntryProcessor entryProcessor;
     private EntryOperator operator;
-
+    private List<State> toStore;
+    private List<State> toRemove;
+    private Predicate predicate;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -202,6 +211,11 @@ public class State {
         return now;
     }
 
+    public State setNow(long now) {
+        this.now = now;
+        return this;
+    }
+
     public Data getKey() {
         return key;
     }
@@ -250,16 +264,35 @@ public class State {
         return result;
     }
 
-    public void setKeys(ArrayList<Data> keys) {
+    public State setKeys(Collection<Data> keys) {
         this.keys = keys;
+        return this;
     }
 
-    public ArrayList<Data> getKeys() {
+    public Collection<Data> getKeys() {
         return keys;
     }
 
     public void setRecords(ArrayList<Record> records) {
         this.records = records;
+    }
+
+    public Collection<Data> getKeysToLoad() {
+        return keysToLoad;
+    }
+
+    public State setKeysToLoad(Collection<Data> keysToLoad) {
+        this.keysToLoad = keysToLoad;
+        return this;
+    }
+
+    public State setLoadedKeyValuePairs(Map loadedKeyValuePairs) {
+        this.loadedKeyValuePairs = loadedKeyValuePairs;
+        return this;
+    }
+
+    public Map getLoadedKeyValuePairs() {
+        return loadedKeyValuePairs;
     }
 
     public ArrayList<Record> getRecords() {
@@ -272,5 +305,30 @@ public class State {
 
     public EntryOperator getOperator() {
         return operator;
+    }
+
+    public void setToStore(List<State> toStore) {
+        this.toStore = toStore;
+    }
+
+    public void setToRemove(List<State> toRemove) {
+        this.toRemove = toRemove;
+    }
+
+    public List<State> getToStore() {
+        return toStore;
+    }
+
+    public List<State> getToRemove() {
+        return toRemove;
+    }
+
+    public Predicate getPredicate() {
+        return predicate;
+    }
+
+    public State setPredicate(Predicate predicate) {
+        this.predicate = predicate;
+        return this;
     }
 }

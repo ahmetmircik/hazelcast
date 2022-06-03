@@ -25,7 +25,7 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
@@ -88,7 +88,7 @@ public enum ClearStep implements Step<State> {
             return () -> {
                 System.out.println("==> clearing map store");
                 DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                List<Data> keys = state.getKeys();
+                Collection<Data> keys = state.getKeys();
                 recordStore.getMapDataStore().removeAll(keys);
             };
         }
@@ -108,7 +108,7 @@ public enum ClearStep implements Step<State> {
                 public void run() {
                     System.out.println("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
                     DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    int removedKeyCount = recordStore.removeBulk(state.getKeys(), state.getRecords());
+                    int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
                     if (removedKeyCount > 0) {
                         recordStore.updateStatsOnRemove(Clock.currentTimeMillis());
                     }
