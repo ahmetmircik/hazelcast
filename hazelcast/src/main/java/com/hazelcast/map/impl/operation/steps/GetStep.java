@@ -18,6 +18,8 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
+import com.hazelcast.map.impl.MapContainer;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -127,8 +129,14 @@ public enum GetStep implements Step<State> {
             return () -> {
                 Step.log("==> sending response");
 
+                RecordStore recordStore = state.getRecordStore();
+                MapContainer mapContainer = recordStore.getMapContainer();
+                MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+
                 Operation operation = state.getOperation();
                 Object oldValue = state.getOldValue();
+                oldValue = mapServiceContext.interceptGet(mapContainer.getInterceptorRegistry(), oldValue);
+
                 Data result = ((GetOperation) operation).extractResult(oldValue);
                 state.setResult(result);
 

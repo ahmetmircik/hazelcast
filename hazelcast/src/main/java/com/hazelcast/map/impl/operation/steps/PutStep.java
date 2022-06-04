@@ -27,6 +27,9 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 // TODO: re-run upon NOOME
 public enum PutStep implements Step<State> {
@@ -254,12 +257,12 @@ public enum PutStep implements Step<State> {
                     operation.sendResponse(oldValue != null);
                 }
 
-//                OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
-//                        .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-//                ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
-//                        state.getKey(), mapServiceContext.toData(state.getNewValue()));
-//
-//                ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
+                OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+                        .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+                ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
+                        state.getKey(), mapServiceContext.toData(state.getNewValue()));
+
+                ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
             };
         }
 

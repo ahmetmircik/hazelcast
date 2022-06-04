@@ -274,7 +274,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return MapService.SERVICE_NAME;
     }
 
-    public boolean isPostProcessing(RecordStore recordStore) {
+    public boolean isPostProcessingOrHasInterceptor(RecordStore recordStore) {
         MapDataStore mapDataStore = recordStore.getMapDataStore();
         return mapDataStore.isPostProcessingMapStore()
                 || !mapContainer.getInterceptorRegistry().getInterceptors().isEmpty();
@@ -410,7 +410,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     }
 
     protected final Data getValueOrPostProcessedValue(Record record, Data dataValue) {
-        if (!isPostProcessing(recordStore)) {
+        if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }
         return mapServiceContext.toData(record.getValue());

@@ -210,10 +210,6 @@ public enum EPStep implements Step<State> {
                 @Override
                 public void run() {
                     PutStep.ON_STORE.runStepDirect(state);
-
-                    EntryOperator operator = state.getOperator();
-                    operator.onAddedOrUpdated0(state.getNewValue());
-                    operator.doPostOperateOps0();
                 }
 
                 @Override
@@ -250,10 +246,6 @@ public enum EPStep implements Step<State> {
                 @Override
                 public void run() {
                     DeleteStep.ON_DELETE.runStepDirect(state);
-
-                    EntryOperator operator = state.getOperator();
-                    operator.onRemove0();
-                    operator.doPostOperateOps0();
                 }
 
                 @Override
@@ -282,7 +274,23 @@ public enum EPStep implements Step<State> {
             Step.log("==> sending response");
 
             Operation operation = state.getOperation();
-            Data result = state.getOperator().getResult();
+            EntryOperator operator = state.getOperator();
+            EntryEventType eventType = operator.getEventType();
+            if(eventType != null){
+                switch (eventType){
+                    case ADDED:
+                    case UPDATED:
+                        operator.onAddedOrUpdated0(state.getNewValue());
+                        operator.doPostOperateOps0();
+                        break;
+                    case REMOVED:
+                        operator.onRemove0();
+                        operator.doPostOperateOps0();
+                        break;
+                }
+            }
+
+            Data result = operator.getResult();
             operation.sendResponse(result);
         }
 

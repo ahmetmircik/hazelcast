@@ -79,7 +79,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     }
 
     public void afterRunInternal0(Data dataKey, Object dataValue, Object oldValue) {
-        Object value = isPostProcessing(recordStore) ? recordStore.getRecord(dataKey).getValue() : dataValue;
+        Object value = isPostProcessingOrHasInterceptor(recordStore) ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);
         mapEventPublisher.publishEvent(getCallerAddress(), name,
                 oldValue == null ? EntryEventType.ADDED : EntryEventType.UPDATED, dataKey, oldValue, value);

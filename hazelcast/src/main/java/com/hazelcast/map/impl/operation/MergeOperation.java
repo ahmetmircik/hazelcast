@@ -202,7 +202,7 @@ public class MergeOperation extends MapOperation
     }
 
     private Data getValueOrPostProcessedValue(Data dataKey, Data dataValue) {
-        if (!isPostProcessing(recordStore)) {
+        if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }
         Record record = recordStore.getRecord(dataKey);

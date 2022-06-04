@@ -288,16 +288,16 @@ public final class EntryOperator {
             recordStore.putBackup(dataKey, newValue, entry.getNewTtl(), UNSET, UNSET, NOT_WAN);
         } else {
             recordStore.setWithUncountedAccess(dataKey, newValue, entry.getNewTtl(), UNSET);
-            if (mapOperation.isPostProcessing(recordStore)) {
-                Record record = recordStore.getRecord(dataKey);
-                newValue = record == null ? null : record.getValue();
-                entry.setValueByInMemoryFormat(inMemoryFormat, newValue);
-            }
             onAddedOrUpdated0(newValue);
         }
     }
 
     public void onAddedOrUpdated0(Object newValue) {
+        if (mapOperation.isPostProcessingOrHasInterceptor(recordStore)) {
+            Record record = recordStore.getRecord(dataKey);
+            newValue = record == null ? null : record.getValue();
+            entry.setValueByInMemoryFormat(inMemoryFormat, newValue);
+        }
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), newValue);
         stats.incrementPutLatencyNanos(Timer.nanosElapsed(startTimeNanos));
     }

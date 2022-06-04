@@ -82,7 +82,7 @@ public enum ClearStep implements Step<State> {
 
         @Override
         public ClearStep nextStep(State state) {
-            return state.getRecordStore() == null ? ClearStep.AFTER_RUN : ClearStep.CLEAR_MAP_STORE;
+            return state.getRecordStore() == null ? ClearStep.RESPONSE : ClearStep.CLEAR_MAP_STORE;
         }
     },
 
