@@ -112,8 +112,11 @@ public abstract class MapOperation extends AbstractNamedOperation
         // TODO: find a better way to catch offloadEnabled ops.
         mapStoreOffloadEnabled = true
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
-                && (this instanceof BasePutOperation
-                || this instanceof GetOperation
+                &&
+                (
+                        this instanceof BasePutOperation
+                ||
+                        this instanceof GetOperation
                 || this instanceof ClearOperation
                 || this instanceof BaseRemoveOperation
                 || this instanceof EntryOperation
@@ -149,7 +152,7 @@ public abstract class MapOperation extends AbstractNamedOperation
             }
         }
 
-        if (mapStoreOffloadEnabled) {
+        if (mapStoreOffloadEnabled && createRecordStoreOnDemand) {
             assert recordStore != null;
 
             return new StepOffload(this, getName(), newStepRunner());

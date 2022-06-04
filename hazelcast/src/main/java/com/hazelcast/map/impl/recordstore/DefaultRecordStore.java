@@ -927,15 +927,13 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
             putIntoMapStore(record, key, newValue, ttl, maxIdle, now, transactionId);
         }
-        putMemory(key, oldValue, newValue, ttl, maxIdle,
-                expiryTime, now, entryEventType, backup, record);
+        putMemory(record, key, oldValue, ttl, maxIdle, expiryTime, now, entryEventType, backup);
         return record;
     }
 
-    public Record putMemory(Data key, Object oldValue, Object newValue, long ttl, long maxIdle,
+    public Record putMemory(Record record, Data key, Object oldValue, long ttl, long maxIdle,
                             long expiryTime, long now, EntryEventType entryEventType,
-                            boolean backup, Record r) {
-        Record record = r == null ? createRecord(key, newValue, now) : r;
+                            boolean backup) {
         storage.put(key, record);
         expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
 
@@ -952,12 +950,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     protected Object updateRecord(Record record, Data key, Object oldValue, Object newValue,
                                   long ttl, long maxIdle, long expiryTime, long now, UUID transactionId,
                                   boolean store, boolean countAsAccess, boolean backup) {
-        updateStatsOnPut(countAsAccess, now);
-        record.onUpdate(now);
-
-        if (countAsAccess) {
-            record.onAccess(now);
-        }
+        updateRecord0(record, now, countAsAccess);
 
         if (mapDataStore != EMPTY_MAP_DATA_STORE && store) {
             newValue = putIntoMapStore(record, key, newValue,
@@ -966,6 +959,15 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
         updateMemory(record, key, oldValue, newValue, ttl, maxIdle, expiryTime, now, backup);
         return oldValue;
+    }
+
+    public void updateRecord0(Record record, long now, boolean countAsAccess) {
+        updateStatsOnPut(countAsAccess, now);
+        record.onUpdate(now);
+
+        if (countAsAccess) {
+            record.onAccess(now);
+        }
     }
 
     public void updateMemory(Record record, Data key, Object oldValue, Object newValue,
@@ -1194,7 +1196,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         return getRecordOrNull(key, now, false);
     }
 
-    protected Record getRecordOrNull(Data key, long now, boolean backup) {
+    public Record getRecordOrNull(Data key, long now, boolean backup) {
         Record record = storage.get(key);
         if (record != null) {
             return evictIfExpired(key, now, backup) ? null : record;

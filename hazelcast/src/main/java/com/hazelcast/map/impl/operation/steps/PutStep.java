@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.BasePutOperation;
@@ -45,8 +44,8 @@ public enum PutStep implements Step<State> {
                 @Override
                 public void run() {
                     Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    RecordStore recordStore = state.getRecordStore();
-                    Record record = recordStore.getRecordOrNull(state.getKey());
+                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+                    Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
                     if (record != null) {
                         state.setOldValue(record.getValue());
                     }
@@ -133,12 +132,10 @@ public enum PutStep implements Step<State> {
                         state.setOldValue(record.getValue());
                     }
 
-                    ValueComparator valueComparator = ((DefaultRecordStore) recordStore).getValueComparator();
                     if (staticParams.isPutIfEqual()
-                            && !valueComparator.isEqual(state.getExpect(), state.getOldValue(),
-                            mapServiceContext.getNodeEngine().
-
-                                    getSerializationService())) {
+                            && !((DefaultRecordStore) recordStore).getValueComparator()
+                            .isEqual(state.getExpect(), state.getOldValue(),
+                                    mapServiceContext.getNodeEngine().getSerializationService())) {
                         state.setStopExecution(true);
                         return;
                     }
@@ -169,7 +166,7 @@ public enum PutStep implements Step<State> {
         @Override
         public Runnable createStep(State state) {
             return () -> {
-               runStepDirect(state);
+                runStepDirect(state);
             };
         }
 
@@ -193,7 +190,7 @@ public enum PutStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                   runStepDirect(state);
+                    runStepDirect(state);
                 }
 
                 @Override
@@ -215,11 +212,12 @@ public enum PutStep implements Step<State> {
             Record record = recordStore.getRecord(state.getKey());
             // TODO: fix event type
             if (record == null) {
-                recordStore.putMemory(state.getKey(), state.getOldValue(),
-                        state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
-                        state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup(), null);
-
+                record = recordStore.createRecord(state.getKey(), state.getNewValue(), state.getNow());
+                recordStore.putMemory(record, state.getKey(), state.getOldValue(),
+                        state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
+                        state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup());
             } else {
+                recordStore.updateRecord0(record, state.getNow(), state.getStaticParams().isCountAsAccess());
                 recordStore.updateMemory(record, state.getKey(), state.getOldValue(), state.getNewValue(),
                         state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
                         state.getStaticParams().isBackup());
