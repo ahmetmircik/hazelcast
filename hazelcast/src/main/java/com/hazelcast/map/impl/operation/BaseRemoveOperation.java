@@ -67,7 +67,6 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
     protected StepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setKey(dataKey)
-                .setNewValue(dataValue)
                 .setExpect(getExpect())
                 .setCallerAddress(getCallerAddress())
                 .setCallerProvenance(getCallerProvenance())

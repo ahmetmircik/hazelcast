@@ -186,7 +186,9 @@ public enum MultipleKeyEPStep implements Step<State> {
                         EntryEventType eventType = singleKeyState.getOperator().getEventType();
                         if (eventType == null) {
                             Data result = singleKeyState.getOperator().getResult();
-                            responses.add(singleKeyState.getKey(), result);
+                            if (result != null) {
+                                responses.add(singleKeyState.getKey(), result);
+                            }
                         } else {
                             switch (eventType) {
                                 case ADDED:
@@ -254,7 +256,9 @@ public enum MultipleKeyEPStep implements Step<State> {
                         operator.doPostOperateOps0();
 
                         Data result = s.getOperator().getResult();
-                        ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        if (result != null) {
+                            ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        }
                     }
 
                     List<State> toRemove = state.getToRemove();
@@ -266,7 +270,9 @@ public enum MultipleKeyEPStep implements Step<State> {
                         operator.doPostOperateOps0();
 
                         Data result = s.getOperator().getResult();
-                        ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        if (result != null) {
+                            ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        }
                     }
 
                     Operation operation = state.getOperation();

@@ -31,8 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public abstract class BasePutOperation
-        extends LockAwareOperation implements BackupAwareOperation {
+public abstract class BasePutOperation extends LockAwareOperation implements BackupAwareOperation {
 
     protected transient Object oldValue;
     protected transient EntryEventType eventType;
@@ -61,8 +60,8 @@ public abstract class BasePutOperation
     protected StepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setStaticPutParams(getStaticParams())
-                .setKey(dataKey)
-                .setNewValue(dataValue)
+                .setKey(dataKey).
+                setNewValue(dataValue)
                 .setExpect(getExpect())
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle())
@@ -80,11 +79,10 @@ public abstract class BasePutOperation
     }
 
     public void afterRunInternal0(Data dataKey, Object dataValue, Object oldValue) {
-        Object value = isPostProcessing(recordStore)
-                ? recordStore.getRecord(dataKey).getValue() : dataValue;
+        Object value = isPostProcessing(recordStore) ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);
-        mapEventPublisher.publishEvent(getCallerAddress(), name, getEventType(),
-                dataKey, oldValue, value);
+        mapEventPublisher.publishEvent(getCallerAddress(), name,
+                oldValue == null ? EntryEventType.ADDED : EntryEventType.UPDATED, dataKey, oldValue, value);
         invalidateNearCache(dataKey);
         publishWanUpdate(dataKey, value);
         evict(dataKey);
@@ -107,8 +105,7 @@ public abstract class BasePutOperation
 
     private EntryEventType getEventType() {
         if (eventType == null) {
-            eventType = oldValue == null
-                    ? EntryEventType.ADDED : EntryEventType.UPDATED;
+            eventType = oldValue == null ? EntryEventType.ADDED : EntryEventType.UPDATED;
         }
         return eventType;
     }
@@ -125,8 +122,14 @@ public abstract class BasePutOperation
         return newBackupOperation(dataKey, recordToBackup, dataValue);
     }
 
-    protected PutBackupOperation newBackupOperation(Data
-                                                            dataKey, Record record, Data dataValue) {
+    public void initFields(Record record, Data dataKey, Data dataValue) {
+        this.recordToBackup = record;
+        this.dataKey = dataKey;
+        this.dataValue = dataValue;
+
+    }
+
+    protected PutBackupOperation newBackupOperation(Data dataKey, Record record, Data dataValue) {
         ExpiryMetadata metadata = recordStore.getExpirySystem().getExpiryMetadata(dataKey);
         return new PutBackupOperation(name, dataKey, record, dataValue, metadata);
     }

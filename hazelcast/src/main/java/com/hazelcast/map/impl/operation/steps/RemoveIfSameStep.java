@@ -16,7 +16,6 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.comparators.ValueComparator;
@@ -104,7 +103,6 @@ public enum RemoveIfSameStep implements Step<State> {
                     Step.log("==> on load" + " (thread:" + Thread.currentThread().getName() + ")");
 
                     DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-                    MapDataStore<Data, Object> mapDataStore = recordStore.getMapDataStore();
                     MapContainer mapContainer = recordStore.getMapContainer();
                     MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
                     SerializationService serializationService = mapServiceContext

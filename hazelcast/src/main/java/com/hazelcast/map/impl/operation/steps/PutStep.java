@@ -21,6 +21,7 @@ import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.BasePutOperation;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -124,6 +125,7 @@ public enum PutStep implements Step<State> {
                         if (record == null) {
                             state.setOldValue(null);
                             state.setStopExecution(true);
+                            state.setResult(false);
                             return;
                         }
 
@@ -136,16 +138,15 @@ public enum PutStep implements Step<State> {
                             && !((DefaultRecordStore) recordStore).getValueComparator()
                             .isEqual(state.getExpect(), state.getOldValue(),
                                     mapServiceContext.getNodeEngine().getSerializationService())) {
+                        state.setResult(false);
                         state.setStopExecution(true);
                         return;
                     }
 
                     // Intercept put on owner partition.
-                    if (!staticParams.isBackup()) {
-                        newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
-                                state.getOldValue(), newValue);
-                        state.setNewValue(newValue);
-                    }
+                    newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
+                            state.getOldValue(), newValue);
+                    state.setNewValue(newValue);
                 }
 
                 @Override
@@ -242,15 +243,23 @@ public enum PutStep implements Step<State> {
                 StaticParams staticParams = state.getStaticParams();
                 Object oldValue = state.getOldValue();
 
+                MapOperation operation = state.getOperation();
                 if (staticParams.isTryPut()) {
-                    state.getOperation().sendResponse(true);
+                    operation.sendResponse(true);
                 } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
-                    state.getOperation().sendResponse(oldValue != null);
+                    operation.sendResponse(!state.isStopExecution());
                 } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                    state.getOperation().sendResponse(mapServiceContext.toData(oldValue));
+                    operation.sendResponse(mapServiceContext.toData(oldValue));
                 } else if (staticParams.isPutIfEqual()) {
-                    state.getOperation().sendResponse(oldValue != null);
+                    operation.sendResponse(oldValue != null);
                 }
+
+//                OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+//                        .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+//                ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
+//                        state.getKey(), mapServiceContext.toData(state.getNewValue()));
+//
+//                ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
             };
         }
 
