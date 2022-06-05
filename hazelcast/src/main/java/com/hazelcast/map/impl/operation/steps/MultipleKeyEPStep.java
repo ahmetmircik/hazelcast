@@ -169,17 +169,13 @@ public enum MultipleKeyEPStep implements Step<State> {
                     for (Data key : keys) {
                         Record record = recordStore.getRecord(key);
 
-                        State singleKeyState = new State(recordStore, state.getOperation());
-                        singleKeyState.setKey(key)
+                        // create specific state for this key
+                        State singleKeyState = new State(state);
+                        singleKeyState
+                                .setKey(key)
                                 .setOldValue(record == null ? null : record.getValue())
-                                .setCallerProvenance(state.getCallerProvenance())
-                                .setEntryProcessor(state.getEntryProcessor())
-                                .setCallerAddress(state.getCallerAddress())
-                                .setPartitionId(state.getPartitionId());
-
-                        EntryOperator operator = operator(singleKeyState.getOperation(),
-                                singleKeyState.getEntryProcessor(), singleKeyState.getPredicate());
-                        singleKeyState.setEntryOperator(operator);
+                                .setEntryOperator(operator(singleKeyState.getOperation(),
+                                        singleKeyState.getEntryProcessor(), singleKeyState.getPredicate()));
 
                         EPStep.PROCESS.runStepDirect(singleKeyState);
 

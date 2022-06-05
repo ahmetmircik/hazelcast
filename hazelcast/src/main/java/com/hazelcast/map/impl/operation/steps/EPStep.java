@@ -135,7 +135,8 @@ public enum EPStep implements Step<State> {
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
             EntryOperator entryOperator = state.getOperator();
-            entryOperator.init(state.getKey(), state.getOldValue(), null, null, null, null, UNSET);
+            entryOperator.init(state.getKey(), state.getOldValue(),
+                    null, null, null, null, UNSET);
             if (!entryOperator.checkCanProceed()) {
                 entryOperator.onTouched();
                 state.setStopExecution(true);

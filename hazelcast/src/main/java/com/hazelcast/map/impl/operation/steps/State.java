@@ -39,14 +39,12 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public class State {
 
-    protected volatile Object oldValue;
-    protected volatile Object newValue;
-
     private final RecordStore recordStore;
     private final MapOperation operation;
 
-    // params
+    // fields coming from operation
     boolean putTransient;
+    int partitionId;
     long ttl = UNSET;
     long maxIdle = UNSET;
     long version;
@@ -60,9 +58,11 @@ public class State {
     UUID ownerUuid;
     CallerProvenance callerProvenance;
 
-    int partitionId;
+    // fields used in inter thread communication
+    private volatile Object oldValue;
+    private volatile Object newValue;
     private volatile boolean stopExecution;
-    private Object result;
+    private volatile Object result;
     private volatile boolean nullRecord;
     private volatile Collection<Data> keysToLoad = Collections.emptyList();
     private volatile Map loadedKeyValuePairs = Collections.emptyMap();
@@ -79,12 +79,36 @@ public class State {
         this.operation = operation;
     }
 
+    public State(State state) {
+        this.recordStore = state.getRecordStore();
+        this.operation = state.getOperation();
+
+        setTtl(state.getTtl())
+                .setPutTransient(state.isPutTransient())
+                .setMaxIdle(state.getMaxIdle())
+                .setVersion(state.getVersion())
+                .setExpiryTime(state.getExpiryTime())
+                .setNow(state.getNow())
+                .setStaticPutParams(state.getStaticParams())
+                .setOwnerUuid(state.getOwnerUuid())
+                .setTxnId(state.getTxnId())
+                .setCallerProvenance(state.getCallerProvenance())
+                .setEntryProcessor(state.getEntryProcessor())
+                .setCallerAddress(state.getCallerAddress())
+                .setPartitionId(state.getPartitionId());
+    }
+
     public RecordStore getRecordStore() {
         return recordStore;
     }
 
     public MapOperation getOperation() {
         return operation;
+    }
+
+    public State setVersion(long version) {
+        this.version = version;
+        return this;
     }
 
     public State setPartitionId(int partitionId) {
@@ -142,8 +166,9 @@ public class State {
         return this;
     }
 
-    public void setExpiryTime(long expiryTime) {
+    public State setExpiryTime(long expiryTime) {
         this.expiryTime = expiryTime;
+        return this;
     }
 
     public State setPutTransient(boolean putTransient) {
@@ -240,6 +265,11 @@ public class State {
         return ownerUuid;
     }
 
+    public State setOwnerUuid(UUID ownerUuid) {
+        this.ownerUuid = ownerUuid;
+        return this;
+    }
+
     public int getPartitionId() {
         return partitionId;
     }
@@ -299,8 +329,9 @@ public class State {
         return records;
     }
 
-    public void setEntryOperator(EntryOperator operator) {
+    public State setEntryOperator(EntryOperator operator) {
         this.operator = operator;
+        return this;
     }
 
     public EntryOperator getOperator() {
