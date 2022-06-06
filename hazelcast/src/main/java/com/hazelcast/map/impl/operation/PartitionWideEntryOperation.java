@@ -24,6 +24,10 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
+import com.hazelcast.map.impl.operation.steps.FullScanEPStep;
+import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.StepOffload;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -31,9 +35,11 @@ import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
+import com.hazelcast.wan.impl.CallerProvenance;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
@@ -44,6 +50,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
+import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 
 /**
  * GOTCHA: This operation does NOT load missing keys from map-store for now.
@@ -77,6 +84,30 @@ public class PartitionWideEntryOperation extends MapOperation
 
         keysFromIndex = null;
         queryOptimizer = mapServiceContext.getQueryOptimizer();
+    }
+
+    @Override
+    public CallStatus call() throws Exception {
+        if (mapStoreOffloadEnabled) {
+            assert recordStore != null;
+
+            return new StepOffload(this, getName(), newStepRunner());
+        }
+
+        return super.call();
+    }
+
+    @Override
+    protected StepRunner newStepRunner() {
+        State state = new State(recordStore, this);
+        state.setPredicate(getPredicate())
+                .setCallerProvenance(CallerProvenance.NOT_WAN)
+                .setEntryProcessor(entryProcessor)
+                .setCallerAddress(getCallerAddress())
+                .setPartitionId(getPartitionId());
+
+        return new StepRunner(getNodeEngine(), this,
+                newStepSupplier(state, FullScanEPStep.INITIAL), getName());
     }
 
     protected Predicate getPredicate() {

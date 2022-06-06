@@ -1,0 +1,253 @@
+/*
+ * Copyright (c) 2008-2022, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hazelcast.map.impl.operation.steps;
+
+import com.hazelcast.config.InMemoryFormat;
+import com.hazelcast.core.EntryEventType;
+import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.MapContainer;
+import com.hazelcast.map.impl.MapEntries;
+import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.operation.EntryOperator;
+import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.query.Predicate;
+import com.hazelcast.query.impl.Indexes;
+import com.hazelcast.query.impl.QueryableEntry;
+import com.hazelcast.query.impl.predicates.QueryOptimizer;
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationservice.Operation;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+
+import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
+import static com.hazelcast.map.impl.operation.EntryOperator.operator;
+
+// TODO: Handle backup operations for this step since backup handling a bit different here.
+// TODO: what happens if partition is migrating and we offload map load.
+public enum FullScanEPStep implements Step<State> {
+
+    INITIAL() {
+        @Override
+        public Step nextStep(State state) {
+            return PROCESS;
+        }
+    },
+
+    PROCESS() {
+        @Override
+        public Runnable createStep(State state) {
+            return new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    RecordStore<Record> recordStore = state.getRecordStore();
+
+                    if (isHDMap(recordStore) && runWithIndex(state)) {
+                        return;
+                    }
+                    runWithPartitionScan(state);
+                }
+
+                private boolean isHDMap(RecordStore<Record> recordStore) {
+                    return recordStore.getMapContainer().getMapConfig()
+                            .getInMemoryFormat() == InMemoryFormat.NATIVE;
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return state.getPartitionId();
+                }
+            };
+        }
+
+        private boolean runWithIndex(State state) {
+            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+
+            Predicate predicate = state.getPredicate();
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            int partitionId = state.getPartitionId();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            QueryOptimizer queryOptimizer = mapServiceContext.getQueryOptimizer();
+
+            // here we try to query the partitioned-index
+            if (predicate == null) {
+                return false;
+            }
+
+            // we use the partitioned-index to operate on the selected keys only
+            Indexes indexes = mapContainer.getIndexes(partitionId);
+            Iterable<QueryableEntry> entries = indexes.query(queryOptimizer.optimize(predicate, indexes), 1);
+            if (entries == null) {
+                return false;
+            }
+
+            List<State> toStore = new ArrayList<>();
+            List<State> toRemove = new ArrayList<>();
+
+            state.setToStore(toStore);
+            state.setToRemove(toRemove);
+
+            MapEntries responses = new MapEntries(recordStore.size());
+            state.setResult(responses);
+
+            final HashSet keysFromIndex = new HashSet<>();
+            entries.forEach(entry -> {
+                keysFromIndex.add(entry.getKeyData());
+                Record record = recordStore.getRecord(entry.getKeyData());
+                processInternal(state, toStore, toRemove, responses, entry.getKeyData(), record);
+            });
+
+            return true;
+        }
+
+        private void runWithPartitionScan(State state) {
+            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore<Record> recordStore = state.getRecordStore();
+
+            List<State> toStore = new ArrayList<>();
+            List<State> toRemove = new ArrayList<>();
+
+            state.setToStore(toStore);
+            state.setToRemove(toRemove);
+
+            MapEntries responses = new MapEntries(recordStore.size());
+            state.setResult(responses);
+
+            recordStore.forEach((key, record) -> {
+                processInternal(state, toStore, toRemove, responses, toHeapData(key), record);
+
+            }, false);
+        }
+
+        private void processInternal(State state, List<State> toStore, List<State> toRemove,
+                                     MapEntries responses, Data key, Record record) {
+            State singleKeyState = new State(state);
+            singleKeyState
+                    .setKey(key)
+                    .setOldValue(record == null ? null : record.getValue())
+                    .setEntryOperator(operator(singleKeyState.getOperation(),
+                            singleKeyState.getEntryProcessor(), singleKeyState.getPredicate()));
+
+            EPStep.PROCESS.runStepDirect(singleKeyState);
+
+            EntryEventType eventType = singleKeyState.getOperator().getEventType();
+            if (eventType == null) {
+                Data result = singleKeyState.getOperator().getResult();
+                if (result != null) {
+                    responses.add(singleKeyState.getKey(), result);
+                }
+            } else {
+                switch (eventType) {
+                    case ADDED:
+                    case UPDATED:
+                        toStore.add(singleKeyState);
+                        break;
+                    case REMOVED:
+                        toRemove.add(singleKeyState);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unexpected event found:" + eventType);
+                }
+            }
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return !state.getToStore().isEmpty() || !state.getToRemove().isEmpty()
+                    ? STORE_OR_DELETE : ON_STORE_OR_DELETE;
+        }
+    },
+
+    STORE_OR_DELETE() {
+        @Override
+        public Runnable createStep(State state) {
+            return () -> {
+                List<State> toStore = state.getToStore();
+                for (State s : toStore) {
+                    PutStep.STORE.runStepDirect(s);
+                }
+
+                List<State> toRemove = state.getToRemove();
+                for (State s : toRemove) {
+                    DeleteStep.DELETE.runStepDirect(s);
+                }
+            };
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return ON_STORE_OR_DELETE;
+        }
+    },
+
+    ON_STORE_OR_DELETE() {
+        @Override
+        public Runnable createStep(State state) {
+            return new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    List<State> toStore = state.getToStore();
+                    for (State s : toStore) {
+                        PutStep.ON_STORE.runStepDirect(s);
+
+                        EntryOperator operator = s.getOperator();
+                        operator.onAddedOrUpdated0(s.getNewValue());
+                        operator.doPostOperateOps0();
+
+                        Data result = s.getOperator().getResult();
+                        if (result != null) {
+                            ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        }
+                    }
+
+                    List<State> toRemove = state.getToRemove();
+                    for (State s : toRemove) {
+                        DeleteStep.ON_DELETE.runStepDirect(s);
+
+                        EntryOperator operator = s.getOperator();
+                        operator.onRemove0();
+                        operator.doPostOperateOps0();
+
+                        Data result = s.getOperator().getResult();
+                        if (result != null) {
+                            ((MapEntries) state.getResult()).add(s.getKey(), result);
+                        }
+                    }
+
+                    Operation operation = state.getOperation();
+                    operation.sendResponse(state.getResult());
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return state.getPartitionId();
+                }
+            };
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return null;
+        }
+    };
+
+    FullScanEPStep() {
+    }
+}
