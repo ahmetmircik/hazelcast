@@ -23,7 +23,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.MultipleKeyEPStep;
+import com.hazelcast.map.impl.operation.steps.EPMultiKeyStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.operation.steps.StepOffload;
 import com.hazelcast.map.impl.operation.steps.StepRunner;
@@ -42,7 +42,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.SetUtil.createHashSet;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 
 
 public class MultipleEntryOperation extends MapOperation
@@ -92,7 +92,7 @@ public class MultipleEntryOperation extends MapOperation
                 .setPartitionId(getPartitionId());
 
         return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, MultipleKeyEPStep.INITIAL), getName());
+                newStepSupplier(state, EPMultiKeyStep.INITIAL), getName());
     }
 
     @Override

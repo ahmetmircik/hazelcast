@@ -25,7 +25,7 @@ import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 
 public abstract class BaseRemoveOperation extends LockAwareOperation
         implements BackupAwareOperation, MutatingOperation {

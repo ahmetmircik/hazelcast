@@ -71,7 +71,8 @@ public enum ClearStep implements Step {
 
         @Override
         public ClearStep nextStep(State state) {
-            return state.getRecordStore() == null ? ClearStep.RESPONSE : ClearStep.CLEAR_MAP_STORE;
+            return state.getRecordStore() == null
+                    ? ClearStep.RESPONSE : ClearStep.CLEAR_MAP_STORE;
         }
     },
 
@@ -95,9 +96,7 @@ public enum ClearStep implements Step {
         }
     },
 
-
     ON_CLEAR() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
@@ -116,7 +115,6 @@ public enum ClearStep implements Step {
     },
 
     RESPONSE() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> clear all sending response");

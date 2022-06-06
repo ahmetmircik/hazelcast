@@ -24,7 +24,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.FullScanEPStep;
+import com.hazelcast.map.impl.operation.steps.EPFullScanStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.operation.steps.StepOffload;
 import com.hazelcast.map.impl.operation.steps.StepRunner;
@@ -50,7 +50,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 
 /**
  * GOTCHA: This operation does NOT load missing keys from map-store for now.
@@ -107,7 +107,7 @@ public class PartitionWideEntryOperation extends MapOperation
                 .setPartitionId(getPartitionId());
 
         return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, FullScanEPStep.INITIAL), getName());
+                newStepSupplier(state, EPFullScanStep.INITIAL), getName());
     }
 
     protected Predicate getPredicate() {

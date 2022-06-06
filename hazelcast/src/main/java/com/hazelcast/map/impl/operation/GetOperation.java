@@ -20,13 +20,13 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.map.impl.operation.steps.GetStep;
 import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 
 public final class GetOperation extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
 

@@ -26,7 +26,6 @@ import java.util.UUID;
 public enum TxnRemoveStep implements Step {
 
     INITIAL() {
-
         @Override
         public Step nextStep(State state) {
             return READ;
@@ -34,7 +33,6 @@ public enum TxnRemoveStep implements Step {
     },
 
     READ() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> reading old value"

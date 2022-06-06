@@ -37,7 +37,7 @@ import java.util.Map;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum MultipleKeyEPStep implements Step {
+public enum EPMultiKeyStep implements Step {
 
     INITIAL() {
         @Override
@@ -72,10 +72,10 @@ public enum MultipleKeyEPStep implements Step {
         @Override
         public Step nextStep(State state) {
             if (!state.getKeysToLoad().isEmpty()) {
-                return MultipleKeyEPStep.LOAD_ALL;
+                return EPMultiKeyStep.LOAD_ALL;
             }
             // FIXME
-            return MultipleKeyEPStep.PROCESS;
+            return EPMultiKeyStep.PROCESS;
         }
     },
 
@@ -94,7 +94,7 @@ public enum MultipleKeyEPStep implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getLoadedKeyValuePairs().isEmpty()
-                    ? MultipleKeyEPStep.PROCESS : MultipleKeyEPStep.ON_LOAD_ALL;
+                    ? EPMultiKeyStep.PROCESS : EPMultiKeyStep.ON_LOAD_ALL;
         }
     },
 
@@ -124,7 +124,7 @@ public enum MultipleKeyEPStep implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return MultipleKeyEPStep.PROCESS;
+            return EPMultiKeyStep.PROCESS;
         }
     },
 
@@ -155,7 +155,7 @@ public enum MultipleKeyEPStep implements Step {
                         .setEntryOperator(operator(state.getOperation(),
                                 state.getEntryProcessor(), state.getPredicate()));
 
-                EPStep.PROCESS.runStep(singleKeyState);
+                EPSingleKeyStep.PROCESS.runStep(singleKeyState);
 
                 EntryEventType eventType = singleKeyState.getOperator().getEventType();
                 if (eventType == null) {
@@ -252,6 +252,6 @@ public enum MultipleKeyEPStep implements Step {
         }
     };
 
-    MultipleKeyEPStep() {
+    EPMultiKeyStep() {
     }
 }

@@ -40,7 +40,7 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: Handle backup operations for this step since backup handling a bit different here.
 // TODO: what happens if partition is migrating and we offload map load.
-public enum FullScanEPStep implements Step {
+public enum EPFullScanStep implements Step {
 
     INITIAL() {
         @Override
@@ -134,7 +134,7 @@ public enum FullScanEPStep implements Step {
                     .setEntryOperator(operator(state.getOperation(),
                             state.getEntryProcessor(), state.getPredicate()));
 
-            EPStep.PROCESS.runStep(singleKeyState);
+            EPSingleKeyStep.PROCESS.runStep(singleKeyState);
 
             EntryEventType eventType = singleKeyState.getOperator().getEventType();
             if (eventType == null) {
@@ -230,6 +230,6 @@ public enum FullScanEPStep implements Step {
         }
     };
 
-    FullScanEPStep() {
+    EPFullScanStep() {
     }
 }

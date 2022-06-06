@@ -246,7 +246,6 @@ public enum PutStep implements Step {
     },
 
     AFTER_RUN() {
-
         @Override
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();

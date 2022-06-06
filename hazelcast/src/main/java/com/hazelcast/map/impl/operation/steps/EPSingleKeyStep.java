@@ -31,7 +31,7 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO: UPDATE BACKUP!!!
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPStep implements Step {
+public enum EPSingleKeyStep implements Step {
 
     INITIAL() {
         @Override
@@ -60,9 +60,9 @@ public enum EPStep implements Step {
         @Override
         public Step nextStep(State state) {
             if (state.isStopExecution()) {
-                return EPStep.RESPONSE;
+                return EPSingleKeyStep.RESPONSE;
             }
-            EPStep epStep = state.getOldValue() == null ? EPStep.LOAD : EPStep.PROCESS;
+            EPSingleKeyStep epStep = state.getOldValue() == null ? EPSingleKeyStep.LOAD : EPSingleKeyStep.PROCESS;
             Step.log(state.getOldValue() == null ? "EPStep.LOAD" : "EPStep.PROCESS");
             return epStep;
         }
@@ -83,7 +83,7 @@ public enum EPStep implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? EPStep.PROCESS : EPStep.ON_LOAD;
+            return state.getOldValue() == null ? EPSingleKeyStep.PROCESS : EPSingleKeyStep.ON_LOAD;
         }
     },
 
@@ -95,7 +95,7 @@ public enum EPStep implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return EPStep.PROCESS;
+            return EPSingleKeyStep.PROCESS;
         }
     },
 
@@ -259,6 +259,6 @@ public enum EPStep implements Step {
         }
     };
 
-    EPStep() {
+    EPSingleKeyStep() {
     }
 }

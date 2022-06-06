@@ -156,7 +156,6 @@ public enum RemoveIfSameStep implements Step {
     },
 
     RESPONSE() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");

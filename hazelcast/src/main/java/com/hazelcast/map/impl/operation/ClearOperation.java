@@ -27,7 +27,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
 
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 
 public class ClearOperation extends MapOperation
         implements BackupAwareOperation, PartitionAwareOperation, MutatingOperation {

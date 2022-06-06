@@ -30,7 +30,7 @@ import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.ExecutorStats;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.EPStep;
+import com.hazelcast.map.impl.operation.steps.EPSingleKeyStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.operation.steps.StepOffload;
 import com.hazelcast.map.impl.operation.steps.StepRunner;
@@ -59,7 +59,7 @@ import static com.hazelcast.core.Offloadable.NO_OFFLOADING;
 import static com.hazelcast.internal.util.ExceptionUtil.sneakyThrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.OFFLOADABLE_EXECUTOR;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
@@ -218,7 +218,7 @@ public class EntryOperation extends LockAwareOperation
                 .setPartitionId(getPartitionId());
 
         return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPStep.INITIAL), getName());
+                newStepSupplier(state, EPSingleKeyStep.INITIAL), getName());
     }
 
     @Override

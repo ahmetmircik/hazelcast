@@ -36,7 +36,6 @@ public enum RemoveStep implements Step {
     },
 
     READ() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
@@ -138,7 +137,6 @@ public enum RemoveStep implements Step {
     },
 
     RESPONSE() {
-
         @Override
         public void runStep(State state) {
             Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");

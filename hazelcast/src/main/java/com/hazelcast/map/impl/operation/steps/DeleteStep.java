@@ -140,7 +140,6 @@ public enum DeleteStep implements Step {
         }
     };
 
-
     DeleteStep() {
     }
 }
