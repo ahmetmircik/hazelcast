@@ -93,7 +93,6 @@ public enum RemoveIfSameStep implements Step<State> {
     },
 
     ON_LOAD() {
-        private boolean goToDelete = false;
 
         @Override
         public Runnable createStep(State state) {
@@ -112,9 +111,9 @@ public enum RemoveIfSameStep implements Step<State> {
                     Object oldValue = state.getOldValue();
                     if (valueComparator.isEqual(state.getExpect(), oldValue, serializationService)) {
                         mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                        goToDelete = true;
                     } else {
                         state.setResult(false);
+                        state.setStopExecution(true);
                     }
                 }
 
@@ -127,7 +126,8 @@ public enum RemoveIfSameStep implements Step<State> {
 
         @Override
         public RemoveIfSameStep nextStep(State state) {
-            return goToDelete ? RemoveIfSameStep.DELETE : RemoveIfSameStep.RESPONSE;
+            return state.isStopExecution()
+                    ? RemoveIfSameStep.RESPONSE : RemoveIfSameStep.DELETE;
         }
     },
 
