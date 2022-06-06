@@ -22,6 +22,9 @@ import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
+import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.Step;
+import com.hazelcast.map.impl.operation.steps.TxnPutStep;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -59,6 +62,21 @@ public class TxnSetOperation extends BasePutOperation
         super(name, dataKey, value);
         this.version = version;
         this.ttl = ttl;
+    }
+
+    @Override
+    protected State newState() {
+        return super.newState()
+                .setStaticPutParams(getStaticParams())
+                .setTxnId(transactionId)
+                .setOwnerUuid(ownerUuid)
+                .setVersion(version)
+                .setTtl(ttl);
+    }
+
+    @Override
+    protected Step getOffloadStartingStep() {
+        return TxnPutStep.INITIAL;
     }
 
     @Override

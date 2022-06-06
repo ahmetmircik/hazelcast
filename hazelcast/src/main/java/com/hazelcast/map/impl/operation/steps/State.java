@@ -45,6 +45,7 @@ public class State {
     // fields coming from operation
     boolean putTransient;
     int partitionId;
+    long threadId;
     long ttl = UNSET;
     long maxIdle = UNSET;
     long version;
@@ -194,6 +195,15 @@ public class State {
     public State setEntryProcessor(EntryProcessor entryProcessor) {
         this.entryProcessor = entryProcessor;
         return this;
+    }
+
+    public State setThreadId(long threadId) {
+        this.threadId = threadId;
+        return this;
+    }
+
+    public long getThreadId() {
+        return threadId;
     }
 
     public EntryProcessor getEntryProcessor() {

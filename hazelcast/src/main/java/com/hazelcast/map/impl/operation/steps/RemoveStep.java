@@ -42,19 +42,7 @@ public enum RemoveStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-
-                    Record record = recordStore.getRecordOrNull(state.getKey());
-                    state.setRecordNull(record == null);
-
-                    if (record != null) {
-                        Object oldValue = record.getValue();
-                        oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                        state.setOldValue(oldValue);
-                    }
+                    runStepDirect(state);
                 }
 
                 @Override
@@ -62,6 +50,23 @@ public enum RemoveStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+
+            Record record = recordStore.getRecordOrNull(state.getKey());
+            state.setRecordNull(record == null);
+
+            if (record != null) {
+                Object oldValue = record.getValue();
+                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+                state.setOldValue(oldValue);
+            }
         }
 
         @Override

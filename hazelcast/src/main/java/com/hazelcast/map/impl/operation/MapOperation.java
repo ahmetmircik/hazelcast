@@ -405,7 +405,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return false;
     }
 
-    protected final TxnReservedCapacityCounter wbqCapacityCounter() {
+    public final TxnReservedCapacityCounter wbqCapacityCounter() {
         return recordStore.getMapDataStore().getTxnReservedCapacityCounter();
     }
 

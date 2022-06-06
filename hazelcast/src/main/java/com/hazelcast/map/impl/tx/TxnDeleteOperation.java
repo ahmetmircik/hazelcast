@@ -20,7 +20,9 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.operation.steps.Step;
+import com.hazelcast.map.impl.operation.steps.TxnRemoveStep;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -77,8 +79,22 @@ public class TxnDeleteOperation
     }
 
     @Override
+    protected State newState() {
+        return super.newState()
+                .setVersion(version)
+                .setThreadId(threadId)
+                .setOwnerUuid(ownerUuid)
+                .setTxnId(transactionId);
+    }
+
+    @Override
     public boolean shouldWait() {
         return false;
+    }
+
+    @Override
+    protected Step getOffloadStartingStep() {
+        return TxnRemoveStep.INITIAL;
     }
 
     @Override
@@ -86,11 +102,6 @@ public class TxnDeleteOperation
         if (successful) {
             super.afterRunInternal();
         }
-    }
-
-    @Override
-    protected Step getOffloadStartingStep() {
-        throw new UnsupportedOperationException();
     }
 
     @Override

@@ -18,15 +18,15 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.map.impl.operation.steps.PutStep;
 import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.Step;
+import com.hazelcast.map.impl.operation.steps.StepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
-import org.jetbrains.annotations.NotNull;
 
 import static com.hazelcast.map.impl.operation.steps.Step.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -56,20 +56,25 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         throw new UnsupportedOperationException();
     }
 
-    @NotNull
     protected StepRunner newStepRunner() {
-        State state = new State(recordStore, this);
-        state.setStaticPutParams(getStaticParams())
-                .setKey(dataKey).
-                setNewValue(dataValue)
+        return new StepRunner(getNodeEngine(), this,
+                newStepSupplier(newState(), getOffloadStartingStep()), getName());
+    }
+
+    protected Step getOffloadStartingStep() {
+        return PutStep.INITIAL;
+    }
+
+    protected State newState() {
+        return new State(recordStore, this)
+                .setStaticPutParams(getStaticParams())
+                .setKey(dataKey)
+                .setNewValue(dataValue)
                 .setExpect(getExpect())
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle())
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
-
-        return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, PutStep.INITIAL), getName());
     }
 
     @Override

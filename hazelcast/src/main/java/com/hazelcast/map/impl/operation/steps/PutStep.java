@@ -47,12 +47,7 @@ public enum PutStep implements Step<State> {
             return new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
-                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
-                    if (record != null) {
-                        state.setOldValue(record.getValue());
-                    }
+                  runStepDirect(state);
                 }
 
                 @Override
@@ -60,6 +55,16 @@ public enum PutStep implements Step<State> {
                     return state.getPartitionId();
                 }
             };
+        }
+
+        @Override
+        public void runStepDirect(State state) {
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
+            if (record != null) {
+                state.setOldValue(record.getValue());
+            }
         }
 
         @Override
@@ -76,7 +81,8 @@ public enum PutStep implements Step<State> {
 
                 StaticParams staticParams = state.getStaticParams();
                 if (staticParams.isPutVanilla()) {
-                    state.setOldValue(((DefaultRecordStore) state.getRecordStore()).loadValueOf(state.getKey()));
+                    state.setOldValue(((DefaultRecordStore) state.getRecordStore())
+                            .loadValueOf(state.getKey()));
                 } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
                     state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
                 }
