@@ -29,7 +29,6 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
@@ -41,7 +40,7 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: Handle backup operations for this step since backup handling a bit different here.
 // TODO: what happens if partition is migrating and we offload map load.
-public enum FullScanEPStep implements Step<State> {
+public enum FullScanEPStep implements Step {
 
     INITIAL() {
         @Override
@@ -52,28 +51,18 @@ public enum FullScanEPStep implements Step<State> {
 
     PROCESS() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    RecordStore<Record> recordStore = state.getRecordStore();
+        public void runStep(State state) {
+            RecordStore<Record> recordStore = state.getRecordStore();
 
-                    if (isHDMap(recordStore) && runWithIndex(state)) {
-                        return;
-                    }
-                    runWithPartitionScan(state);
-                }
+            if (isHDMap(recordStore) && runWithIndex(state)) {
+                return;
+            }
+            runWithPartitionScan(state);
+        }
 
-                private boolean isHDMap(RecordStore<Record> recordStore) {
-                    return recordStore.getMapContainer().getMapConfig()
-                            .getInMemoryFormat() == InMemoryFormat.NATIVE;
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+        private boolean isHDMap(RecordStore<Record> recordStore) {
+            return recordStore.getMapContainer().getMapConfig()
+                    .getInMemoryFormat() == InMemoryFormat.NATIVE;
         }
 
         private boolean runWithIndex(State state) {
@@ -142,10 +131,10 @@ public enum FullScanEPStep implements Step<State> {
             singleKeyState
                     .setKey(key)
                     .setOldValue(record == null ? null : record.getValue())
-                    .setEntryOperator(operator(singleKeyState.getOperation(),
-                            singleKeyState.getEntryProcessor(), singleKeyState.getPredicate()));
+                    .setEntryOperator(operator(state.getOperation(),
+                            state.getEntryProcessor(), state.getPredicate()));
 
-            EPStep.PROCESS.runStepDirect(singleKeyState);
+            EPStep.PROCESS.runStep(singleKeyState);
 
             EntryEventType eventType = singleKeyState.getOperator().getEventType();
             if (eventType == null) {
@@ -177,18 +166,21 @@ public enum FullScanEPStep implements Step<State> {
 
     STORE_OR_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                List<State> toStore = state.getToStore();
-                for (State s : toStore) {
-                    PutStep.STORE.runStepDirect(s);
-                }
+        public boolean offloadStep() {
+            return true;
+        }
 
-                List<State> toRemove = state.getToRemove();
-                for (State s : toRemove) {
-                    DeleteStep.DELETE.runStepDirect(s);
-                }
-            };
+        @Override
+        public void runStep(State state) {
+            List<State> toStore = state.getToStore();
+            for (State s : toStore) {
+                PutStep.STORE.runStep(s);
+            }
+
+            List<State> toRemove = state.getToRemove();
+            for (State s : toRemove) {
+                DeleteStep.DELETE.runStep(s);
+            }
         }
 
         @Override
@@ -199,47 +191,37 @@ public enum FullScanEPStep implements Step<State> {
 
     ON_STORE_OR_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    List<State> toStore = state.getToStore();
-                    for (State s : toStore) {
-                        PutStep.ON_STORE.runStepDirect(s);
+        public void runStep(State state) {
+            List<State> toStore = state.getToStore();
+            for (State s : toStore) {
+                PutStep.ON_STORE.runStep(s);
 
-                        EntryOperator operator = s.getOperator();
-                        operator.onAddedOrUpdated0(s.getNewValue());
-                        operator.doPostOperateOps0();
+                EntryOperator operator = s.getOperator();
+                operator.onAddedOrUpdated0(s.getNewValue());
+                operator.doPostOperateOps0();
 
-                        Data result = s.getOperator().getResult();
-                        if (result != null) {
-                            ((MapEntries) state.getResult()).add(s.getKey(), result);
-                        }
-                    }
-
-                    List<State> toRemove = state.getToRemove();
-                    for (State s : toRemove) {
-                        DeleteStep.ON_DELETE.runStepDirect(s);
-
-                        EntryOperator operator = s.getOperator();
-                        operator.onRemove0();
-                        operator.doPostOperateOps0();
-
-                        Data result = s.getOperator().getResult();
-                        if (result != null) {
-                            ((MapEntries) state.getResult()).add(s.getKey(), result);
-                        }
-                    }
-
-                    Operation operation = state.getOperation();
-                    operation.sendResponse(state.getResult());
+                Data result = s.getOperator().getResult();
+                if (result != null) {
+                    ((MapEntries) state.getResult()).add(s.getKey(), result);
                 }
+            }
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
+            List<State> toRemove = state.getToRemove();
+            for (State s : toRemove) {
+                DeleteStep.ON_DELETE.runStep(s);
+
+                EntryOperator operator = s.getOperator();
+                operator.onRemove0();
+                operator.doPostOperateOps0();
+
+                Data result = s.getOperator().getResult();
+                if (result != null) {
+                    ((MapEntries) state.getResult()).add(s.getKey(), result);
                 }
-            };
+            }
+
+            Operation operation = state.getOperation();
+            operation.sendResponse(state.getResult());
         }
 
         @Override

@@ -16,22 +16,34 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+
+import javax.annotation.Nullable;
 import java.util.function.Supplier;
 
-public interface Step<State> {
+public interface Step {
 
-    default Runnable createStep(State state) {
+    default void runStep(State state) {
         throw new UnsupportedOperationException();
     }
 
-    Step nextStep(State state);
-
-    default void runStepDirect(State state) {
+    /**
+     * Idempotent next step finder.
+     *
+     * @param state state
+     * @return next step or null if there is no next step.
+     */
+    @Nullable
+    default Step nextStep(State state) {
         throw new UnsupportedOperationException();
+    }
+
+    default boolean offloadStep() {
+        return false;
     }
 
     static void log(String msg) {
-        //S(msg);
+        //System.out.println("msg = " + msg);
     }
 
     static Supplier<Runnable> newStepSupplier(com.hazelcast.map.impl.operation.steps.State state,
@@ -41,6 +53,9 @@ public interface Step<State> {
 
             @Override
             public Runnable get() {
+                if (current == null) {
+                    return null;
+                }
                 Step nextStep = current.nextStep(state);
                 if (nextStep == null) {
                     return null;
@@ -49,7 +64,38 @@ public interface Step<State> {
                 assertStepTypeSameWithInitial(nextStep);
 
                 current = nextStep;
-                return nextStep.createStep(state);
+                return createStep(state, nextStep);
+            }
+
+            private Runnable createStep(State state, Step step) {
+                if (step.offloadStep()) {
+                    return () -> step.runStep(state);
+                }
+
+                return new PartitionSpecificRunnable() {
+                    @Override
+                    public void run() {
+                        step.runStep(state);
+
+                        Step temp = step;
+                        while (true) {
+                            Step nextStep = temp.nextStep(state);
+                            if (nextStep == null
+                                    || nextStep.offloadStep()) {
+                                current = temp;
+                                break;
+                            }
+
+                            nextStep.runStep(state);
+                            temp = nextStep;
+                        }
+                    }
+
+                    @Override
+                    public int getPartitionId() {
+                        return state.getPartitionId();
+                    }
+                };
             }
 
             private void assertStepTypeSameWithInitial(Step nextStep) {

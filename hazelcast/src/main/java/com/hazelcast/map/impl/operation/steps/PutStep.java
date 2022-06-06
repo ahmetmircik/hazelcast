@@ -26,13 +26,14 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+
 // TODO: re-run upon NOOME
-public enum PutStep implements Step<State> {
+public enum PutStep implements Step {
 
     INITIAL() {
         @Override
@@ -43,22 +44,7 @@ public enum PutStep implements Step<State> {
 
     READ() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                  runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
@@ -69,119 +55,117 @@ public enum PutStep implements Step<State> {
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? PutStep.LOAD : PutStep.RUN_META_OPS;
+            return state.getOldValue() == null ? PutStep.LOAD : PutStep.PROCESS;
         }
     },
 
     LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+        public boolean offloadStep() {
+            return true;
+        }
 
-                StaticParams staticParams = state.getStaticParams();
-                if (staticParams.isPutVanilla()) {
-                    state.setOldValue(((DefaultRecordStore) state.getRecordStore())
-                            .loadValueOf(state.getKey()));
-                } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                    state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
-                }
-            };
+        @Override
+        public void runStep(State state) {
+            assert !isRunningOnPartitionThread();
+
+            Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+
+            StaticParams staticParams = state.getStaticParams();
+            if (staticParams.isPutVanilla()) {
+                state.setOldValue(((DefaultRecordStore) state.getRecordStore())
+                        .loadValueOf(state.getKey()));
+            } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
+                state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+            }
         }
 
         @Override
         public Step nextStep(State state) {
-            return PutStep.RUN_META_OPS;
+            return PutStep.PROCESS;
         }
     },
 
-    RUN_META_OPS() {
+    PROCESS() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    Step.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
-                    StaticParams staticParams = state.getStaticParams();
-                    Object newValue = state.getNewValue();
+            Step.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
+            StaticParams staticParams = state.getStaticParams();
+            Object newValue = state.getNewValue();
 
-                    // For method replace, if current value is not expected one, return.
-                    RecordStore recordStore = state.getRecordStore();
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            // For method replace, if current value is not expected one, return.
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                    if (staticParams.isPutIfAbsent()) {
-                        Record record = recordStore.getRecord(state.getKey());
-                        if (record == null && state.getOldValue() != null) {
-                            record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                                    state.getOldValue(), false, state.getCallerAddress());
-                        }
-
-                        if (record != null) {
-                            state.setOldValue(record.getValue());
-                            state.setStopExecution(true);
-                            return;
-                        }
-                    } else if (staticParams.isPutIfExists()) {
-                        Record record = recordStore.getRecord(state.getKey());
-                        if (record == null && state.getOldValue() != null) {
-                            record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                                    state.getOldValue(), false, state.getCallerAddress());
-                        }
-
-                        if (record == null) {
-                            state.setOldValue(null);
-                            state.setStopExecution(true);
-                            state.setResult(false);
-                            return;
-                        }
-
-                        newValue = staticParams.isSetTtl() ? record.getValue() : newValue;
-                        state.setNewValue(newValue);
-                        state.setOldValue(record.getValue());
-                    }
-
-                    if (staticParams.isPutIfEqual()
-                            && !((DefaultRecordStore) recordStore).getValueComparator()
-                            .isEqual(state.getExpect(), state.getOldValue(),
-                                    mapServiceContext.getNodeEngine().getSerializationService())) {
-                        state.setResult(false);
-                        state.setStopExecution(true);
-                        return;
-                    }
-
-                    // Intercept put on owner partition.
-                    newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
-                            state.getOldValue(), newValue);
-                    state.setNewValue(newValue);
+            if (staticParams.isPutIfAbsent()) {
+                Record record = recordStore.getRecord(state.getKey());
+                if (record == null && state.getOldValue() != null) {
+                    record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                            state.getOldValue(), false, state.getCallerAddress());
                 }
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
+                if (record != null) {
+                    state.setOldValue(record.getValue());
+                    state.setStopExecution(true);
+                    return;
                 }
-            };
+            } else if (staticParams.isPutIfExists()) {
+                Record record = recordStore.getRecord(state.getKey());
+                if (record == null && state.getOldValue() != null) {
+                    record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
+                            state.getOldValue(), false, state.getCallerAddress());
+                }
+
+                if (record == null) {
+                    state.setOldValue(null);
+                    state.setStopExecution(true);
+                    state.setResult(false);
+                    return;
+                }
+
+                newValue = staticParams.isSetTtl() ? record.getValue() : newValue;
+                state.setNewValue(newValue);
+                state.setOldValue(record.getValue());
+            }
+
+            if (staticParams.isPutIfEqual()
+                    && !((DefaultRecordStore) recordStore).getValueComparator()
+                    .isEqual(state.getExpect(), state.getOldValue(),
+                            mapServiceContext.getNodeEngine().getSerializationService())) {
+                state.setResult(false);
+                state.setStopExecution(true);
+                return;
+            }
+
+            // Intercept put on owner partition.
+            newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
+                    state.getOldValue(), newValue);
+            state.setNewValue(newValue);
         }
 
         @Override
         public Step nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
-            return state.isStopExecution() ? PutStep.RESPONSE : STORE;
+            if (state.isStopExecution()) {
+                return RESPONSE;
+            }
+            return STORE;
         }
     },
 
     STORE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
         }
 
         @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
+            assert !isRunningOnPartitionThread();
+
             Step.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
             Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
@@ -196,22 +180,7 @@ public enum PutStep implements Step<State> {
 
     ON_STORE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
@@ -242,34 +211,32 @@ public enum PutStep implements Step<State> {
 
     RESPONSE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-                RecordStore recordStore = state.getRecordStore();
-                MapContainer mapContainer = recordStore.getMapContainer();
-                MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+        public void runStep(State state) {
+            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                StaticParams staticParams = state.getStaticParams();
-                Object oldValue = state.getOldValue();
+            StaticParams staticParams = state.getStaticParams();
+            Object oldValue = state.getOldValue();
 
-                MapOperation operation = state.getOperation();
-                if (staticParams.isTryPut()) {
-                    operation.sendResponse(true);
-                } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
-                    operation.sendResponse(!state.isStopExecution());
-                } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                    operation.sendResponse(mapServiceContext.toData(oldValue));
-                } else if (staticParams.isPutIfEqual()) {
-                    operation.sendResponse(oldValue != null);
-                }
+            MapOperation operation = state.getOperation();
+            if (staticParams.isTryPut()) {
+                operation.sendResponse(true);
+            } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
+                operation.sendResponse(!state.isStopExecution());
+            } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
+                operation.sendResponse(mapServiceContext.toData(oldValue));
+            } else if (staticParams.isPutIfEqual()) {
+                operation.sendResponse(oldValue != null);
+            }
 
-                OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
-                        .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-                ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
-                        state.getKey(), mapServiceContext.toData(state.getNewValue()));
+            OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+                    .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+            ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
+                    state.getKey(), mapServiceContext.toData(state.getNewValue()));
 
-                ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
-            };
+            ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
         }
 
         @Override
@@ -279,22 +246,13 @@ public enum PutStep implements Step<State> {
     },
 
     AFTER_RUN() {
+
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
-                            state.getNewValue(), state.getOldValue());
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
+                    state.getNewValue(), state.getOldValue());
         }
 
         @Override
@@ -302,7 +260,6 @@ public enum PutStep implements Step<State> {
             return null;
         }
     };
-
 
     PutStep() {
     }

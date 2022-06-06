@@ -24,11 +24,10 @@ import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum GetStep implements Step<State> {
+public enum GetStep implements Step {
 
     INITIAL() {
         @Override
@@ -40,22 +39,7 @@ public enum GetStep implements Step<State> {
     // TODO add touch record test?
     READ() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
@@ -73,16 +57,16 @@ public enum GetStep implements Step<State> {
 
     LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
         }
 
         @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> loading old value");
-            state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+            Object load = state.getRecordStore().getMapDataStore().load(state.getKey());
+            Step.log("==> loaded " + load);
+            state.setOldValue(load);
         }
 
         @Override
@@ -93,22 +77,7 @@ public enum GetStep implements Step<State> {
 
     ON_LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
@@ -125,23 +94,21 @@ public enum GetStep implements Step<State> {
 
     RESPONSE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> sending response");
+        public void runStep(State state) {
+            Step.log("==> sending response");
 
-                RecordStore recordStore = state.getRecordStore();
-                MapContainer mapContainer = recordStore.getMapContainer();
-                MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                Operation operation = state.getOperation();
-                Object oldValue = state.getOldValue();
-                oldValue = mapServiceContext.interceptGet(mapContainer.getInterceptorRegistry(), oldValue);
+            Operation operation = state.getOperation();
+            Object oldValue = state.getOldValue();
+            oldValue = mapServiceContext.interceptGet(mapContainer.getInterceptorRegistry(), oldValue);
 
-                Data result = ((GetOperation) operation).extractResult(oldValue);
-                state.setResult(result);
+            Data result = ((GetOperation) operation).extractResult(oldValue);
+            state.setResult(result);
 
-                operation.sendResponse(result);
-            };
+            operation.sendResponse(result);
         }
 
         @Override
@@ -152,20 +119,10 @@ public enum GetStep implements Step<State> {
 
     AFTER_RUN() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getResult());
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getResult());
         }
 
         @Override

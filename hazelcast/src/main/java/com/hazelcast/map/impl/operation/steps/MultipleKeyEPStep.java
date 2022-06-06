@@ -26,7 +26,6 @@ import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
@@ -38,7 +37,7 @@ import java.util.Map;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum MultipleKeyEPStep implements Step<State> {
+public enum MultipleKeyEPStep implements Step {
 
     INITIAL() {
         @Override
@@ -49,35 +48,25 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     FIND_KEYS_TO_LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> EP start" + " (thread:" + Thread.currentThread().getName() + ")");
+        public void runStep(State state) {
+            Step.log("==> EP start" + " (thread:" + Thread.currentThread().getName() + ")");
 
-                    RecordStore recordStore = state.getRecordStore();
-                    IPartitionService partitionService = recordStore.getMapContainer()
-                            .getMapServiceContext().getNodeEngine().getPartitionService();
+            RecordStore recordStore = state.getRecordStore();
+            IPartitionService partitionService = recordStore.getMapContainer()
+                    .getMapServiceContext().getNodeEngine().getPartitionService();
 
-                    List<Data> keysToLoad = new ArrayList<>();
-                    Collection<Data> keys = state.getKeys();
-                    for (Data key : keys) {
-                        if (partitionService.getPartitionId(key) == state.getPartitionId()
-                                && recordStore.getRecord(key) == null) {
-                            keysToLoad.add(key);
-                        }
-                    }
-
-                    if (!keysToLoad.isEmpty()) {
-                        state.setKeysToLoad(Collections.unmodifiableList(keysToLoad));
-                    }
+            List<Data> keysToLoad = new ArrayList<>();
+            Collection<Data> keys = state.getKeys();
+            for (Data key : keys) {
+                if (partitionService.getPartitionId(key) == state.getPartitionId()
+                        && recordStore.getRecord(key) == null) {
+                    keysToLoad.add(key);
                 }
+            }
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            if (!keysToLoad.isEmpty()) {
+                state.setKeysToLoad(Collections.unmodifiableList(keysToLoad));
+            }
         }
 
         @Override
@@ -92,11 +81,14 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     LOAD_ALL() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Collection<Data> keysToLoad = state.getKeysToLoad();
-                state.setLoadedKeyValuePairs(state.getRecordStore().getMapDataStore().loadAll(keysToLoad));
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            Collection<Data> keysToLoad = state.getKeysToLoad();
+            state.setLoadedKeyValuePairs(state.getRecordStore().getMapDataStore().loadAll(keysToLoad));
         }
 
         @Override
@@ -108,37 +100,26 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     ON_LOAD_ALL() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> on old all"
-                            + " (thread:" + Thread.currentThread().getName() + ")");
+        public void runStep(State state) {
+            Step.log("==> on old all"
+                    + " (thread:" + Thread.currentThread().getName() + ")");
 
-                    RecordStore recordStore = state.getRecordStore();
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                    // create record for loaded records.
-                    Map<Object, Object> loadedKeyValuePairs = state.getLoadedKeyValuePairs();
-                    for (Map.Entry<Object, Object> entry : loadedKeyValuePairs.entrySet()) {
-                        Object key = entry.getKey();
-                        if (key == null) {
-                            continue;
-                        }
-                        Object value = entry.getValue();
-
-                        ((DefaultRecordStore) recordStore)
-                                .onLoadRecord(mapServiceContext.toData(key), value, false, state.getCallerAddress());
-                    }
-
+            // create record for loaded records.
+            Map<Object, Object> loadedKeyValuePairs = state.getLoadedKeyValuePairs();
+            for (Map.Entry<Object, Object> entry : loadedKeyValuePairs.entrySet()) {
+                Object key = entry.getKey();
+                if (key == null) {
+                    continue;
                 }
+                Object value = entry.getValue();
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+                ((DefaultRecordStore) recordStore)
+                        .onLoadRecord(mapServiceContext.toData(key), value, false, state.getCallerAddress());
+            }
         }
 
         @Override
@@ -149,63 +130,53 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     PROCESS() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
-                    RecordStore recordStore = state.getRecordStore();
+        public void runStep(State state) {
+            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            RecordStore recordStore = state.getRecordStore();
 
-                    List<State> toStore = new ArrayList<>();
-                    List<State> toRemove = new ArrayList<>();
+            List<State> toStore = new ArrayList<>();
+            List<State> toRemove = new ArrayList<>();
 
-                    state.setToStore(toStore);
-                    state.setToRemove(toRemove);
+            state.setToStore(toStore);
+            state.setToRemove(toRemove);
 
-                    MapEntries responses = new MapEntries(state.getKeys().size());
-                    state.setResult(responses);
+            MapEntries responses = new MapEntries(state.getKeys().size());
+            state.setResult(responses);
 
-                    Collection<Data> keys = state.getKeys();
-                    for (Data key : keys) {
-                        Record record = recordStore.getRecord(key);
+            Collection<Data> keys = state.getKeys();
+            for (Data key : keys) {
+                Record record = recordStore.getRecord(key);
 
-                        // create specific state for this key
-                        State singleKeyState = new State(state);
-                        singleKeyState
-                                .setKey(key)
-                                .setOldValue(record == null ? null : record.getValue())
-                                .setEntryOperator(operator(singleKeyState.getOperation(),
-                                        singleKeyState.getEntryProcessor(), singleKeyState.getPredicate()));
+                // create specific state for this key
+                State singleKeyState = new State(state);
+                singleKeyState
+                        .setKey(key)
+                        .setOldValue(record == null ? null : record.getValue())
+                        .setEntryOperator(operator(state.getOperation(),
+                                state.getEntryProcessor(), state.getPredicate()));
 
-                        EPStep.PROCESS.runStepDirect(singleKeyState);
+                EPStep.PROCESS.runStep(singleKeyState);
 
-                        EntryEventType eventType = singleKeyState.getOperator().getEventType();
-                        if (eventType == null) {
-                            Data result = singleKeyState.getOperator().getResult();
-                            if (result != null) {
-                                responses.add(singleKeyState.getKey(), result);
-                            }
-                        } else {
-                            switch (eventType) {
-                                case ADDED:
-                                case UPDATED:
-                                    toStore.add(singleKeyState);
-                                    break;
-                                case REMOVED:
-                                    toRemove.add(singleKeyState);
-                                    break;
-                                default:
-                                    throw new IllegalArgumentException("Unexpected event found:" + eventType);
-                            }
-                        }
+                EntryEventType eventType = singleKeyState.getOperator().getEventType();
+                if (eventType == null) {
+                    Data result = singleKeyState.getOperator().getResult();
+                    if (result != null) {
+                        responses.add(singleKeyState.getKey(), result);
+                    }
+                } else {
+                    switch (eventType) {
+                        case ADDED:
+                        case UPDATED:
+                            toStore.add(singleKeyState);
+                            break;
+                        case REMOVED:
+                            toRemove.add(singleKeyState);
+                            break;
+                        default:
+                            throw new IllegalArgumentException("Unexpected event found:" + eventType);
                     }
                 }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            }
         }
 
         @Override
@@ -217,18 +188,21 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     STORE_OR_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                List<State> toStore = state.getToStore();
-                for (State s : toStore) {
-                    PutStep.STORE.runStepDirect(s);
-                }
+        public boolean offloadStep() {
+            return true;
+        }
 
-                List<State> toRemove = state.getToRemove();
-                for (State s : toRemove) {
-                    DeleteStep.DELETE.runStepDirect(s);
-                }
-            };
+        @Override
+        public void runStep(State state) {
+            List<State> toStore = state.getToStore();
+            for (State s : toStore) {
+                PutStep.STORE.runStep(s);
+            }
+
+            List<State> toRemove = state.getToRemove();
+            for (State s : toRemove) {
+                DeleteStep.DELETE.runStep(s);
+            }
         }
 
         @Override
@@ -239,47 +213,37 @@ public enum MultipleKeyEPStep implements Step<State> {
 
     ON_STORE_OR_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    List<State> toStore = state.getToStore();
-                    for (State s : toStore) {
-                        PutStep.ON_STORE.runStepDirect(s);
+        public void runStep(State state) {
+            List<State> toStore = state.getToStore();
+            for (State s : toStore) {
+                PutStep.ON_STORE.runStep(s);
 
-                        EntryOperator operator = s.getOperator();
-                        operator.onAddedOrUpdated0(s.getNewValue());
-                        operator.doPostOperateOps0();
+                EntryOperator operator = s.getOperator();
+                operator.onAddedOrUpdated0(s.getNewValue());
+                operator.doPostOperateOps0();
 
-                        Data result = s.getOperator().getResult();
-                        if (result != null) {
-                            ((MapEntries) state.getResult()).add(s.getKey(), result);
-                        }
-                    }
-
-                    List<State> toRemove = state.getToRemove();
-                    for (State s : toRemove) {
-                        DeleteStep.ON_DELETE.runStepDirect(s);
-
-                        EntryOperator operator = s.getOperator();
-                        operator.onRemove0();
-                        operator.doPostOperateOps0();
-
-                        Data result = s.getOperator().getResult();
-                        if (result != null) {
-                            ((MapEntries) state.getResult()).add(s.getKey(), result);
-                        }
-                    }
-
-                    Operation operation = state.getOperation();
-                    operation.sendResponse(state.getResult());
+                Data result = s.getOperator().getResult();
+                if (result != null) {
+                    ((MapEntries) state.getResult()).add(s.getKey(), result);
                 }
+            }
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
+            List<State> toRemove = state.getToRemove();
+            for (State s : toRemove) {
+                DeleteStep.ON_DELETE.runStep(s);
+
+                EntryOperator operator = s.getOperator();
+                operator.onRemove0();
+                operator.doPostOperateOps0();
+
+                Data result = s.getOperator().getResult();
+                if (result != null) {
+                    ((MapEntries) state.getResult()).add(s.getKey(), result);
                 }
-            };
+            }
+
+            Operation operation = state.getOperation();
+            operation.sendResponse(state.getResult());
         }
 
         @Override

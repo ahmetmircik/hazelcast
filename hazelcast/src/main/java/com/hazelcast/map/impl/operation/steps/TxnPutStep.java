@@ -17,17 +17,13 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.MapContainer;
-import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.NodeEngine;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.UUID;
 
 // TODO: re-run upon NOOME
-public enum TxnPutStep implements Step<State> {
+public enum TxnPutStep implements Step {
 
     INITIAL() {
         @Override
@@ -38,34 +34,21 @@ public enum TxnPutStep implements Step<State> {
 
     READ() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    RecordStore recordStore = state.getRecordStore();
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-                    NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
+        public void runStep(State state) {
+            RecordStore recordStore = state.getRecordStore();
 
-                    Data dataKey = state.getKey();
-                    long threadId = state.getThreadId();
-                    long version = state.getVersion();
-                    UUID ownerUuid = state.getOwnerUuid();
-                    long callId = state.getOperation().getCallId();
+            Data dataKey = state.getKey();
+            long threadId = state.getThreadId();
+            long version = state.getVersion();
+            UUID ownerUuid = state.getOwnerUuid();
+            long callId = state.getOperation().getCallId();
 
-                    recordStore.unlock(dataKey, ownerUuid, threadId, callId);
+            recordStore.unlock(dataKey, ownerUuid, threadId, callId);
 
-                    Record record = recordStore.getRecordOrNull(dataKey);
-                    if (record == null || version == record.getVersion()) {
-                        PutStep.READ.runStepDirect(state);
-                    }
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            Record record = recordStore.getRecordOrNull(dataKey);
+            if (record == null || version == record.getVersion()) {
+                PutStep.READ.runStep(state);
+            }
         }
 
         @Override

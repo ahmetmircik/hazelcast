@@ -23,16 +23,12 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
-public enum DeleteStep implements Step<State> {
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+
+public enum DeleteStep implements Step {
 
     INITIAL() {
-        @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
-
         @Override
         public Step nextStep(State state) {
             return READ;
@@ -41,22 +37,7 @@ public enum DeleteStep implements Step<State> {
 
     READ() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
@@ -84,14 +65,14 @@ public enum DeleteStep implements Step<State> {
 
     DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-               runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
         }
 
         @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
+            assert !isRunningOnPartitionThread();
+
             Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
@@ -109,22 +90,7 @@ public enum DeleteStep implements Step<State> {
 
     ON_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                   runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
             Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
@@ -142,12 +108,10 @@ public enum DeleteStep implements Step<State> {
 
     RESPONSE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-                Object oldValue = state.getOldValue();
-                state.getOperation().sendResponse(oldValue != null);
-            };
+        public void runStep(State state) {
+            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            Object oldValue = state.getOldValue();
+            state.getOperation().sendResponse(oldValue != null);
         }
 
         @Override
@@ -158,27 +122,16 @@ public enum DeleteStep implements Step<State> {
 
     AFTER_RUN() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-
-                    // TODO: prevent unneeded serialization for oldValue
-                    if (!state.isNullRecord()) {
-                        Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
-                        ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
-                    } else {
-                        Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
-                    }
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            // TODO: prevent unneeded serialization for oldValue
+            if (!state.isNullRecord()) {
+                Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
+            } else {
+                Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            }
         }
 
         @Override

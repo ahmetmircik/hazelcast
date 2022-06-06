@@ -20,17 +20,12 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.UUID;
 
-public enum TxnRemoveStep implements Step<State> {
+public enum TxnRemoveStep implements Step {
 
     INITIAL() {
-        @Override
-        public Runnable createStep(State state) {
-            throw new UnsupportedOperationException();
-        }
 
         @Override
         public Step nextStep(State state) {
@@ -39,23 +34,9 @@ public enum TxnRemoveStep implements Step<State> {
     },
 
     READ() {
-        @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
 
         @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> reading old value"
                     + " (thread:" + Thread.currentThread().getName() + ")");
 
@@ -73,7 +54,7 @@ public enum TxnRemoveStep implements Step<State> {
 
             Record record = recordStore.getRecord(dataKey);
             if (record == null || version == record.getVersion()) {
-                RemoveStep.READ.runStepDirect(state);
+                RemoveStep.READ.runStep(state);
             }
 
             if (record == null) {

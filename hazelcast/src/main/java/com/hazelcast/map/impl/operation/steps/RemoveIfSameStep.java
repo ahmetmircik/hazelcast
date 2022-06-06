@@ -25,9 +25,8 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
-public enum RemoveIfSameStep implements Step<State> {
+public enum RemoveIfSameStep implements Step {
 
     INITIAL() {
         @Override
@@ -38,30 +37,20 @@ public enum RemoveIfSameStep implements Step<State> {
 
     READ() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+        public void runStep(State state) {
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-                    Record record = recordStore.getRecordOrNull(state.getKey());
-                    state.setRecordNull(record == null);
+            Record record = recordStore.getRecordOrNull(state.getKey());
+            state.setRecordNull(record == null);
 
-                    if (record != null) {
-                        Object oldValue = record.getValue();
-                        oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                        state.setOldValue(oldValue);
-                    }
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            if (record != null) {
+                Object oldValue = record.getValue();
+                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+                state.setOldValue(oldValue);
+            }
         }
 
         @Override
@@ -72,18 +61,21 @@ public enum RemoveIfSameStep implements Step<State> {
 
     LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> loading old value");
-                DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-                Object oldValue = recordStore.loadValueOf(state.getKey());
-                if (oldValue != null) {
-                    recordStore.getMapDataStore().remove(state.getKey(), state.getNow(), state.getTxnId());
-                    state.setOldValue(oldValue);
-                } else {
-                    state.setResult(false);
-                }
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            Step.log("==> loading old value");
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            Object oldValue = recordStore.loadValueOf(state.getKey());
+            if (oldValue != null) {
+                recordStore.getMapDataStore().remove(state.getKey(), state.getNow(), state.getTxnId());
+                state.setOldValue(oldValue);
+            } else {
+                state.setResult(false);
+            }
         }
 
         @Override
@@ -93,35 +85,24 @@ public enum RemoveIfSameStep implements Step<State> {
     },
 
     ON_LOAD() {
-
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> on load" + " (thread:" + Thread.currentThread().getName() + ")");
+        public void runStep(State state) {
+            Step.log("==> on load" + " (thread:" + Thread.currentThread().getName() + ")");
 
-                    DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-                    MapContainer mapContainer = recordStore.getMapContainer();
-                    MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-                    SerializationService serializationService = mapServiceContext
-                            .getNodeEngine().getSerializationService();
-                    ValueComparator valueComparator = recordStore.getValueComparator();
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            SerializationService serializationService = mapServiceContext
+                    .getNodeEngine().getSerializationService();
+            ValueComparator valueComparator = recordStore.getValueComparator();
 
-                    Object oldValue = state.getOldValue();
-                    if (valueComparator.isEqual(state.getExpect(), oldValue, serializationService)) {
-                        mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                    } else {
-                        state.setResult(false);
-                        state.setStopExecution(true);
-                    }
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            Object oldValue = state.getOldValue();
+            if (valueComparator.isEqual(state.getExpect(), oldValue, serializationService)) {
+                mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+            } else {
+                state.setResult(false);
+                state.setStopExecution(true);
+            }
         }
 
         @Override
@@ -133,12 +114,15 @@ public enum RemoveIfSameStep implements Step<State> {
 
     DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
-                MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
-                mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+            MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
+            mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
         }
 
         @Override
@@ -149,30 +133,20 @@ public enum RemoveIfSameStep implements Step<State> {
 
     ON_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
 
-                    if (!state.isNullRecord()) {
-                        DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-                        Record record = recordStore.getRecord(state.getKey());
-                        recordStore.removeRecord0(state.getKey(), record);
-                        recordStore.onStore(record);
-                        recordStore.updateStatsOnRemove(state.getNow());
-                    }
+            if (!state.isNullRecord()) {
+                DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+                Record record = recordStore.getRecord(state.getKey());
+                recordStore.removeRecord0(state.getKey(), record);
+                recordStore.onStore(record);
+                recordStore.updateStatsOnRemove(state.getNow());
+            }
 
-                    state.setResult(true);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            state.setResult(true);
         }
 
         @Override
@@ -182,13 +156,12 @@ public enum RemoveIfSameStep implements Step<State> {
     },
 
     RESPONSE() {
+
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-                Object result = state.getResult();
-                state.getOperation().sendResponse(result);
-            };
+        public void runStep(State state) {
+            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            Object result = state.getResult();
+            state.getOperation().sendResponse(result);
         }
 
         @Override
@@ -199,23 +172,14 @@ public enum RemoveIfSameStep implements Step<State> {
 
     AFTER_RUN() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    // TODO: prevent unneeded serialization for oldValue
-                    if (((Boolean) state.getResult())) {
-                        ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
-                    }
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            // TODO: prevent unneeded serialization for oldValue
+            if (((Boolean) state.getResult())) {
+                ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(),
+                        state.getOldValue());
+            }
         }
 
         @Override

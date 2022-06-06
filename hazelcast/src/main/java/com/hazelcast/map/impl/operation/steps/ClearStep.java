@@ -22,7 +22,6 @@ import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.ClearOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,7 +29,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum ClearStep implements Step<State> {
+public enum ClearStep implements Step {
 
     INITIAL() {
         @Override
@@ -41,43 +40,33 @@ public enum ClearStep implements Step<State> {
 
     CLEAR_MEMORY() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
+        public void runStep(State state) {
+            Step.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            if (recordStore == null) {
+                state.setResult(0);
+                return;
+            }
+            recordStore.checkIfLoaded();
+
+            ArrayList<Data> keys = new ArrayList<>();
+            ArrayList<Record> records = new ArrayList<>();
+            // we don't remove locked keys. These are clearable records.
+            recordStore.forEach(new BiConsumer<Data, Record>() {
+                final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
+
                 @Override
-                public void run() {
-                    Step.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    if (recordStore == null) {
-                        state.setResult(0);
-                        return;
+                public void accept(Data dataKey, Record record) {
+                    if (lockedKeySet != null && !lockedKeySet.contains(dataKey)) {
+                        keys.add(dataKey);
+                        records.add(record);
                     }
-                    recordStore.checkIfLoaded();
 
-                    ArrayList<Data> keys = new ArrayList<>();
-                    ArrayList<Record> records = new ArrayList<>();
-                    // we don't remove locked keys. These are clearable records.
-                    recordStore.forEach(new BiConsumer<Data, Record>() {
-                        final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
-
-                        @Override
-                        public void accept(Data dataKey, Record record) {
-                            if (lockedKeySet != null && !lockedKeySet.contains(dataKey)) {
-                                keys.add(dataKey);
-                                records.add(record);
-                            }
-
-                        }
-                    }, false);
-
-                    state.setKeys(keys);
-                    state.setRecords(records);
                 }
+            }, false);
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            state.setKeys(keys);
+            state.setRecords(records);
         }
 
         @Override
@@ -88,13 +77,16 @@ public enum ClearStep implements Step<State> {
 
     CLEAR_MAP_STORE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> clearing map store");
-                DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                Collection<Data> keys = state.getKeys();
-                recordStore.getMapDataStore().removeAll(keys);
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            Step.log("==> clearing map store");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            Collection<Data> keys = state.getKeys();
+            recordStore.getMapDataStore().removeAll(keys);
         }
 
         @Override
@@ -105,25 +97,16 @@ public enum ClearStep implements Step<State> {
 
 
     ON_CLEAR() {
-        @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-                    DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-                    int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
-                    if (removedKeyCount > 0) {
-                        recordStore.updateStatsOnRemove(Clock.currentTimeMillis());
-                    }
-                    state.setResult(removedKeyCount);
-                }
 
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+        @Override
+        public void runStep(State state) {
+            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
+            if (removedKeyCount > 0) {
+                recordStore.updateStatsOnRemove(Clock.currentTimeMillis());
+            }
+            state.setResult(removedKeyCount);
         }
 
         @Override
@@ -133,13 +116,12 @@ public enum ClearStep implements Step<State> {
     },
 
     RESPONSE() {
-        @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                Step.log("==> clear all sending response");
 
-                state.getOperation().sendResponse(state.getResult());
-            };
+        @Override
+        public void runStep(State state) {
+            Step.log("==> clear all sending response");
+
+            state.getOperation().sendResponse(state.getResult());
         }
 
         @Override
@@ -150,20 +132,10 @@ public enum ClearStep implements Step<State> {
 
     AFTER_RUN() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    ThreadUtil.assertRunningOnPartitionThread();
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-                    ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
         }
 
         @Override

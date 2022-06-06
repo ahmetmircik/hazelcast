@@ -152,6 +152,10 @@ public final class EntryOperator {
         return this;
     }
 
+    public boolean isDidMatchPredicate() {
+        return didMatchPredicate;
+    }
+
     public LockAwareLazyMapEntry getEntry() {
         return entry;
     }
@@ -172,8 +176,8 @@ public final class EntryOperator {
         }
 
         Boolean locked = recordStore.isLocked(dataKey);
-
-        return operateOnKeyValueInternal(dataKey, clonedOrRawOldValue(), locked);
+        init(dataKey, clonedOrRawOldValue(), null, null, null, locked, UNSET);
+        return operateOnKeyValueInternal();
     }
 
     public boolean checkCanProceed() {
@@ -192,14 +196,11 @@ public final class EntryOperator {
     }
 
     public EntryOperator operateOnKeyValue(Data dataKey, Object oldValue) {
-        return operateOnKeyValueInternal(dataKey, oldValue, null);
+        init(dataKey, oldValue, null, null, null, null, UNSET);
+        return operateOnKeyValueInternal();
     }
 
-    private EntryOperator operateOnKeyValueInternal(Data dataKey,
-                                                    Object oldValue,
-                                                    Boolean locked) {
-        init(dataKey, oldValue, null, null, null, locked, UNSET);
-
+    public EntryOperator operateOnKeyValueInternal() {
         if (outOfPredicateScope(entry)) {
             this.didMatchPredicate = false;
             return this;

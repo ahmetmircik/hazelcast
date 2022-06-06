@@ -18,19 +18,20 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
+// TODO: UPDATE BACKUP!!!
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPStep implements Step<State> {
+public enum EPStep implements Step {
 
     INITIAL() {
         @Override
@@ -41,29 +42,19 @@ public enum EPStep implements Step<State> {
 
     EP_START() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+        public void runStep(State state) {
+            Step.log("==> EP_START reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
-                    EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
-                    operator.init(state.getKey(), null, null, null, null, null, UNSET);
-                    state.setEntryOperator(operator);
+            EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
+            operator.init(state.getKey(), null, null, null, null, null, UNSET);
+            state.setEntryOperator(operator);
 
-                    if (operator.belongsAnotherPartition(state.getKey())) {
-                        state.setStopExecution(true);
-                        return;
-                    }
+            if (operator.belongsAnotherPartition(state.getKey())) {
+                state.setStopExecution(true);
+                return;
+            }
 
-                    GetStep.READ.runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+            GetStep.READ.runStep(state);
         }
 
         @Override
@@ -71,16 +62,23 @@ public enum EPStep implements Step<State> {
             if (state.isStopExecution()) {
                 return EPStep.RESPONSE;
             }
-            return state.getOldValue() == null ? EPStep.LOAD : EPStep.PROCESS;
+            EPStep epStep = state.getOldValue() == null ? EPStep.LOAD : EPStep.PROCESS;
+            Step.log(state.getOldValue() == null ? "EPStep.LOAD" : "EPStep.PROCESS");
+            return epStep;
         }
     },
 
     LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                GetStep.LOAD.runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            assert !ThreadUtil.isRunningOnPartitionThread();
+
+            GetStep.LOAD.runStep(state);
         }
 
         @Override
@@ -91,18 +89,8 @@ public enum EPStep implements Step<State> {
 
     ON_LOAD() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    GetStep.ON_LOAD.runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+        public void runStep(State state) {
+            GetStep.ON_LOAD.runStep(state);
         }
 
         @Override
@@ -113,22 +101,7 @@ public enum EPStep implements Step<State> {
 
     PROCESS() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
-        }
-
-        @Override
-        public void runStepDirect(State state) {
+        public void runStep(State state) {
             Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -136,13 +109,17 @@ public enum EPStep implements Step<State> {
 
             EntryOperator entryOperator = state.getOperator();
             entryOperator.init(state.getKey(), state.getOldValue(),
-                    null, null, null, null, UNSET);
+                    null, null, null, recordStore.isLocked(state.getKey()), state.getTtl());
             if (!entryOperator.checkCanProceed()) {
                 entryOperator.onTouched();
                 state.setStopExecution(true);
                 return;
             }
-            entryOperator.operateOnKeyValue(state.getKey(), state.getOldValue());
+            entryOperator.operateOnKeyValueInternal();
+
+            if (!entryOperator.isDidMatchPredicate()) {
+                return;
+            }
 
             EntryEventType eventType = entryOperator.getEventType();
             if (eventType == null) {
@@ -163,7 +140,7 @@ public enum EPStep implements Step<State> {
                         state.setTtl(entryOperator.getEntry().getNewTtl());
                         break;
                     case REMOVED:
-                        DeleteStep.READ.runStepDirect(state);
+                        DeleteStep.READ.runStep(state);
                         break;
                     default:
                         throw new IllegalArgumentException("Unexpected event found:" + eventType);
@@ -192,10 +169,13 @@ public enum EPStep implements Step<State> {
 
     STORE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                PutStep.STORE.runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            PutStep.STORE.runStep(state);
         }
 
         @Override
@@ -206,18 +186,8 @@ public enum EPStep implements Step<State> {
 
     ON_STORE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    PutStep.ON_STORE.runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+        public void runStep(State state) {
+            PutStep.ON_STORE.runStep(state);
         }
 
         @Override
@@ -228,10 +198,13 @@ public enum EPStep implements Step<State> {
 
     DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                DeleteStep.DELETE.runStepDirect(state);
-            };
+        public boolean offloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            DeleteStep.DELETE.runStep(state);
         }
 
         @Override
@@ -242,18 +215,8 @@ public enum EPStep implements Step<State> {
 
     ON_DELETE() {
         @Override
-        public Runnable createStep(State state) {
-            return new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    DeleteStep.ON_DELETE.runStepDirect(state);
-                }
-
-                @Override
-                public int getPartitionId() {
-                    return state.getPartitionId();
-                }
-            };
+        public void runStep(State state) {
+            DeleteStep.ON_DELETE.runStep(state);
         }
 
         @Override
@@ -264,21 +227,16 @@ public enum EPStep implements Step<State> {
 
     RESPONSE() {
         @Override
-        public Runnable createStep(State state) {
-            return () -> {
-                runStepDirect(state);
-            };
-        }
+        public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
 
-        @Override
-        public void runStepDirect(State state) {
             Step.log("==> sending response");
 
             Operation operation = state.getOperation();
             EntryOperator operator = state.getOperator();
             EntryEventType eventType = operator.getEventType();
-            if(eventType != null){
-                switch (eventType){
+            if (eventType != null) {
+                switch (eventType) {
                     case ADDED:
                     case UPDATED:
                         operator.onAddedOrUpdated0(state.getNewValue());
