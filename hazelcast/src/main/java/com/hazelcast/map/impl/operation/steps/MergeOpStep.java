@@ -26,6 +26,7 @@ import com.hazelcast.map.impl.operation.MergeOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes;
 
@@ -175,7 +176,8 @@ public enum MergeOpStep implements OpStep {
 
                 perKeyState.setKey((Data) key)
                         .setOldValue(oldValue)
-                        .setNewValue(newValue);
+                        .setNewValue(newValue)
+                        .setStaticPutParams(StaticParams.PUT_PARAMS);
 
                 if (oldValue == null && newValue != null
                         || oldValue != null && newValue != null) {

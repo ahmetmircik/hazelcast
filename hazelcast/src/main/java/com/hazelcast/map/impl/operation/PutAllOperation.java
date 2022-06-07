@@ -57,7 +57,7 @@ public class PutAllOperation extends MapOperation
 
     private transient int currentIndex;
     private MapEntries mapEntries;
-    private boolean triggerMapLoader;
+    private volatile boolean triggerMapLoader;
 
     private transient boolean hasMapListener;
     private transient boolean hasWanReplication;
@@ -74,11 +74,18 @@ public class PutAllOperation extends MapOperation
         super(name);
         this.mapEntries = mapEntries;
         this.triggerMapLoader = triggerMapLoader;
+        if(!triggerMapLoader){
+            Thread.dumpStack();
+        }
     }
 
     @Override
     public void innerBeforeRun() throws Exception {
         super.innerBeforeRun();
+
+        if (recordStore != null) {
+            recordStore.checkIfLoaded();
+        }
 
         hasMapListener = mapEventPublisher.hasEventListener(name);
         hasWanReplication = mapContainer.isWanReplicationEnabled();

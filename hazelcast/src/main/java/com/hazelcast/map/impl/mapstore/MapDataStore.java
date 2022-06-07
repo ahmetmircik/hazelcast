@@ -76,9 +76,10 @@ public interface MapDataStore<K, V> {
     /**
      * Bulk store into map-store.
      *
-     * @param map map of key-value pairs
+     * @param map            map of key-value pairs
+     * @param expirationTime
      */
-    void storeAll(Map map);
+    void storeAll(Map map, long expirationTime);
 
     /**
      * Removes keys from map store.

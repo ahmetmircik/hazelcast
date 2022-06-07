@@ -20,6 +20,7 @@ import com.hazelcast.internal.serialization.DataType;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.MapUtil;
+import com.hazelcast.map.EntryLoader;
 import com.hazelcast.map.impl.MapStoreWrapper;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.internal.serialization.Data;
@@ -52,12 +53,12 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
     }
 
     @Override
-    public void storeAll(Map map) {
+    public void storeAll(Map map, long expirationTime) {
         if (MapUtil.isNullOrEmpty(map)) {
             return;
         }
 
-        getStore().storeAll(convertKVPairsToObject(map));
+        getStore().storeAll(convertKVPairsToObject(map, expirationTime));
     }
 
     @Override
@@ -98,7 +99,7 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
      * @param hzExpirationTime
      * @return
      */
-    protected long getUserExpirationTime(long hzExpirationTime) {
+    protected static long getUserExpirationTime(long hzExpirationTime) {
         if (hzExpirationTime == Long.MAX_VALUE) {
             return hzExpirationTime;
         }
@@ -135,11 +136,16 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
         return objectKeys;
     }
 
-    private Map convertKVPairsToObject(Map map) {
+    private Map convertKVPairsToObject(Map map, long expirationTime) {
         Map objectMap = MapUtil.createHashMap(map.size());
         Set<Map.Entry> entrySet = map.entrySet();
         for (Map.Entry entry : entrySet) {
-            objectMap.put(toObject(entry.getKey()), toObject(entry.getValue()));
+            Object value = getStore().isWithExpirationTime()
+                    ? new EntryLoader.MetadataAwareValue(toObject(entry.getValue()),
+                    getUserExpirationTime(expirationTime))
+                    : toObject(entry.getValue());
+
+            objectMap.put(toObject(entry.getKey()), value);
         }
         return objectMap;
     }

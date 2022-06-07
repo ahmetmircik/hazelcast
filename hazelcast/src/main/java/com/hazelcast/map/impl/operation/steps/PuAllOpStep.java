@@ -37,6 +37,7 @@ import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
+// FIXME: mapstore load all should be called
 // TODO: re-run upon NOOME
 public enum PuAllOpStep implements OpStep {
 
@@ -86,8 +87,10 @@ public enum PuAllOpStep implements OpStep {
             OpStep.log("==> PuAllOpStep STORE_ALL " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            long expirationTime = recordStore.getExpirySystem().calculateExpirationTime(state.getTtl(),
+                    state.getMaxIdle(), state.getNow(), state.getNow());
             // TODO what about expiry aware entry-store?
-            recordStore.getMapDataStore().storeAll((Map) state.getResult());
+            recordStore.getMapDataStore().storeAll((Map) state.getResult(), expirationTime);
 
             state.setResult(null);
         }
@@ -110,9 +113,9 @@ public enum PuAllOpStep implements OpStep {
 
             Map<Data, Object> oldValueByKey = new HashMap<>();
             State perKeyState = new State(state);
+            boolean loadOldValue = triggerMapLoader
+                    && ((PutAllOperation) state.getOperation()).isHasMapListener();
             for (Map.Entry<Data, Data> entry : entries) {
-                boolean loadOldValue = triggerMapLoader
-                        && ((PutAllOperation) state.getOperation()).isHasMapListener();
 
                 perKeyState.setKey(entry.getKey())
                         .setNewValue(entry.getValue())

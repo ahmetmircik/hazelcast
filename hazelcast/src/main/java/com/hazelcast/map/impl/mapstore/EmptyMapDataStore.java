@@ -71,7 +71,7 @@ class EmptyMapDataStore implements MapDataStore {
     }
 
     @Override
-    public void storeAll(Map map) {
+    public void storeAll(Map map, long expirationTime) {
 
     }
 
