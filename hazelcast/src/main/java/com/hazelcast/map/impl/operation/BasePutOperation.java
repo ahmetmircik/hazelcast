@@ -21,14 +21,12 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.PutOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public abstract class BasePutOperation extends LockAwareOperation implements BackupAwareOperation {
@@ -56,25 +54,18 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         throw new UnsupportedOperationException();
     }
 
-    protected OpStepRunner newStepRunner() {
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(newState(), getOffloadStartingStep()), getName());
-    }
-
-    protected OpStep getOffloadStartingStep() {
+    protected OpStep getStartingOpStep() {
         return PutOpStep.INITIAL;
     }
 
     protected State newState() {
-        return new State(recordStore, this)
+        return super.newState()
                 .setStaticPutParams(getStaticParams())
                 .setKey(dataKey)
                 .setNewValue(dataValue)
                 .setExpect(getExpect())
                 .setTtl(getTtl())
-                .setMaxIdle(getMaxIdle())
-                .setCallerAddress(getCallerAddress())
-                .setPartitionId(getPartitionId());
+                .setMaxIdle(getMaxIdle());
     }
 
     @Override
@@ -133,7 +124,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         this.recordToBackup = record;
         this.dataKey = dataKey;
         this.dataValue = dataValue;
-
     }
 
     protected PutBackupOperation newBackupOperation(Data dataKey, Record record, Data dataValue) {

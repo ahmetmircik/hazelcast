@@ -36,6 +36,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
+
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
 public class OpStepRunner implements Runnable {
 
@@ -46,18 +48,20 @@ public class OpStepRunner implements Runnable {
     private final OperationExecutor operationExecutor;
     private final Operation operation;
 
-    public OpStepRunner(NodeEngine nodeEngine, Operation operation,
-                        Supplier<Runnable> stepSupplier,
+    public OpStepRunner(Operation operation,
+                        State state,
+                        OpStep startingOpStep,
                         String mapName) {
         this.operation = operation;
 
         ThreadUtil.assertRunningOnPartitionThread();
 
+        NodeEngine nodeEngine = operation.getNodeEngine();
         this.node = ((NodeEngineImpl) nodeEngine).getNode();
         this.logger = nodeEngine.getLogger(getClass());
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
-        this.stepSupplier = stepSupplier;
+        this.stepSupplier = newStepSupplier(state, startingOpStep);
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(String.format("%s-%d-mapStoreOffloadingExecutor",
                         mapName, Thread.currentThread().getId()));

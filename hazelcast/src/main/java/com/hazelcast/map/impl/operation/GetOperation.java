@@ -21,12 +21,10 @@ import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.GetOpStep;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
-
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 public final class GetOperation extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
 
@@ -66,14 +64,14 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    protected OpStepRunner newStepRunner() {
-        State state = new State(recordStore, this);
-        state.setKey(dataKey)
-                .setCallerAddress(getCallerAddress())
-                .setPartitionId(getPartitionId());
+    protected State newState() {
+        return super.newState()
+                .setKey(dataKey);
+    }
 
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(state, GetOpStep.INITIAL), getName());
+    @Override
+    protected OpStep getStartingOpStep() {
+        return GetOpStep.INITIAL;
     }
 
     private boolean noCopyReadAllowed(Object currentValue) {

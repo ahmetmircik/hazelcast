@@ -31,9 +31,9 @@ import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.ExecutorStats;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.EPSingleKeyOpStep;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.OpStepOffload;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
@@ -59,7 +59,6 @@ import static com.hazelcast.core.Offloadable.NO_OFFLOADING;
 import static com.hazelcast.internal.util.ExceptionUtil.sneakyThrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.OFFLOADABLE_EXECUTOR;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
@@ -196,9 +195,8 @@ public class EntryOperation extends LockAwareOperation
             return new EntryOperationOffload(getCallerAddress());
         } else {
             if (mapStoreOffloadEnabled) {
-                assert recordStore != null;
-
-                return new OpStepOffload(this, getName(), newStepRunner());
+                return new OpStepOffload(this, getName(),
+                        newState(), getStartingOpStep());
             }
             response = operator(this, entryProcessor)
                     .operateOnKey(dataKey)
@@ -209,16 +207,16 @@ public class EntryOperation extends LockAwareOperation
     }
 
     @Override
-    protected OpStepRunner newStepRunner() {
-        State state = new State(recordStore, this);
-        state.setKey(dataKey)
+    protected State newState() {
+        return super.newState()
+                .setKey(dataKey)
                 .setCallerProvenance(CallerProvenance.NOT_WAN)
-                .setEntryProcessor(entryProcessor)
-                .setCallerAddress(getCallerAddress())
-                .setPartitionId(getPartitionId());
+                .setEntryProcessor(entryProcessor);
+    }
 
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPSingleKeyOpStep.INITIAL), getName());
+    @Override
+    protected OpStep getStartingOpStep() {
+        return EPSingleKeyOpStep.INITIAL;
     }
 
     @Override

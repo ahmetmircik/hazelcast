@@ -29,11 +29,12 @@ public class OpStepOffload extends Offload {
     private final String executorName;
 
     public OpStepOffload(Operation offloadedOperation,
-                         String mapName, OpStepRunner runner) {
+                         String mapName, State state, OpStep startingOpStep) {
         super(offloadedOperation);
-        this.runner = runner;
         this.executorName = String.format("%s-%d-%s", mapName, Thread.currentThread().getId(),
                 OpStepOffload.class.getName());
+        this.runner = new OpStepRunner(offloadedOperation, state,
+                startingOpStep, mapName);
     }
 
     @Override

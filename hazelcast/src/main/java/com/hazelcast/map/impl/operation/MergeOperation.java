@@ -20,6 +20,9 @@ import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.MergeOpStep;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -85,6 +88,18 @@ public class MergeOperation extends MapOperation
     @Override
     protected boolean disableWanReplicationEvent() {
         return disableWanReplicationEvent;
+    }
+
+    @Override
+    protected State newState() {
+        return super.newState()
+                .setMergingEntries(mergingEntries)
+                .setMergePolicy(mergePolicy);
+    }
+
+    @Override
+    protected OpStep getStartingOpStep() {
+        return MergeOpStep.INITIAL;
     }
 
     @Override

@@ -24,9 +24,9 @@ import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.steps.EPMultiKeyOpStep;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.OpStepOffload;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -42,7 +42,6 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.SetUtil.createHashSet;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 
 public class MultipleEntryOperation extends MapOperation
@@ -75,24 +74,25 @@ public class MultipleEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new OpStepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(),
+                    newState(), getStartingOpStep());
         }
 
         return super.call();
     }
 
     @Override
-    protected OpStepRunner newStepRunner() {
-        State state = new State(recordStore, this);
-        state.setKeys(keys)
+    protected State newState() {
+        return super.newState()
+                .setKeys(keys)
                 .setPredicate(getPredicate())
                 .setCallerProvenance(CallerProvenance.NOT_WAN)
-                .setEntryProcessor(entryProcessor)
-                .setCallerAddress(getCallerAddress())
-                .setPartitionId(getPartitionId());
+                .setEntryProcessor(entryProcessor);
+    }
 
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPMultiKeyOpStep.INITIAL), getName());
+    @Override
+    protected OpStep getStartingOpStep() {
+        return EPMultiKeyOpStep.INITIAL;
     }
 
     @Override

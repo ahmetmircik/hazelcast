@@ -93,7 +93,7 @@ public class TxnDeleteOperation
     }
 
     @Override
-    protected OpStep getOffloadStartingStep() {
+    protected OpStep getStartingOpStep() {
         return TxnRemoveOpStep.INITIAL;
     }
 

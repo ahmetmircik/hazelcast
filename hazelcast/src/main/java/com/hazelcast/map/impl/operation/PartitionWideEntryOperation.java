@@ -25,9 +25,9 @@ import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.steps.EPFullScanOpStep;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.OpStepOffload;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -50,7 +50,6 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 /**
  * GOTCHA: This operation does NOT load missing keys from map-store for now.
@@ -91,23 +90,24 @@ public class PartitionWideEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new OpStepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(),
+                    newState(), getStartingOpStep());
         }
 
         return super.call();
     }
 
     @Override
-    protected OpStepRunner newStepRunner() {
-        State state = new State(recordStore, this);
-        state.setPredicate(getPredicate())
+    protected State newState() {
+        return super.newState()
+                .setPredicate(getPredicate())
                 .setCallerProvenance(CallerProvenance.NOT_WAN)
-                .setEntryProcessor(entryProcessor)
-                .setCallerAddress(getCallerAddress())
-                .setPartitionId(getPartitionId());
+                .setEntryProcessor(entryProcessor);
+    }
 
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPFullScanOpStep.INITIAL), getName());
+    @Override
+    protected OpStep getStartingOpStep() {
+        return EPFullScanOpStep.INITIAL;
     }
 
     protected Predicate getPredicate() {

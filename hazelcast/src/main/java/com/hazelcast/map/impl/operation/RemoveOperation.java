@@ -43,7 +43,7 @@ public class RemoveOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected OpStep getOffloadStartingStep() {
+    protected OpStep getStartingOpStep() {
         return RemoveOpStep.INITIAL;
     }
 

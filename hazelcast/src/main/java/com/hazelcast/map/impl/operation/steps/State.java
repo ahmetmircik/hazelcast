@@ -26,6 +26,8 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.query.Predicate;
+import com.hazelcast.spi.merge.SplitBrainMergePolicy;
+import com.hazelcast.spi.merge.SplitBrainMergeTypes;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import java.util.ArrayList;
@@ -74,6 +76,9 @@ public class State {
     private volatile List<State> toStore;
     private volatile List<State> toRemove;
     private volatile Predicate predicate;
+    private volatile List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> mergingEntries;
+    private volatile SplitBrainMergePolicy<Object,
+            SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -371,5 +376,25 @@ public class State {
     public State setPredicate(Predicate predicate) {
         this.predicate = predicate;
         return this;
+    }
+
+    public State setMergingEntries(List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> mergingEntries) {
+        this.mergingEntries = mergingEntries;
+        return this;
+    }
+
+    public List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> getMergingEntries() {
+        return mergingEntries;
+    }
+
+    public State setMergePolicy(SplitBrainMergePolicy<Object,
+            SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy) {
+        this.mergePolicy = mergePolicy;
+        return this;
+    }
+
+    public SplitBrainMergePolicy<Object,
+            SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> getMergePolicy() {
+        return mergePolicy;
     }
 }

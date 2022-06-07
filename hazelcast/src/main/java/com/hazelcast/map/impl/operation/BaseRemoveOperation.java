@@ -18,14 +18,10 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.OpStep;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
-
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 public abstract class BaseRemoveOperation extends LockAwareOperation
         implements BackupAwareOperation, MutatingOperation {
@@ -62,18 +58,10 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         super.afterRunInternal();
     }
 
-    protected OpStepRunner newStepRunner() {
-        return new OpStepRunner(getNodeEngine(), this,
-                newStepSupplier(newState(), getOffloadStartingStep()), getName());
-    }
-
     protected State newState() {
-        return new State(recordStore, this)
+        return super.newState()
                 .setKey(dataKey)
-                .setExpect(getExpect())
-                .setCallerAddress(getCallerAddress())
-                .setCallerProvenance(getCallerProvenance())
-                .setPartitionId(getPartitionId());
+                .setExpect(getExpect());
     }
 
     public void initFields(Data dataKey, Data dataOldValue) {
@@ -85,8 +73,6 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
     protected Object getExpect() {
         return null;
     }
-
-    abstract protected OpStep getOffloadStartingStep();
 
     @Override
     public Object getResponse() {

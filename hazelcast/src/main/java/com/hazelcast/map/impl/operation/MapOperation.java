@@ -31,8 +31,9 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.OpStepOffload;
-import com.hazelcast.map.impl.operation.steps.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -114,13 +115,14 @@ public abstract class MapOperation extends AbstractNamedOperation
         mapStoreOffloadEnabled = true
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0
                 && (this instanceof BasePutOperation
-                                || this instanceof GetOperation
-                                || this instanceof ClearOperation
-                                || this instanceof BaseRemoveOperation
-                                || this instanceof BasePutOperation
-                                || this instanceof EntryOperation
-                                || this instanceof MultipleEntryOperation
-                                || this instanceof PartitionWideEntryOperation);
+                || this instanceof GetOperation
+                || this instanceof ClearOperation
+                || this instanceof BaseRemoveOperation
+                || this instanceof BasePutOperation
+                || this instanceof EntryOperation
+                || this instanceof MultipleEntryOperation
+                || this instanceof PartitionWideEntryOperation
+                || this instanceof MergeOperation);
 
         assertNativeMapOnPartitionThread();
 
@@ -154,15 +156,23 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (mapStoreOffloadEnabled) {
             // record-store can be null for some ops: see ClearOperation
-            return new OpStepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(),
+                    newState(), getStartingOpStep());
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected OpStepRunner newStepRunner() {
-        throw new UnsupportedOperationException("Implement to use");
+    protected OpStep getStartingOpStep() {
+        throw new UnsupportedOperationException();
+    }
+
+    protected State newState() {
+        return new State(recordStore, this)
+                .setPartitionId(getPartitionId())
+                .setCallerAddress(getCallerAddress())
+                .setCallerProvenance(getCallerProvenance());
     }
 
     protected void runInternal() {
