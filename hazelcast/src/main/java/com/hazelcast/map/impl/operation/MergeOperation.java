@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.MergeOpStep;
 import com.hazelcast.map.impl.operation.steps.OpStep;
@@ -28,6 +29,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.InternalIndex;
+import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
@@ -93,6 +95,7 @@ public class MergeOperation extends MapOperation
     @Override
     protected State newState() {
         return super.newState()
+                .setCallerProvenance(getCallerProvenance())
                 .setMergingEntries(mergingEntries)
                 .setMergePolicy(mergePolicy);
     }
@@ -105,14 +108,7 @@ public class MergeOperation extends MapOperation
     @Override
     protected void runInternal() {
         // Check once in a minute as earliest to avoid log bursts.
-        if (shouldCheckNow(mapContainer.getLastInvalidMergePolicyCheckTime())) {
-            try {
-                checkMapMergePolicy(mapContainer.getMapConfig(), mergePolicy.getClass().getName(),
-                        getNodeEngine().getSplitBrainMergePolicyProvider());
-            } catch (InvalidConfigurationException e) {
-                logger().log(Level.WARNING, e.getMessage(), e);
-            }
-        }
+        checkMergePolicy(mapContainer, mergePolicy);
 
         hasMapListener = mapEventPublisher.hasEventListener(name);
         hasWanReplication = mapContainer.isWanReplicationEnabled()
@@ -150,6 +146,18 @@ public class MergeOperation extends MapOperation
         }
 
         finishIndexMarking(notMarkedIndexes);
+    }
+
+    public static void checkMergePolicy(MapContainer mapContainer, SplitBrainMergePolicy mergePolicy) {
+        NodeEngine nodeEngine = mapContainer.getMapServiceContext().getNodeEngine();
+        if (shouldCheckNow(mapContainer.getLastInvalidMergePolicyCheckTime())) {
+            try {
+                checkMapMergePolicy(mapContainer.getMapConfig(), mergePolicy.getClass().getName(),
+                        nodeEngine.getSplitBrainMergePolicyProvider());
+            } catch (InvalidConfigurationException e) {
+                nodeEngine.getLogger(MergeOperation.class).log(Level.WARNING, e.getMessage(), e);
+            }
+        }
     }
 
     private void finishIndexMarking(Queue<InternalIndex> notIndexedPartitions) {
@@ -216,7 +224,7 @@ public class MergeOperation extends MapOperation
         }
     }
 
-    private Data getValueOrPostProcessedValue(Data dataKey, Data dataValue) {
+    public Data getValueOrPostProcessedValue(Data dataKey, Data dataValue) {
         if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }
@@ -224,7 +232,7 @@ public class MergeOperation extends MapOperation
         return mapServiceContext.toData(record.getValue());
     }
 
-    private Data getValue(Data dataKey) {
+    public Data getValue(Data dataKey) {
         Record record = recordStore.getRecord(dataKey);
         if (record != null) {
             return mapServiceContext.toData(record.getValue());

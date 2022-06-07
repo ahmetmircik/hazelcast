@@ -16,21 +16,25 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.core.EntryEventType;
+import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
-import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.event.MapEventPublisher;
+import com.hazelcast.map.impl.operation.MergeOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
-import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
-import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+import com.hazelcast.spi.merge.SplitBrainMergePolicy;
+import com.hazelcast.spi.merge.SplitBrainMergeTypes;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.hazelcast.core.EntryEventType.MERGED;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
 
 // TODO: re-run upon NOOME
 public enum MergeOpStep implements OpStep {
@@ -45,21 +49,61 @@ public enum MergeOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> MergeOpStep reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
-            if (record != null) {
-                state.setOldValue(record.getValue());
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            SerializationService serializationService = mapServiceContext.getNodeEngine().getSerializationService();
+            List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> mergingEntries = state.getMergingEntries();
+            SplitBrainMergePolicy<Object, SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy = state.getMergePolicy();
+
+            MergeOperation.checkMergePolicy(mapContainer, mergePolicy);
+
+            recordStore.checkIfLoaded();
+
+            // TODO index marking
+            // key + oldValue + newValue
+            List outcomes = new ArrayList<>(3 * mergingEntries.size());
+            state.setResult(outcomes);
+
+            for (SplitBrainMergeTypes.MapMergeTypes<Object, Object> mergingEntry : mergingEntries) {
+                mergingEntry = (SplitBrainMergeTypes.MapMergeTypes<Object, Object>) serializationService
+                        .getManagedContext().initialize(mergingEntry);
+                mergePolicy = (SplitBrainMergePolicy<Object, SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object>)
+                        serializationService.getManagedContext().initialize(mergePolicy);
+                Data key = (Data) mergingEntry.getRawKey();
+                Record record = recordStore.getRecordOrNull(key, state.getNow(), false);
+
+                SplitBrainMergeTypes.MapMergeTypes<Object, Object> existingEntry = record != null
+                        ? createMergingEntry(serializationService, key, record,
+                        recordStore.getExpirySystem().getExpiryMetadata(key)) : null;
+
+                Object oldValue = record == null ? null : record.getValue();
+                Object newValue = mergePolicy.merge(mergingEntry, existingEntry);
+
+                if (oldValue == null && newValue == null) {
+                    continue;
+                }
+
+                outcomes.add(key);
+                outcomes.add(oldValue);
+                outcomes.add(newValue);
             }
         }
 
         @Override
         public OpStep nextStep(State state) {
-            return state.getOldValue() == null ? MergeOpStep.LOAD : MergeOpStep.PROCESS;
+            boolean persistenceEnabled = ((DefaultRecordStore) state.getRecordStore())
+                    .persistenceEnabledFor(state.getCallerProvenance());
+
+            List outcomes = (List) state.getResult();
+            return !outcomes.isEmpty() && persistenceEnabled
+                    ? MergeOpStep.STORE_OR_DELETE : MergeOpStep.PROCESS;
         }
     },
 
-    LOAD() {
+    STORE_OR_DELETE() {
         @Override
         public boolean offloadStep() {
             return true;
@@ -69,15 +113,36 @@ public enum MergeOpStep implements OpStep {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> MergeOpStep STORE_OR_DELETE " + " (thread:" + Thread.currentThread().getName() + ")");
 
-            StaticParams staticParams = state.getStaticParams();
-            if (staticParams.isPutVanilla()) {
-                state.setOldValue(((DefaultRecordStore) state.getRecordStore())
-                        .loadValueOf(state.getKey()));
-            } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+            List outcomes = (List) state.getResult();
+            State perKeyState = new State(state);
+            for (int i = 0; i < outcomes.size(); i++) {
+                Object key = outcomes.get(i++);
+
+                assert key instanceof Data
+                        : "Expect key instanceOf Data but found " + key;
+
+                Object oldValue = outcomes.get(i++);
+                Object newValue = outcomes.get(i++);
+
+                perKeyState.setKey((Data) key)
+                        .setOldValue(oldValue)
+                        .setNewValue(newValue);
+
+                if (oldValue == null && newValue != null
+                        || oldValue != null && newValue != null) {
+                    // put or update
+                    PutOpStep.STORE.runStep(perKeyState);
+                    //set new value returned from map-store
+                    outcomes.set(i - 1, perKeyState.getNewValue());
+                } else if (oldValue != null && newValue == null) {
+                    // remove
+                    DeleteOpStep.DELETE.runStep(perKeyState);
+                }
             }
+
+            state.setResult(outcomes);
         }
 
         @Override
@@ -91,115 +156,43 @@ public enum MergeOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            OpStep.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
-            StaticParams staticParams = state.getStaticParams();
-            Object newValue = state.getNewValue();
-
-            // For method replace, if current value is not expected one, return.
-            RecordStore recordStore = state.getRecordStore();
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            SerializationService serializationService = mapServiceContext
+                    .getNodeEngine().getSerializationService();
 
-            if (staticParams.isPutIfAbsent()) {
-                Record record = recordStore.getRecord(state.getKey());
-                if (record == null && state.getOldValue() != null) {
-                    record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                            state.getOldValue(), false, state.getCallerAddress());
+            List outcomes = (List) state.getResult();
+            State perKeyState = new State(state);
+            for (int i = 0; i < outcomes.size(); i++) {
+                Object key = outcomes.get(i++);
+
+                assert key instanceof Data
+                        : "Expect key instanceOf Data but found " + key;
+
+                Object oldValue = outcomes.get(i++);
+                Object newValue = outcomes.get(i++);
+
+                perKeyState.setKey((Data) key)
+                        .setOldValue(oldValue)
+                        .setNewValue(newValue);
+
+                if (oldValue == null && newValue != null
+                        || oldValue != null && newValue != null) {
+
+                    // if same values, merge expiry and continue with next entry
+                    // TODO add expiry merge
+                    if (recordStore.getValueComparator().isEqual(newValue, oldValue, serializationService)) {
+//                        recordStore.mergeRecordExpiration(key, record, mergingEntry, state.getNow());
+                        continue;
+                    }
+
+                    // put or update
+                    PutOpStep.ON_STORE.runStep(perKeyState);
+                } else if (oldValue != null && newValue == null) {
+                    // remove
+                    DeleteOpStep.ON_DELETE.runStep(perKeyState);
                 }
-
-                if (record != null) {
-                    state.setOldValue(record.getValue());
-                    state.setStopExecution(true);
-                    return;
-                }
-            } else if (staticParams.isPutIfExists()) {
-                Record record = recordStore.getRecord(state.getKey());
-                if (record == null && state.getOldValue() != null) {
-                    record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
-                            state.getOldValue(), false, state.getCallerAddress());
-                }
-
-                if (record == null) {
-                    state.setOldValue(null);
-                    state.setStopExecution(true);
-                    state.setResult(false);
-                    return;
-                }
-
-                newValue = staticParams.isSetTtl() ? record.getValue() : newValue;
-                state.setNewValue(newValue);
-                state.setOldValue(record.getValue());
-            }
-
-            if (staticParams.isPutIfEqual()
-                    && !((DefaultRecordStore) recordStore).getValueComparator()
-                    .isEqual(state.getExpect(), state.getOldValue(),
-                            mapServiceContext.getNodeEngine().getSerializationService())) {
-                state.setResult(false);
-                state.setStopExecution(true);
-                return;
-            }
-
-            // Intercept put on owner partition.
-            newValue = mapServiceContext.interceptPut(mapContainer.getInterceptorRegistry(),
-                    state.getOldValue(), newValue);
-            state.setNewValue(newValue);
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            // TODO: when isStopExecution what should be next state?
-            if (state.isStopExecution()) {
-                return RESPONSE;
-            }
-            return STORE;
-        }
-    },
-
-    STORE() {
-        @Override
-        public boolean offloadStep() {
-            return true;
-        }
-
-        @Override
-        public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
-            OpStep.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
-            Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
-                    state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
-            state.setNewValue(newValue);
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            return ON_STORE;
-        }
-    },
-
-    ON_STORE() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-
-            OpStep.log("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
-
-            // TODO: read  record efficiently
-            Record record = recordStore.getRecord(state.getKey());
-            // TODO: fix event type
-            if (record == null) {
-                record = recordStore.createRecord(state.getKey(), state.getNewValue(), state.getNow());
-                recordStore.putMemory(record, state.getKey(), state.getOldValue(),
-                        state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
-                        state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup());
-            } else {
-                recordStore.updateRecord0(record, state.getNow(), state.getStaticParams().isCountAsAccess());
-                recordStore.updateMemory(record, state.getKey(), state.getOldValue(), state.getNewValue(),
-                        state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
-                        state.getStaticParams().isBackup());
             }
         }
 
@@ -216,42 +209,75 @@ public enum MergeOpStep implements OpStep {
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            MapEventPublisher mapEventPublisher = mapServiceContext.getMapEventPublisher();
+            MergeOperation operation = ((MergeOperation) state.getOperation());
 
-            StaticParams staticParams = state.getStaticParams();
-            Object oldValue = state.getOldValue();
+            List<Data> invalidationKeys = null;
+            boolean hasMergedValues = false;
 
-            MapOperation operation = state.getOperation();
-            if (staticParams.isTryPut()) {
-                operation.sendResponse(true);
-            } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
-                operation.sendResponse(!state.isStopExecution());
-            } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                operation.sendResponse(mapServiceContext.toData(oldValue));
-            } else if (staticParams.isPutIfEqual()) {
-                operation.sendResponse(oldValue != null);
+            List backupPairs = null;
+
+            boolean hasMapListener = mapEventPublisher.hasEventListener(state.getOperation().getName());
+            boolean hasWanReplication = mapContainer.isWanReplicationEnabled()
+                    && !state.isDisableWanReplicationEvent();
+            boolean hasBackups = mapContainer.getTotalBackupCount() > 0;
+            boolean hasInvalidation = mapContainer.hasInvalidationListener();
+
+            List outcomes = (List) state.getResult();
+
+            if (hasBackups) {
+                backupPairs = new ArrayList(2 * (outcomes.size() / 3));
             }
 
-            OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
-                    .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-            ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
-                    state.getKey(), mapServiceContext.toData(state.getNewValue()));
+            if (hasInvalidation) {
+                invalidationKeys = new ArrayList<>((outcomes.size() / 3));
+            }
 
-            ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
-        }
+            for (int i = 0; i < outcomes.size(); i += 3) {
+                hasMergedValues = true;
 
-        @Override
-        public OpStep nextStep(State state) {
-            return AFTER_RUN;
-        }
-    },
+                Data dataKey = ((Data) outcomes.get(i));
 
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+                Object oldValue = outcomes.get(i + 1);
+                // TODO can't we use this newValue directly.
+                Object newValue = outcomes.get(i + 2);
 
-            ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
-                    state.getNewValue(), state.getOldValue());
+                Data dataValue = operation.getValueOrPostProcessedValue(dataKey, operation.getValue(dataKey));
+                mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);
+
+                if (hasMapListener) {
+                    mapEventPublisher.publishEvent(state.getCallerAddress(), state.getOperation().getName(),
+                            MERGED, dataKey, oldValue, dataValue);
+                }
+
+                if (hasWanReplication) {
+                    operation.publishWanUpdate(dataKey, dataValue);
+                }
+
+                if (hasInvalidation) {
+                    invalidationKeys.add(dataKey);
+                }
+
+                if (hasBackups) {
+                    backupPairs.add(dataKey);
+                    backupPairs.add(dataValue);
+                }
+
+                operation.evict(dataKey);
+            }
+
+            operation.sendResponse(hasMergedValues);
+
+            operation.invalidateNearCache(invalidationKeys);
+
+
+            // TODO fix backup op
+//            OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+//                    .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+//            ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
+//                    state.getKey(), mapServiceContext.toData(state.getNewValue()));
+//
+//            ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
         }
 
         @Override

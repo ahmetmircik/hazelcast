@@ -172,7 +172,8 @@ public abstract class MapOperation extends AbstractNamedOperation
         return new State(recordStore, this)
                 .setPartitionId(getPartitionId())
                 .setCallerAddress(getCallerAddress())
-                .setCallerProvenance(getCallerProvenance());
+                .setCallerProvenance(getCallerProvenance())
+                .setDisableWanReplicationEvent(disableWanReplicationEvent());
     }
 
     protected void runInternal() {
@@ -301,7 +302,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         throw new UnsupportedOperationException();
     }
 
-    protected final void invalidateNearCache(List<Data> keys) {
+    public final void invalidateNearCache(List<Data> keys) {
         if (!mapContainer.hasInvalidationListener() || isEmpty(keys)) {
             return;
         }
@@ -346,7 +347,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return mapNearCacheManager.getInvalidator();
     }
 
-    protected final void evict(Data justAddedKey) {
+    public final void evict(Data justAddedKey) {
         if (mapContainer.getEvictor() == Evictor.NULL_EVICTOR) {
             return;
         }
@@ -379,7 +380,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         this.mapContainer = mapContainer;
     }
 
-    protected final void publishWanUpdate(Data dataKey, Object value) {
+    public final void publishWanUpdate(Data dataKey, Object value) {
         publishWanUpdateInternal(dataKey, value, false);
     }
 
@@ -422,7 +423,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return recordStore.getMapDataStore().getTxnReservedCapacityCounter();
     }
 
-    protected final Data getValueOrPostProcessedValue(Record record, Data dataValue) {
+    public final Data getValueOrPostProcessedValue(Record record, Data dataValue) {
         if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }

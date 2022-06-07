@@ -79,6 +79,7 @@ public class State {
     private volatile List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> mergingEntries;
     private volatile SplitBrainMergePolicy<Object,
             SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy;
+    private boolean disableWanReplicationEvent;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -396,5 +397,14 @@ public class State {
     public SplitBrainMergePolicy<Object,
             SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> getMergePolicy() {
         return mergePolicy;
+    }
+
+    public State setDisableWanReplicationEvent(boolean disableWanReplicationEvent) {
+        this.disableWanReplicationEvent = disableWanReplicationEvent;
+        return this;
+    }
+
+    public boolean isDisableWanReplicationEvent() {
+        return disableWanReplicationEvent;
     }
 }
