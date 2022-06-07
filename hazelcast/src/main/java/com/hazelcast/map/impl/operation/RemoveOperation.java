@@ -18,8 +18,8 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.RemoveStep;
-import com.hazelcast.map.impl.operation.steps.Step;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
 
 public class RemoveOperation extends BaseRemoveOperation {
 
@@ -46,8 +46,8 @@ public class RemoveOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected Step getOffloadStartingStep() {
-        return RemoveStep.INITIAL;
+    protected OpStep getOffloadStartingStep() {
+        return RemoveOpStep.INITIAL;
     }
 
     @Override

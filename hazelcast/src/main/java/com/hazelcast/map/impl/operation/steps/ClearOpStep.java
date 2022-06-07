@@ -29,11 +29,11 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum ClearStep implements Step {
+public enum ClearOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return CLEAR_MEMORY;
         }
     },
@@ -41,7 +41,7 @@ public enum ClearStep implements Step {
     CLEAR_MEMORY() {
         @Override
         public void runStep(State state) {
-            Step.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore == null) {
                 state.setResult(0);
@@ -70,9 +70,9 @@ public enum ClearStep implements Step {
         }
 
         @Override
-        public ClearStep nextStep(State state) {
+        public ClearOpStep nextStep(State state) {
             return state.getRecordStore() == null
-                    ? ClearStep.RESPONSE : ClearStep.CLEAR_MAP_STORE;
+                    ? ClearOpStep.RESPONSE : ClearOpStep.CLEAR_MAP_STORE;
         }
     },
 
@@ -84,22 +84,22 @@ public enum ClearStep implements Step {
 
         @Override
         public void runStep(State state) {
-            Step.log("==> clearing map store");
+            OpStep.log("==> clearing map store");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Collection<Data> keys = state.getKeys();
             recordStore.getMapDataStore().removeAll(keys);
         }
 
         @Override
-        public ClearStep nextStep(State state) {
-            return ClearStep.ON_CLEAR;
+        public ClearOpStep nextStep(State state) {
+            return ClearOpStep.ON_CLEAR;
         }
     },
 
     ON_CLEAR() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
             if (removedKeyCount > 0) {
@@ -109,21 +109,21 @@ public enum ClearStep implements Step {
         }
 
         @Override
-        public ClearStep nextStep(State state) {
-            return ClearStep.RESPONSE;
+        public ClearOpStep nextStep(State state) {
+            return ClearOpStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            Step.log("==> clear all sending response");
+            OpStep.log("==> clear all sending response");
 
             state.getOperation().sendResponse(state.getResult());
         }
 
         @Override
-        public ClearStep nextStep(State state) {
+        public ClearOpStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -137,11 +137,11 @@ public enum ClearStep implements Step {
         }
 
         @Override
-        public ClearStep nextStep(State state) {
+        public ClearOpStep nextStep(State state) {
             return null;
         }
     };
 
-    ClearStep() {
+    ClearOpStep() {
     }
 }

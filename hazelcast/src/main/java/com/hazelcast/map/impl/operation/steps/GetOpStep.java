@@ -27,11 +27,11 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum GetStep implements Step {
+public enum GetOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return READ;
         }
     },
@@ -40,7 +40,7 @@ public enum GetStep implements Step {
     READ() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
@@ -50,8 +50,8 @@ public enum GetStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return state.getOldValue() == null ? GetStep.LOAD : GetStep.RESPONSE;
+        public OpStep nextStep(State state) {
+            return state.getOldValue() == null ? GetOpStep.LOAD : GetOpStep.RESPONSE;
         }
     },
 
@@ -63,22 +63,22 @@ public enum GetStep implements Step {
 
         @Override
         public void runStep(State state) {
-            Step.log("==> loading old value");
+            OpStep.log("==> loading old value");
             Object load = state.getRecordStore().getMapDataStore().load(state.getKey());
-            Step.log("==> loaded " + load);
+            OpStep.log("==> loaded " + load);
             state.setOldValue(load);
         }
 
         @Override
-        public Step nextStep(State state) {
-            return state.getOldValue() == null ? GetStep.RESPONSE : GetStep.ON_LOAD;
+        public OpStep nextStep(State state) {
+            return state.getOldValue() == null ? GetOpStep.RESPONSE : GetOpStep.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());
@@ -87,15 +87,15 @@ public enum GetStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return GetStep.RESPONSE;
+        public OpStep nextStep(State state) {
+            return GetOpStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            Step.log("==> sending response");
+            OpStep.log("==> sending response");
 
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -112,7 +112,7 @@ public enum GetStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -126,11 +126,11 @@ public enum GetStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return null;
         }
     };
 
-    GetStep() {
+    GetOpStep() {
     }
 }

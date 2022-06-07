@@ -19,13 +19,13 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.Step;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 public abstract class BaseRemoveOperation extends LockAwareOperation
         implements BackupAwareOperation, MutatingOperation {
@@ -62,8 +62,8 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         super.afterRunInternal();
     }
 
-    protected StepRunner newStepRunner() {
-        return new StepRunner(getNodeEngine(), this,
+    protected OpStepRunner newStepRunner() {
+        return new OpStepRunner(getNodeEngine(), this,
                 newStepSupplier(newState(), getOffloadStartingStep()), getName());
     }
 
@@ -80,7 +80,7 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         return null;
     }
 
-    abstract protected Step getOffloadStartingStep();
+    abstract protected OpStep getOffloadStartingStep();
 
     @Override
     public Object getResponse() {

@@ -20,13 +20,13 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.GetStep;
+import com.hazelcast.map.impl.operation.steps.GetOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 public final class GetOperation extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
 
@@ -66,14 +66,14 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    protected StepRunner newStepRunner() {
+    protected OpStepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setKey(dataKey)
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, GetStep.INITIAL), getName());
+        return new OpStepRunner(getNodeEngine(), this,
+                newStepSupplier(state, GetOpStep.INITIAL), getName());
     }
 
     private boolean noCopyReadAllowed(Object currentValue) {

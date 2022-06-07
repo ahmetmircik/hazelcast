@@ -24,10 +24,10 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.EPFullScanStep;
+import com.hazelcast.map.impl.operation.steps.EPFullScanOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.StepOffload;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepOffload;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -50,7 +50,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 /**
  * GOTCHA: This operation does NOT load missing keys from map-store for now.
@@ -91,14 +91,14 @@ public class PartitionWideEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new StepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(), newStepRunner());
         }
 
         return super.call();
     }
 
     @Override
-    protected StepRunner newStepRunner() {
+    protected OpStepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setPredicate(getPredicate())
                 .setCallerProvenance(CallerProvenance.NOT_WAN)
@@ -106,8 +106,8 @@ public class PartitionWideEntryOperation extends MapOperation
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPFullScanStep.INITIAL), getName());
+        return new OpStepRunner(getNodeEngine(), this,
+                newStepSupplier(state, EPFullScanOpStep.INITIAL), getName());
     }
 
     protected Predicate getPredicate() {

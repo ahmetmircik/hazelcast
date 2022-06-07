@@ -23,10 +23,10 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.EPMultiKeyStep;
+import com.hazelcast.map.impl.operation.steps.EPMultiKeyOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.StepOffload;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepOffload;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -42,7 +42,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.SetUtil.createHashSet;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 
 public class MultipleEntryOperation extends MapOperation
@@ -75,14 +75,14 @@ public class MultipleEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new StepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(), newStepRunner());
         }
 
         return super.call();
     }
 
     @Override
-    protected StepRunner newStepRunner() {
+    protected OpStepRunner newStepRunner() {
         State state = new State(recordStore, this);
         state.setKeys(keys)
                 .setPredicate(getPredicate())
@@ -91,8 +91,8 @@ public class MultipleEntryOperation extends MapOperation
                 .setCallerAddress(getCallerAddress())
                 .setPartitionId(getPartitionId());
 
-        return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, EPMultiKeyStep.INITIAL), getName());
+        return new OpStepRunner(getNodeEngine(), this,
+                newStepSupplier(state, EPMultiKeyOpStep.INITIAL), getName());
     }
 
     @Override

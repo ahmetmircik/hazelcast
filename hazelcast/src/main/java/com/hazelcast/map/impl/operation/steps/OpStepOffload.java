@@ -23,17 +23,17 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.concurrent.Executor;
 
-public class StepOffload extends Offload {
+public class OpStepOffload extends Offload {
 
-    private final StepRunner runner;
+    private final OpStepRunner runner;
     private final String executorName;
 
-    public StepOffload(Operation offloadedOperation,
-                       String mapName, StepRunner runner) {
+    public OpStepOffload(Operation offloadedOperation,
+                         String mapName, OpStepRunner runner) {
         super(offloadedOperation);
         this.runner = runner;
         this.executorName = String.format("%s-%d-%s", mapName, Thread.currentThread().getId(),
-                StepOffload.class.getName());
+                OpStepOffload.class.getName());
     }
 
     @Override
@@ -48,7 +48,7 @@ public class StepOffload extends Offload {
         ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
         if (!service.hasExecutorWithName(executorName)) {
             service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
-            Step.log("---> New executorName = " + executorName);
+            OpStep.log("---> New executorName = " + executorName);
         }
         return service.getExecutor(executorName);
     }

@@ -33,11 +33,11 @@ import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // TODO: re-run upon NOOME
-public enum PutStep implements Step {
+public enum PutOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return READ;
         }
     },
@@ -45,7 +45,7 @@ public enum PutStep implements Step {
     READ() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
             if (record != null) {
@@ -54,8 +54,8 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return state.getOldValue() == null ? PutStep.LOAD : PutStep.PROCESS;
+        public OpStep nextStep(State state) {
+            return state.getOldValue() == null ? PutOpStep.LOAD : PutOpStep.PROCESS;
         }
     },
 
@@ -69,7 +69,7 @@ public enum PutStep implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            Step.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             StaticParams staticParams = state.getStaticParams();
             if (staticParams.isPutVanilla()) {
@@ -81,8 +81,8 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return PutStep.PROCESS;
+        public OpStep nextStep(State state) {
+            return PutOpStep.PROCESS;
         }
     },
 
@@ -91,7 +91,7 @@ public enum PutStep implements Step {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            Step.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
             StaticParams staticParams = state.getStaticParams();
             Object newValue = state.getNewValue();
 
@@ -147,7 +147,7 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
                 return RESPONSE;
@@ -166,14 +166,14 @@ public enum PutStep implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            Step.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
             Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             state.setNewValue(newValue);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return ON_STORE;
         }
     },
@@ -185,7 +185,7 @@ public enum PutStep implements Step {
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
 
-            Step.log("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
 
             // TODO: read  record efficiently
             Record record = recordStore.getRecord(state.getKey());
@@ -204,7 +204,7 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -212,7 +212,7 @@ public enum PutStep implements Step {
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -240,7 +240,7 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -255,11 +255,11 @@ public enum PutStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return null;
         }
     };
 
-    PutStep() {
+    PutOpStep() {
     }
 }

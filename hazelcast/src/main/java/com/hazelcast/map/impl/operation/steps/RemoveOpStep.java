@@ -26,11 +26,11 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-public enum RemoveStep implements Step {
+public enum RemoveOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public RemoveStep nextStep(State state) {
+        public RemoveOpStep nextStep(State state) {
             return READ;
         }
     },
@@ -38,7 +38,7 @@ public enum RemoveStep implements Step {
     READ() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -54,11 +54,11 @@ public enum RemoveStep implements Step {
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
+        public RemoveOpStep nextStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            return state.isNullRecord() ? RemoveStep.LOAD
+            return state.isNullRecord() ? RemoveOpStep.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveStep.DELETE : RemoveStep.RESPONSE);
+                    ? RemoveOpStep.DELETE : RemoveOpStep.RESPONSE);
         }
     },
 
@@ -70,7 +70,7 @@ public enum RemoveStep implements Step {
 
         @Override
         public void runStep(State state) {
-            Step.log("==> loading old value");
+            OpStep.log("==> loading old value");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Object oldValue = recordStore.loadValueOf(state.getKey());
             if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
@@ -80,22 +80,22 @@ public enum RemoveStep implements Step {
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
-            return state.getOldValue() == null ? RemoveStep.RESPONSE : RemoveStep.ON_LOAD;
+        public RemoveOpStep nextStep(State state) {
+            return state.getOldValue() == null ? RemoveOpStep.RESPONSE : RemoveOpStep.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             recordStore.updateStatsOnRemove(state.getNow());
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
-            return RemoveStep.RESPONSE;
+        public RemoveOpStep nextStep(State state) {
+            return RemoveOpStep.RESPONSE;
         }
     },
 
@@ -107,14 +107,14 @@ public enum RemoveStep implements Step {
 
         @Override
         public void runStep(State state) {
-            Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
             MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
             mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
-            return RemoveStep.ON_DELETE;
+        public RemoveOpStep nextStep(State state) {
+            return RemoveOpStep.ON_DELETE;
         }
     },
 
@@ -123,7 +123,7 @@ public enum RemoveStep implements Step {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);
@@ -131,15 +131,15 @@ public enum RemoveStep implements Step {
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
-            return RemoveStep.RESPONSE;
+        public RemoveOpStep nextStep(State state) {
+            return RemoveOpStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             MapServiceContext mapServiceContext = recordStore.getMapContainer().getMapServiceContext();
             Object oldValue = state.getOldValue();
@@ -149,7 +149,7 @@ public enum RemoveStep implements Step {
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
+        public RemoveOpStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -167,12 +167,12 @@ public enum RemoveStep implements Step {
         }
 
         @Override
-        public RemoveStep nextStep(State state) {
+        public RemoveOpStep nextStep(State state) {
             return null;
         }
     };
 
 
-    RemoveStep() {
+    RemoveOpStep() {
     }
 }

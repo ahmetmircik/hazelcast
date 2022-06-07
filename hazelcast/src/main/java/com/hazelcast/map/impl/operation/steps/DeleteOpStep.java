@@ -26,11 +26,11 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-public enum DeleteStep implements Step {
+public enum DeleteOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return READ;
         }
     },
@@ -38,7 +38,7 @@ public enum DeleteStep implements Step {
     READ() {
         @Override
         public void runStep(State state) {
-            Step.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -58,8 +58,8 @@ public enum DeleteStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return DeleteStep.DELETE;
+        public OpStep nextStep(State state) {
+            return DeleteOpStep.DELETE;
         }
     },
 
@@ -73,7 +73,7 @@ public enum DeleteStep implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            Step.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
@@ -83,8 +83,8 @@ public enum DeleteStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return state.isNullRecord() ? DeleteStep.RESPONSE : DeleteStep.ON_DELETE;
+        public OpStep nextStep(State state) {
+            return state.isNullRecord() ? DeleteOpStep.RESPONSE : DeleteOpStep.ON_DELETE;
         }
     },
 
@@ -93,7 +93,7 @@ public enum DeleteStep implements Step {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            Step.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);
@@ -101,21 +101,21 @@ public enum DeleteStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
-            return DeleteStep.RESPONSE;
+        public OpStep nextStep(State state) {
+            return DeleteOpStep.RESPONSE;
         }
     },
 
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            Step.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             Object oldValue = state.getOldValue();
             state.getOperation().sendResponse(oldValue != null);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -127,19 +127,19 @@ public enum DeleteStep implements Step {
 
             // TODO: prevent unneeded serialization for oldValue
             if (!state.isNullRecord()) {
-                Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
                 ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
             } else {
-                Step.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
+                OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
             }
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return null;
         }
     };
 
-    DeleteStep() {
+    DeleteOpStep() {
     }
 }

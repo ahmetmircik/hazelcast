@@ -23,8 +23,8 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.Step;
-import com.hazelcast.map.impl.operation.steps.TxnPutStep;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.TxnPutOpStep;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -75,8 +75,8 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
-    protected Step getOffloadStartingStep() {
-        return TxnPutStep.INITIAL;
+    protected OpStep getOffloadStartingStep() {
+        return TxnPutOpStep.INITIAL;
     }
 
     @Override

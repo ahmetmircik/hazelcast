@@ -18,17 +18,17 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.PutStep;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.PutOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.Step;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 public abstract class BasePutOperation extends LockAwareOperation implements BackupAwareOperation {
@@ -56,13 +56,13 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         throw new UnsupportedOperationException();
     }
 
-    protected StepRunner newStepRunner() {
-        return new StepRunner(getNodeEngine(), this,
+    protected OpStepRunner newStepRunner() {
+        return new OpStepRunner(getNodeEngine(), this,
                 newStepSupplier(newState(), getOffloadStartingStep()), getName());
     }
 
-    protected Step getOffloadStartingStep() {
-        return PutStep.INITIAL;
+    protected OpStep getOffloadStartingStep() {
+        return PutOpStep.INITIAL;
     }
 
     protected State newState() {

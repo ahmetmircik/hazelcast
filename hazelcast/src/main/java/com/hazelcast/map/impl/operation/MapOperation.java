@@ -31,8 +31,8 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.steps.StepOffload;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepOffload;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -154,14 +154,14 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (mapStoreOffloadEnabled) {
             // record-store can be null for some ops: see ClearOperation
-            return new StepOffload(this, getName(), newStepRunner());
+            return new OpStepOffload(this, getName(), newStepRunner());
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected StepRunner newStepRunner() {
+    protected OpStepRunner newStepRunner() {
         throw new UnsupportedOperationException("Implement to use");
     }
 

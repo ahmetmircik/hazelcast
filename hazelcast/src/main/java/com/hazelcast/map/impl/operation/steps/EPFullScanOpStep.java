@@ -40,11 +40,11 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: Handle backup operations for this step since backup handling a bit different here.
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPFullScanStep implements Step {
+public enum EPFullScanOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return PROCESS;
         }
     },
@@ -66,7 +66,7 @@ public enum EPFullScanStep implements Step {
         }
 
         private boolean runWithIndex(State state) {
-            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
 
             Predicate predicate = state.getPredicate();
             RecordStore recordStore = state.getRecordStore();
@@ -107,7 +107,7 @@ public enum EPFullScanStep implements Step {
         }
 
         private void runWithPartitionScan(State state) {
-            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore<Record> recordStore = state.getRecordStore();
 
             List<State> toStore = new ArrayList<>();
@@ -134,7 +134,7 @@ public enum EPFullScanStep implements Step {
                     .setEntryOperator(operator(state.getOperation(),
                             state.getEntryProcessor(), state.getPredicate()));
 
-            EPSingleKeyStep.PROCESS.runStep(singleKeyState);
+            EPSingleKeyOpStep.PROCESS.runStep(singleKeyState);
 
             EntryEventType eventType = singleKeyState.getOperator().getEventType();
             if (eventType == null) {
@@ -158,7 +158,7 @@ public enum EPFullScanStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return !state.getToStore().isEmpty() || !state.getToRemove().isEmpty()
                     ? STORE_OR_DELETE : ON_STORE_OR_DELETE;
         }
@@ -174,17 +174,17 @@ public enum EPFullScanStep implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutStep.STORE.runStep(s);
+                PutOpStep.STORE.runStep(s);
             }
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteStep.DELETE.runStep(s);
+                DeleteOpStep.DELETE.runStep(s);
             }
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return ON_STORE_OR_DELETE;
         }
     },
@@ -194,7 +194,7 @@ public enum EPFullScanStep implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutStep.ON_STORE.runStep(s);
+                PutOpStep.ON_STORE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onAddedOrUpdated0(s.getNewValue());
@@ -208,7 +208,7 @@ public enum EPFullScanStep implements Step {
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteStep.ON_DELETE.runStep(s);
+                DeleteOpStep.ON_DELETE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onRemove0();
@@ -225,11 +225,11 @@ public enum EPFullScanStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return null;
         }
     };
 
-    EPFullScanStep() {
+    EPFullScanOpStep() {
     }
 }

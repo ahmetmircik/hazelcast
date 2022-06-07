@@ -20,9 +20,9 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
+import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.Step;
-import com.hazelcast.map.impl.operation.steps.TxnRemoveStep;
+import com.hazelcast.map.impl.operation.steps.TxnRemoveOpStep;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -93,8 +93,8 @@ public class TxnDeleteOperation
     }
 
     @Override
-    protected Step getOffloadStartingStep() {
-        return TxnRemoveStep.INITIAL;
+    protected OpStep getOffloadStartingStep() {
+        return TxnRemoveOpStep.INITIAL;
     }
 
     @Override

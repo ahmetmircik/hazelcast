@@ -17,17 +17,17 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import java.util.UUID;
 
-// TODO: re-run upon NOOME
-public enum TxnPutStep implements Step {
+public enum TxnRemoveOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return READ;
         }
     },
@@ -35,6 +35,9 @@ public enum TxnPutStep implements Step {
     READ() {
         @Override
         public void runStep(State state) {
+            OpStep.log("==> reading old value"
+                    + " (thread:" + Thread.currentThread().getName() + ")");
+
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();
@@ -42,21 +45,27 @@ public enum TxnPutStep implements Step {
             long version = state.getVersion();
             UUID ownerUuid = state.getOwnerUuid();
             long callId = state.getOperation().getCallId();
+            UUID transactionId = state.getTxnId();
+            MapOperation operation = state.getOperation();
 
             recordStore.unlock(dataKey, ownerUuid, threadId, callId);
 
-            Record record = recordStore.getRecordOrNull(dataKey);
+            Record record = recordStore.getRecord(dataKey);
             if (record == null || version == record.getVersion()) {
-                PutStep.READ.runStep(state);
+                RemoveOpStep.READ.runStep(state);
+            }
+
+            if (record == null) {
+                operation.wbqCapacityCounter().decrement(transactionId);
             }
         }
 
         @Override
-        public Step nextStep(State state) {
-            return PutStep.READ.nextStep(state);
+        public OpStep nextStep(State state) {
+            return RemoveOpStep.READ.nextStep(state);
         }
     };
 
-    TxnPutStep() {
+    TxnRemoveOpStep() {
     }
 }

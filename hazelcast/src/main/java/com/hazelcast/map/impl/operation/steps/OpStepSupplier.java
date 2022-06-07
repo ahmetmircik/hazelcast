@@ -20,15 +20,15 @@ import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.function.Supplier;
 
-public class StepSupplier implements Supplier<Runnable> {
+public class OpStepSupplier implements Supplier<Runnable> {
 
     private final State state;
 
-    private volatile Step current;
+    private volatile OpStep current;
 
-    public StepSupplier(State state, Step initialStep) {
+    public OpStepSupplier(State state, OpStep initialOpStep) {
         this.state = state;
-        this.current = initialStep;
+        this.current = initialOpStep;
     }
 
     @Override
@@ -36,38 +36,38 @@ public class StepSupplier implements Supplier<Runnable> {
         if (current == null) {
             return null;
         }
-        Step nextStep = current.nextStep(state);
-        if (nextStep == null) {
+        OpStep nextOpStep = current.nextStep(state);
+        if (nextOpStep == null) {
             return null;
         }
 
-        assertStepTypeSameWithInitial(nextStep);
+        assertStepTypeSameWithInitial(nextOpStep);
 
-        current = nextStep;
-        return createStep(state, nextStep);
+        current = nextOpStep;
+        return createStep(state, nextOpStep);
     }
 
-    private Runnable createStep(State state, Step step) {
-        if (step.offloadStep()) {
-            return () -> step.runStep(state);
+    private Runnable createStep(State state, OpStep opStep) {
+        if (opStep.offloadStep()) {
+            return () -> opStep.runStep(state);
         }
 
         return new PartitionSpecificRunnable() {
             @Override
             public void run() {
-                step.runStep(state);
+                opStep.runStep(state);
 
-                Step temp = step;
+                OpStep temp = opStep;
                 while (true) {
-                    Step nextStep = temp.nextStep(state);
-                    if (nextStep == null
-                            || nextStep.offloadStep()) {
+                    OpStep nextOpStep = temp.nextStep(state);
+                    if (nextOpStep == null
+                            || nextOpStep.offloadStep()) {
                         current = temp;
                         break;
                     }
 
-                    nextStep.runStep(state);
-                    temp = nextStep;
+                    nextOpStep.runStep(state);
+                    temp = nextOpStep;
                 }
             }
 
@@ -78,14 +78,14 @@ public class StepSupplier implements Supplier<Runnable> {
         };
     }
 
-    private void assertStepTypeSameWithInitial(Step nextStep) {
+    private void assertStepTypeSameWithInitial(OpStep nextOpStep) {
 //                assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
 //                        : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
 //                        nextStep.getClass().getSuperclass());
     }
 
-    public static Supplier<Runnable> newStepSupplier(State state, Step initial) {
-        return new StepSupplier(state, initial);
+    public static Supplier<Runnable> newStepSupplier(State state, OpStep initial) {
+        return new OpStepSupplier(state, initial);
     }
 
 

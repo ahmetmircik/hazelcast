@@ -31,11 +31,11 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO: UPDATE BACKUP!!!
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPSingleKeyStep implements Step {
+public enum EPSingleKeyOpStep implements OpStep {
 
     INITIAL() {
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return EP_START;
         }
     },
@@ -43,7 +43,7 @@ public enum EPSingleKeyStep implements Step {
     EP_START() {
         @Override
         public void runStep(State state) {
-            Step.log("==> EP_START reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> EP_START reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
             operator.init(state.getKey(), null, null, null, null, null, UNSET);
@@ -54,16 +54,16 @@ public enum EPSingleKeyStep implements Step {
                 return;
             }
 
-            GetStep.READ.runStep(state);
+            GetOpStep.READ.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             if (state.isStopExecution()) {
-                return EPSingleKeyStep.RESPONSE;
+                return EPSingleKeyOpStep.RESPONSE;
             }
-            EPSingleKeyStep epStep = state.getOldValue() == null ? EPSingleKeyStep.LOAD : EPSingleKeyStep.PROCESS;
-            Step.log(state.getOldValue() == null ? "EPStep.LOAD" : "EPStep.PROCESS");
+            EPSingleKeyOpStep epStep = state.getOldValue() == null ? EPSingleKeyOpStep.LOAD : EPSingleKeyOpStep.PROCESS;
+            OpStep.log(state.getOldValue() == null ? "EPStep.LOAD" : "EPStep.PROCESS");
             return epStep;
         }
     },
@@ -78,31 +78,31 @@ public enum EPSingleKeyStep implements Step {
         public void runStep(State state) {
             assert !ThreadUtil.isRunningOnPartitionThread();
 
-            GetStep.LOAD.runStep(state);
+            GetOpStep.LOAD.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
-            return state.getOldValue() == null ? EPSingleKeyStep.PROCESS : EPSingleKeyStep.ON_LOAD;
+        public OpStep nextStep(State state) {
+            return state.getOldValue() == null ? EPSingleKeyOpStep.PROCESS : EPSingleKeyOpStep.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            GetStep.ON_LOAD.runStep(state);
+            GetOpStep.ON_LOAD.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
-            return EPSingleKeyStep.PROCESS;
+        public OpStep nextStep(State state) {
+            return EPSingleKeyOpStep.PROCESS;
         }
     },
 
     PROCESS() {
         @Override
         public void runStep(State state) {
-            Step.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -140,7 +140,7 @@ public enum EPSingleKeyStep implements Step {
                         state.setTtl(entryOperator.getEntry().getNewTtl());
                         break;
                     case REMOVED:
-                        DeleteStep.READ.runStep(state);
+                        DeleteOpStep.READ.runStep(state);
                         break;
                     default:
                         throw new IllegalArgumentException("Unexpected event found:" + eventType);
@@ -149,7 +149,7 @@ public enum EPSingleKeyStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             EntryEventType eventType = state.getOperator().getEventType();
             if (eventType == null) {
                 return RESPONSE;
@@ -175,11 +175,11 @@ public enum EPSingleKeyStep implements Step {
 
         @Override
         public void runStep(State state) {
-            PutStep.STORE.runStep(state);
+            PutOpStep.STORE.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return ON_STORE;
         }
     },
@@ -187,11 +187,11 @@ public enum EPSingleKeyStep implements Step {
     ON_STORE() {
         @Override
         public void runStep(State state) {
-            PutStep.ON_STORE.runStep(state);
+            PutOpStep.ON_STORE.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -204,11 +204,11 @@ public enum EPSingleKeyStep implements Step {
 
         @Override
         public void runStep(State state) {
-            DeleteStep.DELETE.runStep(state);
+            DeleteOpStep.DELETE.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return ON_DELETE;
         }
     },
@@ -216,11 +216,11 @@ public enum EPSingleKeyStep implements Step {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            DeleteStep.ON_DELETE.runStep(state);
+            DeleteOpStep.ON_DELETE.runStep(state);
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -230,7 +230,7 @@ public enum EPSingleKeyStep implements Step {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            Step.log("==> sending response");
+            OpStep.log("==> sending response");
 
             Operation operation = state.getOperation();
             EntryOperator operator = state.getOperator();
@@ -254,11 +254,11 @@ public enum EPSingleKeyStep implements Step {
         }
 
         @Override
-        public Step nextStep(State state) {
+        public OpStep nextStep(State state) {
             return null;
         }
     };
 
-    EPSingleKeyStep() {
+    EPSingleKeyOpStep() {
     }
 }

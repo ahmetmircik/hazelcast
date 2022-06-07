@@ -18,7 +18,15 @@ package com.hazelcast.map.impl.operation.steps;
 
 import javax.annotation.Nullable;
 
-public interface Step {
+/**
+ * Represents steps of an operation. e.g.
+ * {@link  com.hazelcast.map.impl.operation.PutOperation}
+ * <p>
+ * By using this interface, an operation can be modeled as
+ * a collection of {@link OpStep}. This model is helpful
+ * to run OpSteps in threads other than partition threads.
+ */
+public interface OpStep {
 
     default void runStep(State state) {
         throw new UnsupportedOperationException();
@@ -31,7 +39,7 @@ public interface Step {
      * @return next step or null if there is no next step.
      */
     @Nullable
-    default Step nextStep(State state) {
+    default OpStep nextStep(State state) {
         throw new UnsupportedOperationException();
     }
 

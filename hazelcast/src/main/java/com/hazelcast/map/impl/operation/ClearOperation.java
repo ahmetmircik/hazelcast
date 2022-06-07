@@ -18,16 +18,16 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.ClearStep;
+import com.hazelcast.map.impl.operation.steps.ClearOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
-import com.hazelcast.map.impl.operation.steps.StepRunner;
+import com.hazelcast.map.impl.operation.steps.OpStepRunner;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
 
 import static com.hazelcast.map.impl.MapService.SERVICE_NAME;
-import static com.hazelcast.map.impl.operation.steps.StepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
 
 public class ClearOperation extends MapOperation
         implements BackupAwareOperation, PartitionAwareOperation, MutatingOperation {
@@ -55,10 +55,10 @@ public class ClearOperation extends MapOperation
     }
 
     @Override
-    protected StepRunner newStepRunner() {
+    protected OpStepRunner newStepRunner() {
         State state = new State(recordStore, this);
-        return new StepRunner(getNodeEngine(), this,
-                newStepSupplier(state, ClearStep.INITIAL), getName());
+        return new OpStepRunner(getNodeEngine(), this,
+                newStepSupplier(state, ClearOpStep.INITIAL), getName());
     }
 
     @Override
