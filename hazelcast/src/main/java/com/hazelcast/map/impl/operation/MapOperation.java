@@ -122,7 +122,8 @@ public abstract class MapOperation extends AbstractNamedOperation
                 || this instanceof EntryOperation
                 || this instanceof MultipleEntryOperation
                 || this instanceof PartitionWideEntryOperation
-                || this instanceof MergeOperation);
+                || this instanceof MergeOperation
+                || this instanceof PutAllOperation);
 
         assertNativeMapOnPartitionThread();
 

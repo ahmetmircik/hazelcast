@@ -71,6 +71,11 @@ class EmptyMapDataStore implements MapDataStore {
     }
 
     @Override
+    public void storeAll(Map map) {
+
+    }
+
+    @Override
     public void removeAll(Collection keys) {
     }
 

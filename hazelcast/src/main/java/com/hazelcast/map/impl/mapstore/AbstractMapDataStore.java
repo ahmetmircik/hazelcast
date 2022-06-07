@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.mapstore;
 import com.hazelcast.internal.serialization.DataType;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.internal.util.MapUtil;
 import com.hazelcast.map.impl.MapStoreWrapper;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.internal.serialization.Data;
@@ -29,6 +30,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Abstract map data store contains common functionality of map data stores.
@@ -47,6 +49,15 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
         this.store = mapStoreContext.getMapStoreWrapper();
         this.nodeEngine = mapStoreContext.getMapServiceContext().getNodeEngine();
         this.serializationService = (InternalSerializationService) nodeEngine.getSerializationService();
+    }
+
+    @Override
+    public void storeAll(Map map) {
+        if (MapUtil.isNullOrEmpty(map)) {
+            return;
+        }
+
+        getStore().storeAll(convertKVPairsToObject(map));
     }
 
     @Override
@@ -122,6 +133,15 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
             objectKeys.add(toObject(key));
         }
         return objectKeys;
+    }
+
+    private Map convertKVPairsToObject(Map map) {
+        Map objectMap = MapUtil.createHashMap(map.size());
+        Set<Map.Entry> entrySet = map.entrySet();
+        for (Map.Entry entry : entrySet) {
+            objectMap.put(toObject(entry.getKey()), toObject(entry.getValue()));
+        }
+        return objectMap;
     }
 
     @Override

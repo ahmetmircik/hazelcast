@@ -22,6 +22,9 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.IMap;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.PuAllOpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -49,7 +52,8 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
  * of an {@link IMap#putAll(Map)} or {@link IMap#setAll(Map)} call.
  */
 public class PutAllOperation extends MapOperation
-        implements PartitionAwareOperation, BackupAwareOperation, MutatingOperation, Versioned {
+        implements PartitionAwareOperation, BackupAwareOperation,
+        MutatingOperation, Versioned {
 
     private transient int currentIndex;
     private MapEntries mapEntries;
@@ -87,6 +91,21 @@ public class PutAllOperation extends MapOperation
         if (hasInvalidation) {
             invalidationKeys = new ArrayList<>(mapEntries.size());
         }
+    }
+
+    @Override
+    protected State newState() {
+        return super.newState()
+                .setMapEntries(mapEntries);
+    }
+
+    @Override
+    protected OpStep getStartingOpStep() {
+        return PuAllOpStep.INITIAL;
+    }
+
+    public boolean isTriggerMapLoader() {
+        return triggerMapLoader;
     }
 
     @Override
@@ -129,6 +148,30 @@ public class PutAllOperation extends MapOperation
         evict(dataKey);
     }
 
+    public boolean isHasMapListener() {
+        return hasMapListener;
+    }
+
+    public boolean isHasWanReplication() {
+        return hasWanReplication;
+    }
+
+    public boolean isHasBackups() {
+        return hasBackups;
+    }
+
+    public boolean isHasInvalidation() {
+        return hasInvalidation;
+    }
+
+    public List getBackupPairs() {
+        return backupPairs;
+    }
+
+    public List<Data> getInvalidationKeys() {
+        return invalidationKeys;
+    }
+
     private boolean hasBackups() {
         return (mapContainer.getTotalBackupCount() > 0);
     }
@@ -155,7 +198,7 @@ public class PutAllOperation extends MapOperation
         super.afterRunInternal();
     }
 
-    private Data getValueOrPostProcessedValue(Data dataKey, Data dataValue) {
+    public Data getValueOrPostProcessedValue(Data dataKey, Data dataValue) {
         if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }

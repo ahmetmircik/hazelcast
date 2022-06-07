@@ -20,6 +20,7 @@ import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.map.EntryProcessor;
+import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
@@ -80,6 +81,7 @@ public class State {
     private volatile SplitBrainMergePolicy<Object,
             SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy;
     private boolean disableWanReplicationEvent;
+    private MapEntries mapEntries;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -406,5 +408,14 @@ public class State {
 
     public boolean isDisableWanReplicationEvent() {
         return disableWanReplicationEvent;
+    }
+
+    public State setMapEntries(MapEntries mapEntries) {
+        this.mapEntries = mapEntries;
+        return this;
+    }
+
+    public MapEntries getMapEntries() {
+        return mapEntries;
     }
 }

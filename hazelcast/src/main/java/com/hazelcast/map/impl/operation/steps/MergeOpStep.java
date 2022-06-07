@@ -205,6 +205,8 @@ public enum MergeOpStep implements OpStep {
     RESPONSE() {
         @Override
         public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
+
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();

@@ -72,6 +72,14 @@ public interface MapDataStore<K, V> {
      */
     Map loadAll(Collection keys);
 
+
+    /**
+     * Bulk store into map-store.
+     *
+     * @param map map of key-value pairs
+     */
+    void storeAll(Map map);
+
     /**
      * Removes keys from map store.
      * It also handles {@link Data}
