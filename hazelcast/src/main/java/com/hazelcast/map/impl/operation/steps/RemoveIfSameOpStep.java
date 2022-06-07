@@ -23,8 +23,13 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.RemoveIfSameOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 public enum RemoveIfSameOpStep implements OpStep {
 
@@ -178,6 +183,17 @@ public enum RemoveIfSameOpStep implements OpStep {
             if (((Boolean) state.getResult())) {
                 ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(),
                         state.getOldValue());
+
+                DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+                MapContainer mapContainer = recordStore.getMapContainer();
+                MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+                MapOperation operation = state.getOperation();
+                OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+                        .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+
+                ((RemoveIfSameOperation) operation).setSuccessful(true);
+
+                ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
             }
         }
 

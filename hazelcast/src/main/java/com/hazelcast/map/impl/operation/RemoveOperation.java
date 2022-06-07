@@ -23,8 +23,6 @@ import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
 
 public class RemoveOperation extends BaseRemoveOperation {
 
-    protected boolean successful;
-
     public RemoveOperation() {
     }
 
@@ -35,12 +33,11 @@ public class RemoveOperation extends BaseRemoveOperation {
     @Override
     protected void runInternal() {
         dataOldValue = mapServiceContext.toData(recordStore.remove(dataKey, getCallerProvenance()));
-        successful = dataOldValue != null;
     }
 
     @Override
     protected void afterRunInternal() {
-        if (successful) {
+        if (dataOldValue != null) {
             super.afterRunInternal();
         }
     }
@@ -52,7 +49,7 @@ public class RemoveOperation extends BaseRemoveOperation {
 
     @Override
     public boolean shouldBackup() {
-        return successful;
+        return dataOldValue != null;
     }
 
     @Override

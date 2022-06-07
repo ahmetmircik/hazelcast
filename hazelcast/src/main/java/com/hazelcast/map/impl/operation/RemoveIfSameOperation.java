@@ -52,6 +52,10 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
         }
     }
 
+    public void setSuccessful(boolean successful) {
+        this.successful = successful;
+    }
+
     @Override
     protected OpStep getOffloadStartingStep() {
         return RemoveIfSameOpStep.INITIAL;

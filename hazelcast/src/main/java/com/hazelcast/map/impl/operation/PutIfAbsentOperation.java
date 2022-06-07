@@ -23,8 +23,6 @@ import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
 public class PutIfAbsentOperation extends BasePutOperation implements MutatingOperation {
 
-    protected transient boolean successful;
-
     public PutIfAbsentOperation(String name, Data dataKey, Data value) {
         super(name, dataKey, value);
     }
@@ -37,7 +35,6 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
         Object oldValue = recordStore.putIfAbsent(dataKey, dataValue,
                 getTtl(), getMaxIdle(), getCallerAddress());
         this.oldValue = mapServiceContext.toData(oldValue);
-        successful = this.oldValue == null;
     }
 
     @Override
@@ -47,7 +44,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
 
     @Override
     protected void afterRunInternal() {
-        if (successful) {
+        if (oldValue == null) {
             super.afterRunInternal();
         }
     }
@@ -59,7 +56,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
 
     @Override
     public boolean shouldBackup() {
-        return successful && super.shouldBackup();
+        return oldValue == null && super.shouldBackup();
     }
 
     @Override

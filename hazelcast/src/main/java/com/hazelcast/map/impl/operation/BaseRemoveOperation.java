@@ -18,9 +18,9 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -74,6 +74,12 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
                 .setCallerAddress(getCallerAddress())
                 .setCallerProvenance(getCallerProvenance())
                 .setPartitionId(getPartitionId());
+    }
+
+    public void initFields(Data dataKey, Data dataOldValue) {
+        this.dataKey = dataKey;
+        this.dataOldValue = dataOldValue;
+
     }
 
     protected Object getExpect() {
