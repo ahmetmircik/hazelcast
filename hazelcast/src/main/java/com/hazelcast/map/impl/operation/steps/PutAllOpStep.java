@@ -25,6 +25,7 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.PutAllOperation;
+import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
@@ -78,7 +79,6 @@ public enum PutAllOpStep implements OpStep {
             state.setResult(batchMap);
             state.setKeysToLoad(keysToLoadOldValue);
         }
-
 
         @Override
         public OpStep nextStep(State state) {
@@ -149,17 +149,27 @@ public enum PutAllOpStep implements OpStep {
             Map loadedKeyValuePairs = state.getLoadedKeyValuePairs();
 
             for (Map.Entry<Data, Data> entry : entries) {
+                Object oldValue = null;
+                if (loadOldValue) {
+                    oldValue = loadedKeyValuePairs.get(mapServiceContext.toObject(entry.getKey()));
+                }
+                if (oldValue == null) {
+                    Record record = recordStore.getRecord(entry.getKey());
+                    if (record != null) {
+                        oldValue = record.getValue();
+                    }
+                }
+
                 perKeyState.setKey(entry.getKey())
-                        .setOldValue(loadOldValue
-                                ? loadedKeyValuePairs.get(mapServiceContext.toObject(entry.getKey())) : null)
+                        .setOldValue(oldValue)
                         .setNewValue(result.get(entry.getKey()))
                         .setStaticPutParams(loadOldValue
                                 ? StaticParams.PUT_PARAMS : StaticParams.SET_PARAMS);
 
                 PutOpStep.ON_STORE.runStep(perKeyState);
 
-                if (loadOldValue && state.getOldValue() != null) {
-                    oldValueByKey.put(state.getKey(), state.getOldValue());
+                if (loadOldValue && oldValue != null) {
+                    oldValueByKey.put(perKeyState.getKey(), oldValue);
                 }
             }
 

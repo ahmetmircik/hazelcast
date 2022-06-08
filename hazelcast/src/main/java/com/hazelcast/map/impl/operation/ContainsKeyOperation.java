@@ -16,14 +16,18 @@
 
 package com.hazelcast.map.impl.operation;
 
-import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.core.OperationTimeoutException;
-import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.ContainsKeyOpStep;
+import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 
-public class ContainsKeyOperation extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
+public class ContainsKeyOperation
+        extends ReadonlyKeyBasedMapOperation implements BlockingOperation {
 
     private transient boolean containsKey;
 
@@ -38,6 +42,17 @@ public class ContainsKeyOperation extends ReadonlyKeyBasedMapOperation implement
     @Override
     protected void runInternal() {
         containsKey = recordStore.containsKey(dataKey, getCallerAddress());
+    }
+
+    @Override
+    protected State newState() {
+        return super.newState()
+                .setKey(dataKey);
+    }
+
+    @Override
+    protected OpStep getStartingOpStep() {
+        return ContainsKeyOpStep.INITIAL;
     }
 
     @Override
