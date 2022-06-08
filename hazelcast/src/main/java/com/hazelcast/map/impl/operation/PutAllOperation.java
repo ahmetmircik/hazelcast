@@ -23,7 +23,7 @@ import com.hazelcast.map.IMap;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.steps.OpStep;
-import com.hazelcast.map.impl.operation.steps.PuAllOpStep;
+import com.hazelcast.map.impl.operation.steps.PutAllOpStep;
 import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
@@ -105,7 +105,7 @@ public class PutAllOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return PuAllOpStep.INITIAL;
+        return PutAllOpStep.INITIAL;
     }
 
     public boolean isTriggerMapLoader() {

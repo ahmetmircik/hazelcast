@@ -42,7 +42,7 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // FIXME: map-store load all should be called
 // TODO: re-run upon NOOME
-public enum PuAllOpStep implements OpStep {
+public enum PutAllOpStep implements OpStep {
 
     INITIAL() {
         @Override
@@ -82,7 +82,7 @@ public enum PuAllOpStep implements OpStep {
 
         @Override
         public OpStep nextStep(State state) {
-            return PuAllOpStep.LOAD_ALL_STORE_ALL;
+            return PutAllOpStep.LOAD_ALL_STORE_ALL;
         }
     },
 
@@ -124,7 +124,7 @@ public enum PuAllOpStep implements OpStep {
 
         @Override
         public OpStep nextStep(State state) {
-            return PuAllOpStep.PROCESS;
+            return PutAllOpStep.PROCESS;
         }
     },
 
@@ -237,6 +237,6 @@ public enum PuAllOpStep implements OpStep {
         }
     };
 
-    PuAllOpStep() {
+    PutAllOpStep() {
     }
 }

@@ -690,6 +690,18 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         checkIfLoaded();
         long now = getNow();
 
+        MapEntries mapEntries = getInMemoryEntries(keys, now);
+
+        // then try to load missing keys from map-store
+        if (mapDataStore != EMPTY_MAP_DATA_STORE && !keys.isEmpty()) {
+            Map loadedEntries = loadEntries(keys, callerAddress);
+            addToMapEntrySet(mapEntries, loadedEntries);
+        }
+
+        return mapEntries;
+    }
+
+    public MapEntries getInMemoryEntries(Set<Data> keys, long now) {
         MapEntries mapEntries = new MapEntries(keys.size());
 
         // first search in memory
@@ -703,19 +715,16 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                 iterator.remove();
             }
         }
-
-        // then try to load missing keys from map-store
-        if (mapDataStore != EMPTY_MAP_DATA_STORE && !keys.isEmpty()) {
-            Map loadedEntries = loadEntries(keys, callerAddress);
-            addToMapEntrySet(loadedEntries, mapEntries);
-        }
-
         return mapEntries;
     }
 
     private Map<Data, Object> loadEntries(Set<Data> keys, Address callerAddress) {
         Map loadedEntries = mapDataStore.loadAll(keys);
 
+        return loadEntries0(loadedEntries, callerAddress);
+    }
+
+    public Map<Data, Object> loadEntries0(Map loadedEntries, Address callerAddress) {
         if (isNullOrEmpty(loadedEntries)) {
             return Collections.emptyMap();
         }
@@ -768,7 +777,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         mapEntries.add(dataKey, dataValue);
     }
 
-    protected void addToMapEntrySet(Map<Object, Object> entries, MapEntries mapEntries) {
+    public void addToMapEntrySet(MapEntries mapEntries, Map<Object, Object> entries) {
         for (Map.Entry<Object, Object> entry : entries.entrySet()) {
             addToMapEntrySet(entry.getKey(), entry.getValue(), mapEntries);
         }
