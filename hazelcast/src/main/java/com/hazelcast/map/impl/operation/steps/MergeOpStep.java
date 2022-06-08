@@ -61,8 +61,6 @@ public enum MergeOpStep implements OpStep {
 
             MergeOperation.checkMergePolicy(mapContainer, mergePolicy);
 
-            recordStore.checkIfLoaded();
-
             // TODO index marking
             // key + oldValue + newValue
             List outcomes = new ArrayList<>(3 * mergingEntries.size());

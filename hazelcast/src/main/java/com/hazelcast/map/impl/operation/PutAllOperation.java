@@ -74,9 +74,6 @@ public class PutAllOperation extends MapOperation
         super(name);
         this.mapEntries = mapEntries;
         this.triggerMapLoader = triggerMapLoader;
-        if(!triggerMapLoader){
-            Thread.dumpStack();
-        }
     }
 
     @Override

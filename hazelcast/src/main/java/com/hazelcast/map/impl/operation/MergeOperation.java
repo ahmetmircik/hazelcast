@@ -88,6 +88,14 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+        if (recordStore != null) {
+            recordStore.checkIfLoaded();
+        }
+    }
+
+    @Override
     protected boolean disableWanReplicationEvent() {
         return disableWanReplicationEvent;
     }

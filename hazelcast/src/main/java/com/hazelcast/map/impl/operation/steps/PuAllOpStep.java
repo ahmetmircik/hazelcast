@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.internal.util.CollectionUtil;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
@@ -28,6 +29,8 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +40,7 @@ import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-// FIXME: mapstore load all should be called
+// FIXME: map-store load all should be called
 // TODO: re-run upon NOOME
 public enum PuAllOpStep implements OpStep {
 
@@ -54,27 +57,36 @@ public enum PuAllOpStep implements OpStep {
             OpStep.log("==> PuAllOpStep reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            recordStore.checkIfLoaded();
 
             MapEntries mapEntries = state.getMapEntries();
+
+            boolean triggerMapLoader = ((PutAllOperation) state.getOperation()).isTriggerMapLoader();
+            boolean loadOldValue = triggerMapLoader
+                    && ((PutAllOperation) state.getOperation()).isHasMapListener();
+            List<Data> keysToLoadOldValue = loadOldValue ? new ArrayList<>() : Collections.emptyList();
 
             Map batchMap = createHashMap(mapEntries.size());
             List<Map.Entry<Data, Data>> entries = mapEntries.entries();
             for (Map.Entry<Data, Data> entry : entries) {
+                if (loadOldValue && recordStore.getRecord(entry.getKey()) == null) {
+                    keysToLoadOldValue.add(entry.getKey());
+                }
+
                 batchMap.put(entry.getKey(), entry.getValue());
             }
 
             state.setResult(batchMap);
+            state.setKeysToLoad(keysToLoadOldValue);
         }
 
 
         @Override
         public OpStep nextStep(State state) {
-            return PuAllOpStep.STORE_ALL;
+            return PuAllOpStep.LOAD_ALL_STORE_ALL;
         }
     },
 
-    STORE_ALL() {
+    LOAD_ALL_STORE_ALL() {
         @Override
         public boolean offloadStep() {
             return true;
@@ -84,15 +96,30 @@ public enum PuAllOpStep implements OpStep {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
+            if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
+                OpStep.log("==> PuAllOpStep LOAD_ALL " + " (thread:" + Thread.currentThread().getName() + ")");
+                EPMultiKeyOpStep.LOAD_ALL.runStep(state);
+            }
+
             OpStep.log("==> PuAllOpStep STORE_ALL " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             long expirationTime = recordStore.getExpirySystem().calculateExpirationTime(state.getTtl(),
                     state.getMaxIdle(), state.getNow(), state.getNow());
             // TODO what about expiry aware entry-store?
-            recordStore.getMapDataStore().storeAll((Map) state.getResult(), expirationTime);
+            // TODO storeAll can be more appropriate?
+            Map result = (Map) state.getResult();
+            Map newResult = new HashMap();
+            for (Object e : result.entrySet()) {
+                Map.Entry entry = (Map.Entry) e;
 
-            state.setResult(null);
+                Object storedValue = recordStore.getMapDataStore().add((Data) entry.getKey(), entry.getValue(),
+                        expirationTime, state.getNow(), null);
+
+                newResult.put(entry.getKey(), storedValue);
+            }
+
+            state.setResult(newResult);
         }
 
         @Override
@@ -106,19 +133,26 @@ public enum PuAllOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
+            RecordStore recordStore = state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
             boolean triggerMapLoader = ((PutAllOperation) state.getOperation()).isTriggerMapLoader();
 
             MapEntries mapEntries = state.getMapEntries();
             List<Map.Entry<Data, Data>> entries = mapEntries.entries();
 
             Map<Data, Object> oldValueByKey = new HashMap<>();
+            Map result = (Map) state.getResult();
             State perKeyState = new State(state);
             boolean loadOldValue = triggerMapLoader
                     && ((PutAllOperation) state.getOperation()).isHasMapListener();
-            for (Map.Entry<Data, Data> entry : entries) {
+            Map loadedKeyValuePairs = state.getLoadedKeyValuePairs();
 
+            for (Map.Entry<Data, Data> entry : entries) {
                 perKeyState.setKey(entry.getKey())
-                        .setNewValue(entry.getValue())
+                        .setOldValue(loadOldValue
+                                ? loadedKeyValuePairs.get(mapServiceContext.toObject(entry.getKey())) : null)
+                        .setNewValue(result.get(entry.getKey()))
                         .setStaticPutParams(loadOldValue
                                 ? StaticParams.PUT_PARAMS : StaticParams.SET_PARAMS);
 
