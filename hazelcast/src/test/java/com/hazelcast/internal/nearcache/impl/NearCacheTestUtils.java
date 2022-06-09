@@ -38,6 +38,7 @@ import com.hazelcast.internal.nearcache.impl.record.NearCacheObjectRecord;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
+import com.hazelcast.map.LocalMapStats;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
 import com.hazelcast.nearcache.NearCacheStats;
@@ -552,8 +553,9 @@ public final class NearCacheTestUtils extends HazelcastTestSupport {
 
         boolean hasLocalMapStats = isMethodAvailable(context.nearCacheAdapter, DataStructureMethods.GET_LOCAL_MAP_STATS);
         if (hasLocalMapStats) {
-            long heapCost = context.nearCacheAdapter.getLocalMapStats().getHeapCost();
-            assertEquals(format("Expected no heap costs in the LocalMapStats, but found %d", heapCost), 0, heapCost);
+            LocalMapStats localMapStats = context.nearCacheAdapter.getLocalMapStats();
+            long heapCost = localMapStats.getHeapCost();
+            assertEquals(format("Expected no heap costs in the LocalMapStats, but found %d %s", heapCost,localMapStats), 0, heapCost);
         }
     }
 

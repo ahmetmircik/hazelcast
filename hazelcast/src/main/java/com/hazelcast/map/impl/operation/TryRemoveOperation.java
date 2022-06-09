@@ -20,6 +20,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 
@@ -41,6 +42,12 @@ public class TryRemoveOperation extends BaseRemoveOperation {
     protected void runInternal() {
         dataOldValue = mapServiceContext.toData(recordStore.remove(dataKey, getCallerProvenance()));
         successful = dataOldValue != null;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        successful = state.getOldValue() != null;
     }
 
     @Override

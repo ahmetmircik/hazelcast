@@ -72,6 +72,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     public void applyState(State state) {
         oldValue = state.getOldValue();
         eventType = getEventType();
+        recordToBackup = state.getRecord();
     }
 
     @Override
@@ -124,12 +125,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     public Operation getBackupOperation() {
         dataValue = getValueOrPostProcessedValue(recordToBackup, dataValue);
         return newBackupOperation(dataKey, recordToBackup, dataValue);
-    }
-
-    public void initFields(Record record, Data dataKey, Data dataValue) {
-        this.recordToBackup = record;
-        this.dataKey = dataKey;
-        this.dataValue = dataValue;
     }
 
     protected PutBackupOperation newBackupOperation(Data dataKey, Record record, Data dataValue) {

@@ -48,7 +48,7 @@ public class State {
 
     // fields coming from operation
     boolean putTransient;
-    int partitionId;
+    int partitionId = UNSET;
     long threadId;
     long ttl = UNSET;
     long maxIdle = UNSET;
@@ -84,6 +84,7 @@ public class State {
     private volatile boolean disableWanReplicationEvent;
     private volatile MapEntries mapEntries;
     private volatile EntryEventType entryEventType;
+    private volatile Record record;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -312,6 +313,14 @@ public class State {
 
     public Object getResult() {
         return result;
+    }
+
+    public void setRecord(Record record) {
+        this.record = record;
+    }
+
+    public Record getRecord() {
+        return record;
     }
 
     public State setKeys(Collection<Data> keys) {

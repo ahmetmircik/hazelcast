@@ -21,6 +21,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.RemoveIfSameOpStep;
 import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 
@@ -52,8 +53,13 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
         }
     }
 
-    public void setSuccessful(boolean successful) {
-        this.successful = successful;
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        successful = ((Boolean) state.getResult());
+        if (successful) {
+            dataOldValue = (Data) state.getExpect();
+        }
     }
 
     @Override

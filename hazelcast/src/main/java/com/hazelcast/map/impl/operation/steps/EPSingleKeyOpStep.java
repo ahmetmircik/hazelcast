@@ -103,6 +103,13 @@ public enum EPSingleKeyOpStep implements OpStep {
             EntryOperator entryOperator = state.getOperator();
             entryOperator.init(state.getKey(), state.getOldValue(),
                     null, null, null, recordStore.isLocked(state.getKey()), state.getTtl());
+
+            // TODO better handle clonedOrRawOldValue
+            Object clonedOldValue = entryOperator.clonedOrRawOldValue();
+
+            entryOperator.init(state.getKey(), clonedOldValue,
+                    null, null, null, recordStore.isLocked(state.getKey()), state.getTtl());
+
             if (!entryOperator.checkCanProceed()) {
                 entryOperator.onTouched();
                 state.setStopExecution(true);

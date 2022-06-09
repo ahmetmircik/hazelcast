@@ -20,6 +20,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.DeleteOpStep;
 import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 
@@ -47,6 +48,12 @@ public class DeleteOperation extends BaseRemoveOperation {
     @Override
     protected boolean disableWanReplicationEvent() {
         return disableWanReplicationEvent;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        success = state.getOldValue() != null;
     }
 
     @Override

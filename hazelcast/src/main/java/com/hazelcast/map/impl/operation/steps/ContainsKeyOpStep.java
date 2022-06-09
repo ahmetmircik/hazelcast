@@ -54,8 +54,7 @@ public enum ContainsKeyOpStep implements OpStep {
         public void runStep(State state) {
             OpStep.log("==> loading old value");
 
-            Object load = state.getRecordStore().getMapDataStore().load(state.getKey());
-            state.setOldValue(load);
+            GetOpStep.LOAD.runStep(state);
         }
 
         @Override

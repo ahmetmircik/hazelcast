@@ -64,10 +64,12 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
                 .setExpect(getExpect());
     }
 
-    public void initFields(Data dataKey, Data dataOldValue) {
-        this.dataKey = dataKey;
-        this.dataOldValue = dataOldValue;
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
 
+        this.dataKey = state.getKey();
+        this.dataOldValue = (Data) state.getOldValue();
     }
 
     protected Object getExpect() {

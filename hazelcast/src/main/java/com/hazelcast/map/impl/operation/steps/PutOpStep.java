@@ -20,6 +20,7 @@ import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
@@ -63,12 +64,16 @@ public enum PutOpStep implements OpStep {
 
             OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
+            if (state.getRecordStore().getMapDataStore() == MapDataStores.EMPTY_MAP_DATA_STORE) {
+                return;
+            }
+
             StaticParams staticParams = state.getStaticParams();
             if (staticParams.isPutVanilla()) {
                 state.setOldValue(((DefaultRecordStore) state.getRecordStore())
                         .loadValueOf(state.getKey()));
             } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                state.setOldValue(state.getRecordStore().getMapDataStore().load(state.getKey()));
+                GetOpStep.LOAD.runStep(state);
             }
         }
 
@@ -159,7 +164,7 @@ public enum PutOpStep implements OpStep {
             assert !isRunningOnPartitionThread();
 
             OpStep.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
-            Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore2(state.getKey(),
+            Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore0(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             state.setNewValue(newValue);
         }
@@ -193,6 +198,8 @@ public enum PutOpStep implements OpStep {
                         state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),
                         state.getStaticParams().isBackup());
             }
+
+            state.setRecord(record);
         }
 
         @Override
@@ -204,6 +211,8 @@ public enum PutOpStep implements OpStep {
     RESPONSE() {
         @Override
         public void runStep(State state) {
+            ThreadUtil.assertRunningOnPartitionThread();
+
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -222,8 +231,6 @@ public enum PutOpStep implements OpStep {
             } else if (staticParams.isPutIfEqual()) {
                 operation.sendResponse(oldValue != null);
             }
-
-            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override
@@ -239,6 +246,8 @@ public enum PutOpStep implements OpStep {
 
             ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
                     state.getNewValue(), state.getOldValue());
+
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

@@ -1009,7 +1009,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     // returns newValue
-    public Object putIntoMapStore2(Data key, Object newValue,
+    public Object putIntoMapStore0(Data key, Object newValue,
                                    long ttlMillis, long maxIdleMillis,
                                    long now, UUID transactionId) {
         long expirationTime = expirySystem.calculateExpirationTime(ttlMillis, maxIdleMillis, now, now);

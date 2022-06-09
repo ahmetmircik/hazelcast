@@ -24,11 +24,15 @@ import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
+import static com.hazelcast.map.impl.record.Record.UNSET;
+
 public class OpStepBackupHandler {
 
     public static void handleBackup(State state) {
         MapOperation operation = state.getOperation();
         operation.applyState(state);
+
+        assert state.getPartitionId() != UNSET;
 
         RecordStore recordStore = state.getRecordStore();
         MapContainer mapContainer = recordStore.getMapContainer();

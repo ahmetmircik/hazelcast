@@ -206,17 +206,14 @@ public final class EntryOperator {
             return this;
         }
 
-        operateOnKeyValueInternal0();
-        return this;
-    }
-
-    public void operateOnKeyValueInternal0() {
         process(entry);
         findModificationType(entry);
 
         if (readOnly && entryWasModified()) {
             throwModificationInReadOnlyException();
         }
+
+        return this;
     }
 
     private boolean entryWasModified() {
@@ -322,7 +319,7 @@ public final class EntryOperator {
         stats.incrementRemoveLatencyNanos(Timer.nanosElapsed(startTimeNanos));
     }
 
-    private Object clonedOrRawOldValue() {
+    public Object clonedOrRawOldValue() {
         return shouldClone ? ss.toObject(ss.toData(oldValue)) : oldValue;
     }
 

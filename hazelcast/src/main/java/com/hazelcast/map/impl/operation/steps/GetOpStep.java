@@ -20,6 +20,8 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.mapstore.MapDataStore;
+import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -57,7 +59,11 @@ public enum GetOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> loading old value");
-            Object load = state.getRecordStore().getMapDataStore().load(state.getKey());
+            MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
+            if (mapDataStore == MapDataStores.EMPTY_MAP_DATA_STORE) {
+                return;
+            }
+            Object load = mapDataStore.load(state.getKey());
             OpStep.log("==> loaded " + load);
             state.setOldValue(load);
         }
