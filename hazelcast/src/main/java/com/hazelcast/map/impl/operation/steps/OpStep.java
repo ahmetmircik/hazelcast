@@ -28,6 +28,9 @@ import javax.annotation.Nullable;
  */
 public interface OpStep {
 
+    /**
+     * Code to run at this step by using the provided state
+     */
     default void runStep(State state) {
         throw new UnsupportedOperationException();
     }
@@ -43,6 +46,12 @@ public interface OpStep {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * @return {@code true} if this step must be
+     * offloaded to a thread other than {@link
+     * com.hazelcast.spi.impl.operationexecutor.impl.PartitionOperationThread}
+     * otherwise {@code false}
+     */
     default boolean isOffloadStep() {
         return false;
     }
