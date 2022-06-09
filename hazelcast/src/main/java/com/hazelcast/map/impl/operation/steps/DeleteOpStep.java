@@ -125,6 +125,8 @@ public enum DeleteOpStep implements OpStep {
             } else {
                 OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
             }
+
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

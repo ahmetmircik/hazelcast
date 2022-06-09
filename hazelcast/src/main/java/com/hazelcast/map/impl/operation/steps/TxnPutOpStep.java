@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -41,6 +42,9 @@ public enum TxnPutOpStep implements OpStep {
             Record record = recordStore.getRecordOrNull(dataKey);
             if (record == null || version == record.getVersion()) {
                 PutOpStep.READ.runStep(state);
+
+                state.setEntryEventType(record == null
+                        ? EntryEventType.ADDED : EntryEventType.UPDATED);
             }
         }
 

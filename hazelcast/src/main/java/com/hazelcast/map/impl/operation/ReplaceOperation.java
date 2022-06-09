@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -45,8 +46,18 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        successful = state.getOldValue() != null;
+    }
+
+    @Override
     public boolean shouldBackup() {
         return successful && super.shouldBackup();
+    }
+
+    public void setSuccessful(boolean successful) {
+        this.successful = successful;
     }
 
     @Override
@@ -55,7 +66,6 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
             super.afterRunInternal();
         }
     }
-
 
     @Override
     public Object getResponse() {

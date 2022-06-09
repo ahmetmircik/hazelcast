@@ -244,6 +244,8 @@ public enum EPSingleKeyOpStep implements OpStep {
 
             Data result = operator.getResult();
             operation.sendResponse(result);
+
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

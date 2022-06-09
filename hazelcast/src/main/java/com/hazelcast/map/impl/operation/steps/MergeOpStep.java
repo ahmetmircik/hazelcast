@@ -262,17 +262,9 @@ public enum MergeOpStep implements OpStep {
             }
 
             operation.sendResponse(hasMergedValues);
+            OpStepBackupHandler.handleBackup(state);
 
             operation.invalidateNearCache(invalidationKeys);
-
-
-            // TODO fix backup op
-//            OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
-//                    .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-//            ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
-//                    state.getKey(), mapServiceContext.toData(state.getNewValue()));
-//
-//            ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
         }
 
         @Override

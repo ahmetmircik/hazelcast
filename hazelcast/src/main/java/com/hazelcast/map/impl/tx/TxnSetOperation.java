@@ -85,6 +85,12 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        shouldBackup = state.getEntryEventType() != null;
+    }
+
+    @Override
     public boolean shouldWait() {
         return false;
     }

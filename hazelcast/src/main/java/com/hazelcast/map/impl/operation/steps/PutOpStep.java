@@ -26,9 +26,6 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
-import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
-import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
@@ -38,6 +35,8 @@ public enum PutOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
+            assert isRunningOnPartitionThread();
+
             OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
@@ -224,12 +223,7 @@ public enum PutOpStep implements OpStep {
                 operation.sendResponse(oldValue != null);
             }
 
-            OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
-                    .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-            ((BasePutOperation) operation).initFields(recordStore.getRecord(state.getKey()),
-                    state.getKey(), mapServiceContext.toData(state.getNewValue()));
-
-            ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

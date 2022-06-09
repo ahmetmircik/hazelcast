@@ -127,6 +127,8 @@ public enum ClearOpStep implements OpStep {
             ThreadUtil.assertRunningOnPartitionThread();
 
             ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
+
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

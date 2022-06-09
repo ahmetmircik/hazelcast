@@ -215,6 +215,8 @@ public enum EPFullScanOpStep implements OpStep {
 
             Operation operation = state.getOperation();
             operation.sendResponse(state.getResult());
+
+            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

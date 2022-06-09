@@ -69,6 +69,12 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     }
 
     @Override
+    public void applyState(State state) {
+        oldValue = state.getOldValue();
+        eventType = getEventType();
+    }
+
+    @Override
     protected void afterRunInternal() {
         afterRunInternal0(dataKey, dataValue, oldValue);
         super.afterRunInternal();
