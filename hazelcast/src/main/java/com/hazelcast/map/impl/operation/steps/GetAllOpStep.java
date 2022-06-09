@@ -33,13 +33,6 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 // TODO: re-run upon NOOME
 public enum GetAllOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {
@@ -64,7 +57,7 @@ public enum GetAllOpStep implements OpStep {
 
     LOAD_ALL() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

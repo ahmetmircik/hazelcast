@@ -39,13 +39,6 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 // TODO: what happens if partition is migrating and we offload map load.
 public enum EPMultiKeyOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return FIND_KEYS_TO_LOAD;
-        }
-    },
-
     FIND_KEYS_TO_LOAD() {
         @Override
         public void runStep(State state) {
@@ -81,7 +74,7 @@ public enum EPMultiKeyOpStep implements OpStep {
 
     LOAD_ALL() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 
@@ -188,7 +181,7 @@ public enum EPMultiKeyOpStep implements OpStep {
 
     STORE_OR_DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

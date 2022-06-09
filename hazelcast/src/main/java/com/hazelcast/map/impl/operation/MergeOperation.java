@@ -110,7 +110,7 @@ public class MergeOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return MergeOpStep.INITIAL;
+        return MergeOpStep.READ;
     }
 
     @Override

@@ -33,13 +33,6 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
 // TODO: what happens if partition is migrating and we offload map load.
 public enum EPSingleKeyOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return EP_START;
-        }
-    },
-
     EP_START() {
         @Override
         public void runStep(State state) {
@@ -70,7 +63,7 @@ public enum EPSingleKeyOpStep implements OpStep {
 
     LOAD() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 
@@ -169,7 +162,7 @@ public enum EPSingleKeyOpStep implements OpStep {
 
     STORE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 
@@ -198,7 +191,7 @@ public enum EPSingleKeyOpStep implements OpStep {
 
     DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

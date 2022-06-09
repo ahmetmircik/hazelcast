@@ -25,13 +25,6 @@ import java.util.UUID;
 // TODO: re-run upon NOOME
 public enum TxnPutOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {

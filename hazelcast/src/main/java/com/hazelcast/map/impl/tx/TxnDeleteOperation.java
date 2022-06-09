@@ -94,7 +94,7 @@ public class TxnDeleteOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return TxnRemoveOpStep.INITIAL;
+        return TxnRemoveOpStep.READ;
     }
 
     @Override

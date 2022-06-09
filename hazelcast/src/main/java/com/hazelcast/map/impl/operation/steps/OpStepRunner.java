@@ -36,7 +36,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newOpStepSupplier;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
 public class OpStepRunner implements Runnable {
@@ -44,7 +44,7 @@ public class OpStepRunner implements Runnable {
     private final Node node;
     private final ILogger logger;
     private final Executor executor;
-    private final Supplier<Runnable> stepSupplier;
+    private final Supplier<Runnable> opStepSupplier;
     private final OperationExecutor operationExecutor;
     private final Operation operation;
 
@@ -61,7 +61,7 @@ public class OpStepRunner implements Runnable {
         this.logger = nodeEngine.getLogger(getClass());
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
-        this.stepSupplier = newStepSupplier(state, startingOpStep);
+        this.opStepSupplier = newOpStepSupplier(startingOpStep, state);
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(String.format("%s-%d-mapStoreOffloadingExecutor",
                         mapName, Thread.currentThread().getId()));
@@ -73,7 +73,7 @@ public class OpStepRunner implements Runnable {
         OpStep.log("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
         try {
             do {
-                Runnable nextStep = stepSupplier.get();
+                Runnable nextStep = opStepSupplier.get();
                 if (nextStep == null) {
                     OpStep.log("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
                     return;

@@ -58,7 +58,7 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
 
     @Override
     protected OpStep getStartingOpStep() {
-        return RemoveIfSameOpStep.INITIAL;
+        return RemoveIfSameOpStep.READ;
     }
 
     @Override

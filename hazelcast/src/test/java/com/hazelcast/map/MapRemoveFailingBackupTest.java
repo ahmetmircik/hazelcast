@@ -136,7 +136,7 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
 
         @Override
         protected OpStep getStartingOpStep() {
-            return RemoveOpStep.INITIAL;
+            return RemoveOpStep.READ;
         }
 
         @Override

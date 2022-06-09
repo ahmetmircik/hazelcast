@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.function.Supplier;
@@ -24,51 +25,31 @@ public class OpStepSupplier implements Supplier<Runnable> {
 
     private final State state;
 
-    private volatile OpStep current;
+    private volatile OpStep currentStep;
 
-    public OpStepSupplier(State state, OpStep initialOpStep) {
+    public OpStepSupplier(OpStep startingStep, State state) {
         this.state = state;
-        this.current = initialOpStep;
+        this.currentStep = startingStep;
     }
 
     @Override
     public Runnable get() {
-        if (current == null) {
-            return null;
-        }
-        OpStep nextOpStep = current.nextStep(state);
-        if (nextOpStep == null) {
+        if (currentStep == null) {
             return null;
         }
 
-        assertStepTypeSameWithInitial(nextOpStep);
-
-        current = nextOpStep;
-        return createStep(state, nextOpStep);
+        return createStep(state);
     }
 
-    private Runnable createStep(State state, OpStep opStep) {
-        if (opStep.offloadStep()) {
-            return () -> opStep.runStep(state);
+    private Runnable createStep(State state) {
+        if (currentStep.isOffloadStep()) {
+            return () -> goRunNextStep(state);
         }
 
         return new PartitionSpecificRunnable() {
             @Override
             public void run() {
-                opStep.runStep(state);
-
-                OpStep temp = opStep;
-                while (true) {
-                    OpStep nextOpStep = temp.nextStep(state);
-                    if (nextOpStep == null
-                            || nextOpStep.offloadStep()) {
-                        current = temp;
-                        break;
-                    }
-
-                    nextOpStep.runStep(state);
-                    temp = nextOpStep;
-                }
+                goRunNextStep(state);
             }
 
             @Override
@@ -78,14 +59,27 @@ public class OpStepSupplier implements Supplier<Runnable> {
         };
     }
 
+    private void goRunNextStep(State state) {
+        do {
+            currentStep.runStep(state);
+            currentStep = currentStep.nextStep(state);
+            if (currentStep == null
+                    || (currentStep.isOffloadStep() && ThreadUtil.isRunningOnPartitionThread())
+                    || (!currentStep.isOffloadStep() && !ThreadUtil.isRunningOnPartitionThread())) {
+                break;
+            }
+        } while (true);
+    }
+
+    // TODO remove this method
     private void assertStepTypeSameWithInitial(OpStep nextOpStep) {
 //                assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
 //                        : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
 //                        nextStep.getClass().getSuperclass());
     }
 
-    public static Supplier<Runnable> newStepSupplier(State state, OpStep initial) {
-        return new OpStepSupplier(state, initial);
+    public static Supplier<Runnable> newOpStepSupplier(OpStep startingStep, State state) {
+        return new OpStepSupplier(startingStep, state);
     }
 
 

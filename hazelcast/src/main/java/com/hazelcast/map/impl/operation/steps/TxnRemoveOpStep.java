@@ -25,13 +25,6 @@ import java.util.UUID;
 
 public enum TxnRemoveOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {

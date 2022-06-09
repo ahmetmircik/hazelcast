@@ -105,7 +105,7 @@ public class PutAllOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return PutAllOpStep.INITIAL;
+        return PutAllOpStep.READ;
     }
 
     public boolean isTriggerMapLoader() {

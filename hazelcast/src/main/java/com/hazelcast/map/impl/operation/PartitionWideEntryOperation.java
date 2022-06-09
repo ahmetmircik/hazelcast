@@ -107,7 +107,7 @@ public class PartitionWideEntryOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return EPFullScanOpStep.INITIAL;
+        return EPFullScanOpStep.PROCESS;
     }
 
     protected Predicate getPredicate() {

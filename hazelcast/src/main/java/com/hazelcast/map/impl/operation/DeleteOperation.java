@@ -63,7 +63,7 @@ public class DeleteOperation extends BaseRemoveOperation {
 
     @Override
     protected OpStep getStartingOpStep() {
-        return DeleteOpStep.INITIAL;
+        return DeleteOpStep.READ;
     }
 
     @Override

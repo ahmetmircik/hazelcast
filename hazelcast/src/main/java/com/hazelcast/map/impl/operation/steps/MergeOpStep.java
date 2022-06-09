@@ -40,13 +40,6 @@ import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntr
 // TODO: re-run upon NOOME
 public enum MergeOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {
@@ -104,7 +97,7 @@ public enum MergeOpStep implements OpStep {
 
     STORE_OR_DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

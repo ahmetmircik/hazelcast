@@ -32,13 +32,6 @@ import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 public enum RemoveOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public RemoveOpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {
@@ -68,7 +61,7 @@ public enum RemoveOpStep implements OpStep {
 
     LOAD() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 
@@ -105,7 +98,7 @@ public enum RemoveOpStep implements OpStep {
 
     DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

@@ -31,13 +31,6 @@ import java.util.function.BiConsumer;
 // TODO: what happens if partition is migrating and we offload map load.
 public enum ClearOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return CLEAR_MEMORY;
-        }
-    },
-
     CLEAR_MEMORY() {
         @Override
         public void runStep(State state) {
@@ -78,7 +71,7 @@ public enum ClearOpStep implements OpStep {
 
     CLEAR_MAP_STORE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

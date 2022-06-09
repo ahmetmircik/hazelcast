@@ -52,7 +52,7 @@ public class ContainsKeyOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return ContainsKeyOpStep.INITIAL;
+        return ContainsKeyOpStep.READ;
     }
 
     @Override

@@ -92,7 +92,7 @@ public class MultipleEntryOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return EPMultiKeyOpStep.INITIAL;
+        return EPMultiKeyOpStep.FIND_KEYS_TO_LOAD;
     }
 
     @Override

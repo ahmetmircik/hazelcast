@@ -91,7 +91,7 @@ public class GetAllOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return GetAllOpStep.INITIAL;
+        return GetAllOpStep.READ;
     }
 
     @Override

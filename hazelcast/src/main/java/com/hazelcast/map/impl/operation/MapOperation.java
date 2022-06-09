@@ -113,7 +113,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         // TODO: find a better way to catch offloadEnabled ops.
 //        mapStoreOffloadEnabled = hasMapStore
         mapStoreOffloadEnabled = getStartingOpStep() != null
-                && true
+                && hasMapStore
                 && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
 
         assertNativeMapOnPartitionThread();

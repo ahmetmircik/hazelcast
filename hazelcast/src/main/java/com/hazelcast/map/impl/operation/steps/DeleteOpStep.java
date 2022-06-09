@@ -28,13 +28,6 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 public enum DeleteOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {
@@ -65,7 +58,7 @@ public enum DeleteOpStep implements OpStep {
 
     DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

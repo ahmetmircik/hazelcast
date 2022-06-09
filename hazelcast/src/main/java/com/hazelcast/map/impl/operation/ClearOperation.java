@@ -54,7 +54,7 @@ public class ClearOperation extends MapOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return ClearOpStep.INITIAL;
+        return ClearOpStep.CLEAR_MEMORY;
     }
 
     @Override

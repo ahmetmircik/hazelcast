@@ -33,13 +33,6 @@ import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 public enum RemoveIfSameOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public RemoveIfSameOpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     READ() {
         @Override
         public void runStep(State state) {
@@ -66,7 +59,7 @@ public enum RemoveIfSameOpStep implements OpStep {
 
     LOAD() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 
@@ -119,7 +112,7 @@ public enum RemoveIfSameOpStep implements OpStep {
 
     DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

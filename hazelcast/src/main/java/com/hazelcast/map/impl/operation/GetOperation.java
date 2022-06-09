@@ -71,7 +71,7 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
 
     @Override
     protected OpStep getStartingOpStep() {
-        return GetOpStep.INITIAL;
+        return GetOpStep.READ;
     }
 
     private boolean noCopyReadAllowed(Object currentValue) {

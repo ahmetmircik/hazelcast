@@ -55,7 +55,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     }
 
     protected OpStep getStartingOpStep() {
-        return PutOpStep.INITIAL;
+        return PutOpStep.READ;
     }
 
     protected State newState() {

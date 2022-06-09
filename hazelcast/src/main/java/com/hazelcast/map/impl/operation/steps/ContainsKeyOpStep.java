@@ -24,13 +24,6 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 // TODO: what happens if partition is migrating and we offload map load.
 public enum ContainsKeyOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return READ;
-        }
-    },
-
     // TODO add touch record test?
     READ() {
         @Override
@@ -53,7 +46,7 @@ public enum ContainsKeyOpStep implements OpStep {
 
     LOAD() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

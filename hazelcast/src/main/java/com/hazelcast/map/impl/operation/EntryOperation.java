@@ -216,7 +216,7 @@ public class EntryOperation extends LockAwareOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return EPSingleKeyOpStep.INITIAL;
+        return EPSingleKeyOpStep.EP_START;
     }
 
     @Override

@@ -76,7 +76,7 @@ public class TxnSetOperation extends BasePutOperation
 
     @Override
     protected OpStep getStartingOpStep() {
-        return TxnPutOpStep.INITIAL;
+        return TxnPutOpStep.READ;
     }
 
     @Override

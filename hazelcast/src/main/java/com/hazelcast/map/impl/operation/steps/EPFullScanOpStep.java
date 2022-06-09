@@ -42,13 +42,6 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 // TODO: what happens if partition is migrating and we offload map load.
 public enum EPFullScanOpStep implements OpStep {
 
-    INITIAL() {
-        @Override
-        public OpStep nextStep(State state) {
-            return PROCESS;
-        }
-    },
-
     PROCESS() {
         @Override
         public void runStep(State state) {
@@ -166,7 +159,7 @@ public enum EPFullScanOpStep implements OpStep {
 
     STORE_OR_DELETE() {
         @Override
-        public boolean offloadStep() {
+        public boolean isOffloadStep() {
             return true;
         }
 

@@ -43,7 +43,7 @@ public interface OpStep {
         throw new UnsupportedOperationException();
     }
 
-    default boolean offloadStep() {
+    default boolean isOffloadStep() {
         return false;
     }
 
