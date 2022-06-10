@@ -22,7 +22,6 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -134,6 +133,7 @@ public enum PutOpStep implements OpStep {
                             mapServiceContext.getNodeEngine().getSerializationService())) {
                 state.setResult(false);
                 state.setStopExecution(true);
+                state.setOldValue(null);
                 return;
             }
 
@@ -214,23 +214,8 @@ public enum PutOpStep implements OpStep {
             ThreadUtil.assertRunningOnPartitionThread();
 
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            RecordStore recordStore = state.getRecordStore();
-            MapContainer mapContainer = recordStore.getMapContainer();
-            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-            StaticParams staticParams = state.getStaticParams();
-            Object oldValue = state.getOldValue();
-
-            MapOperation operation = state.getOperation();
-            if (staticParams.isTryPut()) {
-                operation.sendResponse(true);
-            } else if (staticParams.isPutIfEqual() && staticParams.isPutIfExists()) {
-                operation.sendResponse(!state.isStopExecution());
-            } else if (staticParams.isPutVanilla() || staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                operation.sendResponse(mapServiceContext.toData(oldValue));
-            } else if (staticParams.isPutIfEqual()) {
-                operation.sendResponse(oldValue != null);
-            }
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
@@ -246,8 +231,6 @@ public enum PutOpStep implements OpStep {
 
             ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
                     state.getNewValue(), state.getOldValue());
-
-            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

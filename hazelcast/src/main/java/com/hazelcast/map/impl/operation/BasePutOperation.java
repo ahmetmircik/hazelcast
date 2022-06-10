@@ -68,7 +68,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
 
     @Override
     public void applyState(State state) {
-        oldValue = state.getOldValue();
+        oldValue = mapServiceContext.toData(state.getOldValue());
         eventType = getEventType();
         recordToBackup = state.getRecord();
     }

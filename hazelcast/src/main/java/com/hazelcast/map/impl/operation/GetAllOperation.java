@@ -95,6 +95,12 @@ public class GetAllOperation extends MapOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        entries = state.getMapEntries();
+    }
+
+    @Override
     public Object getResponse() {
         return entries;
     }

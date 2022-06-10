@@ -20,7 +20,6 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.GetAllOperation;
-import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
 import java.util.List;
@@ -106,8 +105,7 @@ public enum GetAllOpStep implements OpStep {
 
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
 
-            MapOperation operation = state.getOperation();
-            operation.sendResponse(state.getMapEntries());
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

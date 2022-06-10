@@ -20,6 +20,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 
 public class RemoveOperation extends BaseRemoveOperation {
 
@@ -40,6 +41,12 @@ public class RemoveOperation extends BaseRemoveOperation {
         if (dataOldValue != null) {
             super.afterRunInternal();
         }
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        dataOldValue = mapServiceContext.toData(state.getOldValue());
     }
 
     @Override

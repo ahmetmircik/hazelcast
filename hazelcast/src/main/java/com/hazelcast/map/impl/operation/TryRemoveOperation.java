@@ -47,6 +47,7 @@ public class TryRemoveOperation extends BaseRemoveOperation {
     @Override
     public void applyState(State state) {
         super.applyState(state);
+        dataOldValue = mapServiceContext.toData(state.getOldValue());
         successful = state.getOldValue() != null;
     }
 

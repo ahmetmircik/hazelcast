@@ -26,7 +26,6 @@ import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
 // TODO: what happens if partition is migrating and we offload map load.
 public enum GetOpStep implements OpStep {
@@ -40,7 +39,6 @@ public enum GetOpStep implements OpStep {
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
                 state.setOldValue(record.getValue());
-                recordStore.accessRecord(state.getKey(), record, state.getNow());
             }
         }
 
@@ -100,14 +98,16 @@ public enum GetOpStep implements OpStep {
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-            Operation operation = state.getOperation();
             Object oldValue = state.getOldValue();
             oldValue = mapServiceContext.interceptGet(mapContainer.getInterceptorRegistry(), oldValue);
+            state.setOldValue(oldValue);
 
-            Data result = ((GetOperation) operation).extractResult(oldValue);
-            state.setResult(result);
+            Record record = recordStore.getRecord(state.getKey());
+            if (record != null) {
+                recordStore.accessRecord(state.getKey(), record, state.getNow());
+            }
 
-            operation.sendResponse(result);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
 // TODO: what happens if partition is migrating and we offload map load.
 public enum ContainsKeyOpStep implements OpStep {
@@ -86,8 +85,7 @@ public enum ContainsKeyOpStep implements OpStep {
         public void runStep(State state) {
             OpStep.log("==> sending response");
 
-            Operation operation = state.getOperation();
-            operation.sendResponse(state.getOldValue() != null);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

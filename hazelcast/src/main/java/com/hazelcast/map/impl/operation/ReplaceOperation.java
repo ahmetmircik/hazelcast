@@ -49,6 +49,7 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
     public void applyState(State state) {
         super.applyState(state);
         successful = state.getOldValue() != null;
+        oldValue = mapServiceContext.toData(state.getOldValue());
     }
 
     @Override

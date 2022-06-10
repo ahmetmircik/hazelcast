@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
@@ -249,10 +248,7 @@ public enum EPSingleKeyOpStep implements OpStep {
                 }
             }
 
-            Data result = operator.getResult();
-            operation.sendResponse(result);
-
-            OpStepBackupHandler.handleBackup(state);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

@@ -21,11 +21,8 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.TryRemoveOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
-import com.hazelcast.map.impl.tx.TxnDeleteOperation;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
 public enum RemoveOpStep implements OpStep {
 
@@ -134,20 +131,8 @@ public enum RemoveOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-            MapServiceContext mapServiceContext = recordStore.getMapContainer().getMapServiceContext();
-            Object oldValue = state.getOldValue();
 
-            Operation operation = state.getOperation();
-            Object response;
-            if (operation instanceof TxnDeleteOperation) {
-                response = Boolean.TRUE;
-            } else if (operation instanceof TryRemoveOperation) {
-                response = oldValue != null;
-            } else {
-                response = mapServiceContext.toData(oldValue);
-            }
-            state.getOperation().sendResponse(response);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
@@ -166,9 +151,6 @@ public enum RemoveOpStep implements OpStep {
             if (oldValue != null) {
                 ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), oldValue);
             }
-
-            OpStepBackupHandler.handleBackup(state);
-
         }
 
         @Override

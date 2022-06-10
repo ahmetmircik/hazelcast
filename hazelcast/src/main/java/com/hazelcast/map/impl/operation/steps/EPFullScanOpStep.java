@@ -29,7 +29,6 @@ import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -213,10 +212,7 @@ public enum EPFullScanOpStep implements OpStep {
                 }
             }
 
-            Operation operation = state.getOperation();
-            operation.sendResponse(state.getResult());
-
-            OpStepBackupHandler.handleBackup(state);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

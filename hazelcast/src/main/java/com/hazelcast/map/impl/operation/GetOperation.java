@@ -74,6 +74,12 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
         return GetOpStep.READ;
     }
 
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        result = extractResult(state.getOldValue());
+    }
+
     private boolean noCopyReadAllowed(Object currentValue) {
         return currentValue instanceof Data
                 && (!getNodeEngine().getLocalMember().getUuid().equals(getCallerUuid())

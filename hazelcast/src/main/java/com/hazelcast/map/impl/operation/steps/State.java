@@ -315,6 +315,9 @@ public class State {
         return result;
     }
 
+    /**
+     * TODO setting record is ok? multiple thread can read it. HD?
+     */
     public void setRecord(Record record) {
         this.record = record;
     }

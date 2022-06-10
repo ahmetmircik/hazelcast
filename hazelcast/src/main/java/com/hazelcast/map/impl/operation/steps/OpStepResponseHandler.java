@@ -19,27 +19,36 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public class OpStepBackupHandler {
+public class OpStepResponseHandler {
 
-    public static void handleBackup(State state) {
+    public static void sendResponse(State state) {
         MapOperation operation = state.getOperation();
         operation.applyState(state);
 
+        int backupAcks = handleBackup(state);
+        Object response = operation.getResponse();
+        if (backupAcks > 0) {
+            response = new NormalResponse(response, operation.getCallId(), backupAcks, operation.isUrgent());
+        }
+        operation.sendResponse(response);
+    }
+
+    private static int handleBackup(State state) {
         assert state.getPartitionId() != UNSET;
 
-        RecordStore recordStore = state.getRecordStore();
-        MapContainer mapContainer = recordStore.getMapContainer();
+        MapContainer mapContainer = state.getOperation().getMapContainer();
         MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
         OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
                 .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
-        ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(operation);
+        return ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(state.getOperation());
     }
+
 }

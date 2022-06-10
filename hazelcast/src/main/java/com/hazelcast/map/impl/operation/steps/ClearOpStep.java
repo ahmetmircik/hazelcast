@@ -112,7 +112,7 @@ public enum ClearOpStep implements OpStep {
         public void runStep(State state) {
             OpStep.log("==> clear all sending response");
 
-            state.getOperation().sendResponse(state.getResult());
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
@@ -127,8 +127,6 @@ public enum ClearOpStep implements OpStep {
             ThreadUtil.assertRunningOnPartitionThread();
 
             ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
-
-            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

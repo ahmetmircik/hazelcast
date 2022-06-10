@@ -57,7 +57,6 @@ public enum MergeOpStep implements OpStep {
             // TODO index marking
             // key + oldValue + newValue
             List outcomes = new ArrayList<>(3 * mergingEntries.size());
-            state.setResult(outcomes);
 
             for (SplitBrainMergeTypes.MapMergeTypes<Object, Object> mergingEntry : mergingEntries) {
                 mergingEntry = (SplitBrainMergeTypes.MapMergeTypes<Object, Object>) serializationService
@@ -82,6 +81,8 @@ public enum MergeOpStep implements OpStep {
                 outcomes.add(oldValue);
                 outcomes.add(newValue);
             }
+
+            state.setResult(outcomes);
         }
 
         @Override
@@ -109,7 +110,7 @@ public enum MergeOpStep implements OpStep {
 
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
-            for (int i = 0; i < outcomes.size(); i++) {
+            for (int i = 0; i < outcomes.size(); ) {
                 Object key = outcomes.get(i++);
 
                 assert key instanceof Data
@@ -156,7 +157,7 @@ public enum MergeOpStep implements OpStep {
 
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
-            for (int i = 0; i < outcomes.size(); i++) {
+            for (int i = 0; i < outcomes.size();) {
                 Object key = outcomes.get(i++);
 
                 assert key instanceof Data
@@ -261,8 +262,8 @@ public enum MergeOpStep implements OpStep {
                 operation.evict(dataKey);
             }
 
-            operation.sendResponse(hasMergedValues);
-            OpStepBackupHandler.handleBackup(state);
+            state.setResult(hasMergedValues);
+            OpStepResponseHandler.sendResponse(state);
 
             operation.invalidateNearCache(invalidationKeys);
         }

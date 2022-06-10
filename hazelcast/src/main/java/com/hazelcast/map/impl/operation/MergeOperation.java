@@ -114,6 +114,12 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        hasMergedValues = (boolean) state.getResult();
+    }
+
+    @Override
     protected void runInternal() {
         // Check once in a minute as earliest to avoid log bursts.
         checkMergePolicy(mapContainer, mergePolicy);

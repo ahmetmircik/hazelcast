@@ -144,7 +144,7 @@ public enum PutAllOpStep implements OpStep {
             for (Map.Entry<Data, Data> entry : entries) {
                 Object oldValue = null;
                 if (loadOldValue) {
-                    oldValue = loadedKeyValuePairs.get(mapServiceContext.toObject(entry.getKey()));
+                    oldValue = loadedKeyValuePairs.get(entry.getKey());
                 }
                 if (oldValue == null) {
                     Record record = recordStore.getRecord(entry.getKey());
@@ -220,8 +220,7 @@ public enum PutAllOpStep implements OpStep {
                 operation.evict(dataKey);
             }
 
-            operation.sendResponse(true);
-            OpStepBackupHandler.handleBackup(state);
+            OpStepResponseHandler.sendResponse(state);
 
             operation.invalidateNearCache(operation.getInvalidationKeys());
         }

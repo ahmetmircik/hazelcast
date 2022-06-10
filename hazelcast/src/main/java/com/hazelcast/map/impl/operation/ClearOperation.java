@@ -20,6 +20,7 @@ import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.ClearOpStep;
 import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -55,6 +56,12 @@ public class ClearOperation extends MapOperation
     @Override
     protected OpStep getStartingOpStep() {
         return ClearOpStep.CLEAR_MEMORY;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        numberOfClearedEntries = (int) state.getResult();
     }
 
     @Override

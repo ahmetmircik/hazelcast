@@ -51,6 +51,12 @@ public class ContainsKeyOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        containsKey = state.getOldValue() != null;
+    }
+
+    @Override
     protected OpStep getStartingOpStep() {
         return ContainsKeyOpStep.READ;
     }

@@ -26,7 +26,6 @@ import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -235,10 +234,7 @@ public enum EPMultiKeyOpStep implements OpStep {
                 }
             }
 
-            Operation operation = state.getOperation();
-            operation.sendResponse(state.getResult());
-
-            OpStepBackupHandler.handleBackup(state);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

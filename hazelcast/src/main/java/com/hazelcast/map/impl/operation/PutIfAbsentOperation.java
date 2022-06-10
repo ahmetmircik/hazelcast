@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
@@ -40,6 +41,12 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
     @Override
     protected StaticParams getStaticParams() {
         return StaticParams.PUT_IF_ABSENT_PARAMS;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        this.oldValue = mapServiceContext.toData(state.getOldValue());
     }
 
     @Override

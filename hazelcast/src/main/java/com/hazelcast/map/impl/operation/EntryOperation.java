@@ -220,6 +220,12 @@ public class EntryOperation extends LockAwareOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        response = state.getOperator().getResult();
+    }
+
+    @Override
     protected void runInternal() {
         // NOP
     }

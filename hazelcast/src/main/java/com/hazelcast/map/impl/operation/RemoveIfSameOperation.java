@@ -58,7 +58,7 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
         super.applyState(state);
         successful = ((Boolean) state.getResult());
         if (successful) {
-            dataOldValue = (Data) state.getExpect();
+            dataOldValue = mapServiceContext.toData(state.getOldValue());
         }
     }
 

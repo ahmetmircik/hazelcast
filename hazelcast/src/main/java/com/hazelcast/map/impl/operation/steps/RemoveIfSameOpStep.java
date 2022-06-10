@@ -152,8 +152,7 @@ public enum RemoveIfSameOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            Object result = state.getResult();
-            state.getOperation().sendResponse(result);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
@@ -172,8 +171,6 @@ public enum RemoveIfSameOpStep implements OpStep {
                 ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(),
                         state.getOldValue());
             }
-
-            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

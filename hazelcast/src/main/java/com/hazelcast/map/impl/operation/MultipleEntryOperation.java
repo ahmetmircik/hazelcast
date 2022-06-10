@@ -96,6 +96,12 @@ public class MultipleEntryOperation extends MapOperation
     }
 
     @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        responses = (MapEntries) state.getResult();
+    }
+
+    @Override
     @SuppressWarnings("checkstyle:npathcomplexity")
     protected void runInternal() {
         responses = new MapEntries(keys.size());

@@ -436,4 +436,8 @@ public abstract class MapOperation extends AbstractNamedOperation
     public boolean requiresTenantContext() {
         return true;
     }
+
+    public MapContainer getMapContainer() {
+        return mapContainer;
+    }
 }

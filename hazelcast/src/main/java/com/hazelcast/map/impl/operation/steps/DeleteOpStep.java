@@ -103,8 +103,7 @@ public enum DeleteOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            Object oldValue = state.getOldValue();
-            state.getOperation().sendResponse(oldValue != null);
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
@@ -125,8 +124,6 @@ public enum DeleteOpStep implements OpStep {
             } else {
                 OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
             }
-
-            OpStepBackupHandler.handleBackup(state);
         }
 
         @Override

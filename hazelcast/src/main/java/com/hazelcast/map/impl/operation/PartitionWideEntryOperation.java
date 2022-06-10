@@ -110,6 +110,12 @@ public class PartitionWideEntryOperation extends MapOperation
         return EPFullScanOpStep.PROCESS;
     }
 
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        responses = (MapEntries) state.getResult();
+    }
+
     protected Predicate getPredicate() {
         return null;
     }
