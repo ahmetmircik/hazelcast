@@ -111,6 +111,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         canPublishWanEvent = canPublishWanEvent(mapContainer);
         hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
         // TODO: find a better way to catch offloadEnabled ops.
+        // TODO: no map-store offload for tiered storage
 //        mapStoreOffloadEnabled = hasMapStore
         mapStoreOffloadEnabled = getStartingOpStep() != null
                 && true

@@ -43,13 +43,13 @@ public class OpStepSupplier implements Supplier<Runnable> {
 
     private Runnable createStep(State state) {
         if (currentStep.isOffloadStep()) {
-            return () -> goRunNextStep(state);
+            return () -> runStepWith(state);
         }
 
         return new PartitionSpecificRunnable() {
             @Override
             public void run() {
-                goRunNextStep(state);
+                runStepWith(state);
             }
 
             @Override
@@ -59,7 +59,7 @@ public class OpStepSupplier implements Supplier<Runnable> {
         };
     }
 
-    private void goRunNextStep(State state) {
+    private void runStepWith(State state) {
         do {
             currentStep.runStep(state);
             currentStep = currentStep.nextStep(state);

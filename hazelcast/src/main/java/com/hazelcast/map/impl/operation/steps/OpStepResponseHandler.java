@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.MapOperation;
@@ -26,16 +27,20 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
+// TODO opLatencyDistributions?
 public class OpStepResponseHandler {
 
     public static void sendResponse(State state) {
+        assert ThreadUtil.isRunningOnPartitionThread();
+
         MapOperation operation = state.getOperation();
         operation.applyState(state);
 
         int backupAcks = handleBackup(state);
         Object response = operation.getResponse();
         if (backupAcks > 0) {
-            response = new NormalResponse(response, operation.getCallId(), backupAcks, operation.isUrgent());
+            response = new NormalResponse(response, operation.getCallId(),
+                    backupAcks, operation.isUrgent());
         }
         operation.sendResponse(response);
     }

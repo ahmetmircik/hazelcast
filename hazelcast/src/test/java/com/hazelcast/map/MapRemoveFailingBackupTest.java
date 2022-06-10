@@ -24,6 +24,7 @@ import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.KeyBasedMapOperation;
 import com.hazelcast.map.impl.operation.steps.OpStep;
 import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
+import com.hazelcast.map.impl.operation.steps.State;
 import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.nio.serialization.DataSerializableFactory;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
@@ -123,7 +124,8 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
 
         @Override
         protected void runInternal() {
-            dataOldValue = mapService.getMapServiceContext().toData(recordStore.remove(dataKey, getCallerProvenance()));
+            dataOldValue = mapService.getMapServiceContext()
+                    .toData(recordStore.remove(dataKey, getCallerProvenance()));
             successful = dataOldValue != null;
         }
 
@@ -132,6 +134,13 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
             if (successful) {
                 super.afterRunInternal();
             }
+        }
+
+        @Override
+        public void applyState(State state) {
+            super.applyState(state);
+            dataOldValue = mapServiceContext.toData(state.getOldValue());
+            successful = dataOldValue != null;
         }
 
         @Override

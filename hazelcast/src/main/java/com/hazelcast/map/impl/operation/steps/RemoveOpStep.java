@@ -30,6 +30,7 @@ public enum RemoveOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -62,6 +63,7 @@ public enum RemoveOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> loading old value");
+
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Object oldValue = recordStore.loadValueOf(state.getKey());
             if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
@@ -80,6 +82,7 @@ public enum RemoveOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             recordStore.updateStatsOnRemove(state.getNow());
         }
@@ -99,6 +102,7 @@ public enum RemoveOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
+
             MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
             mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
         }
@@ -115,6 +119,7 @@ public enum RemoveOpStep implements OpStep {
             ThreadUtil.assertRunningOnPartitionThread();
 
             OpStep.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
+
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);

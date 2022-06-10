@@ -27,19 +27,23 @@ import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
-import com.hazelcast.spi.impl.operationexecutor.impl.PartitionOperationThread;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
-import javax.annotation.Nonnull;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newOpStepSupplier;
+import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
 public class OpStepRunner implements Runnable {
+
+    // TODO is this too much? per-partition-per-map
+    // TODO destroy this on map destroy
+    private static final String OFFLOAD_EXECUTOR_NAME_FORMAT = "%d-%s-mapStoreOffloadingExecutor";
 
     private final Node node;
     private final ILogger logger;
@@ -63,8 +67,8 @@ public class OpStepRunner implements Runnable {
                 .getOperationService()).getOperationExecutor();
         this.opStepSupplier = newOpStepSupplier(startingOpStep, state);
         this.executor = nodeEngine.getExecutionService()
-                .getExecutor(String.format("%s-%d-mapStoreOffloadingExecutor",
-                        mapName, Thread.currentThread().getId()));
+                .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
+                        Thread.currentThread().getId(), mapName));
     }
 
     // TODO: What happens in the event of exception?
@@ -73,25 +77,24 @@ public class OpStepRunner implements Runnable {
         OpStep.log("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
         try {
             do {
-                Runnable nextStep = opStepSupplier.get();
-                if (nextStep == null) {
+                Runnable step = opStepSupplier.get();
+                if (step == null) {
                     OpStep.log("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
                     return;
                 }
 
-                executeAsync(nextStep).get();
+                executeAsync(step).get();
             } while (true);
         } catch (Throwable t) {
             handleOperationError(operation, t);
         }
     }
 
-    @Nonnull
     private CompletableFuture executeAsync(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             CompletableFuture completableFuture = new CompletableFuture<>();
             PartitionSpecificRunnable runnable = wrapRunnable(step, completableFuture);
-            if (Thread.currentThread().getClass() == PartitionOperationThread.class) {
+            if (isRunningOnPartitionThread()) {
                 runnable.run();
             } else {
                 operationExecutor.execute(runnable);
@@ -101,7 +104,6 @@ public class OpStepRunner implements Runnable {
         return CompletableFuture.runAsync(step, executor);
     }
 
-    @Nonnull
     private PartitionSpecificRunnable wrapRunnable(Runnable step,
                                                    CompletableFuture completableFuture) {
         return new PartitionSpecificRunnable() {
