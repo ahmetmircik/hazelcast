@@ -51,10 +51,12 @@ public final class StaticParams {
             .setBackup(true);
 
     public static final StaticParams SET_PARAMS = new StaticParams()
-            .setPutVanilla(true)
-            .setStore(true)
-            .setCheckIfLoaded(true)
-            .setCountAsAccess(true);
+            .importFrom(PUT_PARAMS)
+            .setLoad(false);
+
+    public static final StaticParams TXN_SET_PARAMS = new StaticParams()
+            .importFrom(SET_PARAMS)
+            .setTryPut(true);
 
     public static final StaticParams SET_WTH_NO_ACCESS_PARAMS = new StaticParams()
             .importFrom(SET_PARAMS)

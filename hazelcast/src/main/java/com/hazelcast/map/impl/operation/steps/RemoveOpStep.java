@@ -24,6 +24,7 @@ import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.TryRemoveOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+import com.hazelcast.map.impl.tx.TxnDeleteOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 public enum RemoveOpStep implements OpStep {
@@ -136,9 +137,17 @@ public enum RemoveOpStep implements OpStep {
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             MapServiceContext mapServiceContext = recordStore.getMapContainer().getMapServiceContext();
             Object oldValue = state.getOldValue();
+
             Operation operation = state.getOperation();
-            state.getOperation().sendResponse(operation instanceof TryRemoveOperation
-                    ? oldValue != null : mapServiceContext.toData(oldValue));
+            Object response;
+            if (operation instanceof TxnDeleteOperation) {
+                response = Boolean.TRUE;
+            } else if (operation instanceof TryRemoveOperation) {
+                response = oldValue != null;
+            } else {
+                response = mapServiceContext.toData(oldValue);
+            }
+            state.getOperation().sendResponse(response);
         }
 
         @Override

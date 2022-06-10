@@ -88,13 +88,13 @@ public class TxnDeleteOperation
     }
 
     @Override
-    public boolean shouldWait() {
-        return false;
+    protected OpStep getStartingOpStep() {
+        return TxnRemoveOpStep.READ;
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return TxnRemoveOpStep.READ;
+    public boolean shouldWait() {
+        return false;
     }
 
     @Override

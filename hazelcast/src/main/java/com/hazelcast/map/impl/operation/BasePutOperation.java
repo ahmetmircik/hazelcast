@@ -61,8 +61,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     protected State newState() {
         return super.newState()
                 .setStaticPutParams(getStaticParams())
-                .setKey(dataKey)
-                .setNewValue(dataValue)
                 .setExpect(getExpect())
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle());
