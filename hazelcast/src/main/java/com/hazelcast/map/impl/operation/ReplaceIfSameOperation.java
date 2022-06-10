@@ -65,7 +65,7 @@ public class ReplaceIfSameOperation extends BasePutOperation implements Mutating
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
             super.afterRunInternal();
         }

@@ -121,7 +121,7 @@ public enum GetOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getResult());
+            ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getOperation().getResponse());
         }
 
         @Override

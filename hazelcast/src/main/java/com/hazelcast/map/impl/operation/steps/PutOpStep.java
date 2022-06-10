@@ -229,8 +229,7 @@ public enum PutOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            ((BasePutOperation) state.getOperation()).afterRunInternal0(state.getKey(),
-                    state.getNewValue(), state.getOldValue());
+            ((BasePutOperation) state.getOperation()).afterRunInternal();
         }
 
         @Override

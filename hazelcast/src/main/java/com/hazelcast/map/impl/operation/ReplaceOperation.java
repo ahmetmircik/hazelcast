@@ -62,7 +62,7 @@ public class ReplaceOperation extends BasePutOperation implements MutatingOperat
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
             super.afterRunInternal();
         }

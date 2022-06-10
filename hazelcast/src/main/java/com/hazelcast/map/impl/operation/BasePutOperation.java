@@ -74,7 +74,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         afterRunInternal0(dataKey, dataValue, oldValue);
         super.afterRunInternal();
     }

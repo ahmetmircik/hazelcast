@@ -50,7 +50,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (oldValue == null) {
             super.afterRunInternal();
         }
