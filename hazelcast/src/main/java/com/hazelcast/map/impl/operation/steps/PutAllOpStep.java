@@ -162,7 +162,8 @@ public enum PutAllOpStep implements OpStep {
                 PutOpStep.ON_STORE.runStep(perKeyState);
 
                 if (loadOldValue && oldValue != null) {
-                    oldValueByKey.put(perKeyState.getKey(), oldValue);
+                    // TODO why do we need to convert to heap data here?
+                    oldValueByKey.put(perKeyState.getKey(), mapServiceContext.toData(oldValue));
                 }
             }
 
@@ -220,9 +221,9 @@ public enum PutAllOpStep implements OpStep {
                 operation.evict(dataKey);
             }
 
-            OpStepResponseHandler.sendResponse(state);
-
             operation.invalidateNearCache(operation.getInvalidationKeys());
+
+            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
