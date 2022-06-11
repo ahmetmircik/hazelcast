@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.internal.nearcache.impl.invalidation.Invalidator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.services.ObjectNamespace;
@@ -113,9 +114,11 @@ public abstract class MapOperation extends AbstractNamedOperation
         // TODO: find a better way to catch offloadEnabled ops.
         // TODO: no map-store offload for tiered storage
 //        mapStoreOffloadEnabled = hasMapStore
+        MapConfig mapConfig = mapContainer.getMapConfig();
         mapStoreOffloadEnabled = getStartingOpStep() != null
                 && true
-                && mapContainer.getMapConfig().getMapStoreConfig().getWriteDelaySeconds() == 0;
+                && !mapConfig.getTieredStoreConfig().isEnabled()
+                && mapConfig.getMapStoreConfig().getWriteDelaySeconds() == 0;
 
         assertNativeMapOnPartitionThread();
 
