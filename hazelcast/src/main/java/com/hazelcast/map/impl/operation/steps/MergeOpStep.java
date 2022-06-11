@@ -56,7 +56,7 @@ public enum MergeOpStep implements OpStep {
 
             // TODO index marking
             // key + oldValue + newValue
-            List outcomes = new ArrayList<>(3 * mergingEntries.size());
+            List outcomes = new ArrayList<>(4 * mergingEntries.size());
 
             for (SplitBrainMergeTypes.MapMergeTypes<Object, Object> mergingEntry : mergingEntries) {
                 mergingEntry = (SplitBrainMergeTypes.MapMergeTypes<Object, Object>) serializationService
@@ -80,6 +80,7 @@ public enum MergeOpStep implements OpStep {
                 outcomes.add(key);
                 outcomes.add(oldValue);
                 outcomes.add(newValue);
+                outcomes.add(mergingEntry);
             }
 
             state.setResult(outcomes);
@@ -110,14 +111,14 @@ public enum MergeOpStep implements OpStep {
 
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
-            for (int i = 0; i < outcomes.size(); ) {
-                Object key = outcomes.get(i++);
+            for (int i = 0; i < outcomes.size(); i += 4) {
+                Object key = outcomes.get(i);
 
                 assert key instanceof Data
                         : "Expect key instanceOf Data but found " + key;
 
-                Object oldValue = outcomes.get(i++);
-                Object newValue = outcomes.get(i++);
+                Object oldValue = outcomes.get(i + 1);
+                Object newValue = outcomes.get(i + 2);
 
                 perKeyState.setKey((Data) key)
                         .setOldValue(oldValue)
@@ -128,7 +129,7 @@ public enum MergeOpStep implements OpStep {
                     // put or update
                     PutOpStep.STORE.runStep(perKeyState);
                     //set new value returned from map-store
-                    outcomes.set(i - 1, perKeyState.getNewValue());
+                    outcomes.set(i + 2, perKeyState.getNewValue());
                 } else if (oldValue != null && newValue == null) {
                     // remove
                     DeleteOpStep.DELETE.runStep(perKeyState);
@@ -157,14 +158,14 @@ public enum MergeOpStep implements OpStep {
 
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
-            for (int i = 0; i < outcomes.size();) {
-                Object key = outcomes.get(i++);
+            for (int i = 0; i < outcomes.size(); i += 4) {
+                Object key = outcomes.get(i);
 
                 assert key instanceof Data
                         : "Expect key instanceOf Data but found " + key;
 
-                Object oldValue = outcomes.get(i++);
-                Object newValue = outcomes.get(i++);
+                Object oldValue = outcomes.get(i + 1);
+                Object newValue = outcomes.get(i + 2);
 
                 perKeyState.setKey((Data) key)
                         .setOldValue(oldValue)
@@ -177,7 +178,10 @@ public enum MergeOpStep implements OpStep {
                     // if same values, merge expiry and continue with next entry
                     // TODO add expiry merge
                     if (recordStore.getValueComparator().isEqual(newValue, oldValue, serializationService)) {
-//                        recordStore.mergeRecordExpiration(key, record, mergingEntry, state.getNow());
+                        Record record = recordStore.getRecord((Data) key);
+                        Object mergingEntry = outcomes.get(i + 3);
+                        recordStore.mergeRecordExpiration((Data) key, record,
+                                (SplitBrainMergeTypes.MapMergeTypes) mergingEntry, state.getNow());
                         continue;
                     }
 
@@ -222,14 +226,14 @@ public enum MergeOpStep implements OpStep {
             List outcomes = (List) state.getResult();
 
             if (hasBackups) {
-                backupPairs = new ArrayList(2 * (outcomes.size() / 3));
+                backupPairs = new ArrayList(2 * (outcomes.size() / 4));
             }
 
             if (hasInvalidation) {
-                invalidationKeys = new ArrayList<>((outcomes.size() / 3));
+                invalidationKeys = new ArrayList<>((outcomes.size() / 4));
             }
 
-            for (int i = 0; i < outcomes.size(); i += 3) {
+            for (int i = 0; i < outcomes.size(); i += 4) {
                 hasMergedValues = true;
 
                 Data dataKey = ((Data) outcomes.get(i));
