@@ -18,6 +18,8 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 

@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;

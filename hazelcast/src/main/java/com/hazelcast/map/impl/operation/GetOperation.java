@@ -21,8 +21,8 @@ import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.GetOpStep;
-import com.hazelcast.map.impl.operation.steps.OpStep;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
 

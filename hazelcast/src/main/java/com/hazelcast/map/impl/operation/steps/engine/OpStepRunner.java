@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation.steps;
+package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.instance.impl.Node;
@@ -36,7 +36,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newOpStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.engine.OpStepSupplier.newOpStepSupplier;
 import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.

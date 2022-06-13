@@ -17,7 +17,7 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.nio.IOUtil;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.internal.serialization.Data;

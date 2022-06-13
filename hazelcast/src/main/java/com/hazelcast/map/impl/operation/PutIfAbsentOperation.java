@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 

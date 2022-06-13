@@ -18,9 +18,9 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.OpStep;
 import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
-import com.hazelcast.map.impl.operation.steps.State;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 
 public class RemoveOperation extends BaseRemoveOperation {
 
