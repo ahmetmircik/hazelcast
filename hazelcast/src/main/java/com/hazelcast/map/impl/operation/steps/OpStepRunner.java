@@ -22,6 +22,7 @@ import com.hazelcast.instance.impl.NodeState;
 import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.internal.util.ThreadUtil;
+import com.hazelcast.internal.util.executor.StripedRunnable;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.NodeEngineImpl;
@@ -39,7 +40,7 @@ import static com.hazelcast.map.impl.operation.steps.OpStepSupplier.newOpStepSup
 import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public class OpStepRunner implements Runnable {
+public class OpStepRunner implements StripedRunnable {
 
     // TODO is this too much? per-partition-per-map
     // TODO destroy this on map destroy
@@ -51,6 +52,7 @@ public class OpStepRunner implements Runnable {
     private final Supplier<Runnable> opStepSupplier;
     private final OperationExecutor operationExecutor;
     private final Operation operation;
+    private final int executorKey;
 
     public OpStepRunner(Operation operation,
                         State state,
@@ -69,6 +71,7 @@ public class OpStepRunner implements Runnable {
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
                         Thread.currentThread().getId(), mapName));
+        this.executorKey = mapName.hashCode();
     }
 
     // TODO: What happens in the event of exception?
@@ -125,6 +128,7 @@ public class OpStepRunner implements Runnable {
         };
     }
 
+    // TODO handle this inside partition thread
     private void handleOperationError(Operation operation, Throwable e) {
         if (e instanceof OutOfMemoryError) {
             OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
@@ -155,5 +159,10 @@ public class OpStepRunner implements Runnable {
         } catch (Throwable t) {
             logger.warning("While sending op error... op: " + operation + ", error: " + e, t);
         }
+    }
+
+    @Override
+    public int getKey() {
+        return executorKey;
     }
 }

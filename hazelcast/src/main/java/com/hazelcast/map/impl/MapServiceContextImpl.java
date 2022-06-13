@@ -35,6 +35,7 @@ import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.internal.util.comparators.ValueComparatorUtil;
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
+import com.hazelcast.internal.util.executor.StripedExecutor;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.event.MapEventPublisher;
@@ -75,6 +76,7 @@ import com.hazelcast.query.impl.IndexProvider;
 import com.hazelcast.query.impl.getters.Extractors;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
 import com.hazelcast.spi.impl.NodeEngine;
+import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.eventservice.EventFilter;
 import com.hazelcast.spi.impl.eventservice.EventRegistration;
 import com.hazelcast.spi.impl.eventservice.EventService;
@@ -92,9 +94,11 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
+import static com.hazelcast.config.ExecutorConfig.DEFAULT_POOL_SIZE;
 import static com.hazelcast.internal.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.internal.util.Preconditions.checkPositive;
 import static com.hazelcast.internal.util.SetUtil.immutablePartitionIdSet;
+import static com.hazelcast.internal.util.ThreadUtil.createThreadName;
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.map.impl.MapKeyLoader.LOADED_KEY_LIMITER_PER_NODE;
 import static com.hazelcast.map.impl.MapKeyLoader.PROP_LOADED_KEY_LIMITER_PER_NODE;
@@ -116,8 +120,10 @@ import static java.lang.Thread.currentThread;
 class MapServiceContextImpl implements MapServiceContext {
 
     private static final long DESTROY_TIMEOUT_SECONDS = 30;
+    private static final int STRIPED_RUNNABLE_JOB_QUEUE_SIZE = 1000;
 
     protected final ILogger logger;
+
     private final NodeEngine nodeEngine;
     private final QueryEngine queryEngine;
     private final EventService eventService;
@@ -148,6 +154,7 @@ class MapServiceContextImpl implements MapServiceContext {
      * @see {@link MapKeyLoader#DEFAULT_LOADED_KEY_LIMIT_PER_NODE}
      */
     private final Semaphore nodeWideLoadedKeyLimiter;
+    private volatile StripedExecutor stripedExecutor;
 
     private MapService mapService;
 
@@ -180,6 +187,23 @@ class MapServiceContextImpl implements MapServiceContext {
                 nodeEngine.getProperties().getInteger(LOADED_KEY_LIMITER_PER_NODE)));
         this.logger = nodeEngine.getLogger(getClass());
     }
+
+    public StripedExecutor getMapStoreOffloadExecutor() {
+        StripedExecutor ex = stripedExecutor;
+        if (ex == null) {
+            synchronized (this) {
+                if (stripedExecutor == null) {
+                    String prefix = createThreadName(((NodeEngineImpl) getNodeEngine()).getNode()
+                            .hazelcastInstance.getName(), "map-store-offload");
+                    stripedExecutor = new StripedExecutor(logger, prefix,
+                            DEFAULT_POOL_SIZE, STRIPED_RUNNABLE_JOB_QUEUE_SIZE);
+                }
+                ex = stripedExecutor;
+            }
+        }
+        return ex;
+    }
+
 
     public ExecutorStats getOffloadedEntryProcessorExecutorStats() {
         return offloadedExecutorStats;

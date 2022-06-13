@@ -16,41 +16,24 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.util.executor.ExecutorType;
-import com.hazelcast.spi.impl.executionservice.impl.ExecutionServiceImpl;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.impl.operationservice.Operation;
-
-import java.util.concurrent.Executor;
 
 public class OpStepOffload extends Offload {
 
     private final OpStepRunner runner;
-    private final String executorName;
 
     public OpStepOffload(Operation offloadedOperation,
                          String mapName, State state, OpStep startingOpStep) {
         super(offloadedOperation);
-        this.executorName = String.format("%s-%d-%s", mapName, Thread.currentThread().getId(),
-                OpStepOffload.class.getName());
         this.runner = new OpStepRunner(offloadedOperation, state,
                 startingOpStep, mapName);
     }
 
     @Override
     public void start() {
-        getOrCreateExecutor().execute(runner);
-    }
-
-    /**
-     * @return always created by a single thread
-     */
-    private Executor getOrCreateExecutor() {
-        ExecutionServiceImpl service = ((ExecutionServiceImpl) nodeEngine.getExecutionService());
-        if (!service.hasExecutorWithName(executorName)) {
-            service.register(executorName, 1, Integer.MAX_VALUE, ExecutorType.CACHED);
-            OpStep.log("---> New executorName = " + executorName);
-        }
-        return service.getExecutor(executorName);
+        ((MapOperation) offloadedOperation()).getMapContainer()
+                .getMapServiceContext().getMapStoreOffloadExecutor().execute(runner);
     }
 }

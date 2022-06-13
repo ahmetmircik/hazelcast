@@ -24,6 +24,7 @@ import com.hazelcast.internal.eviction.ExpirationManager;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.internal.util.comparators.ValueComparator;
+import com.hazelcast.internal.util.executor.StripedExecutor;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.eviction.MapClearExpiredRecordsTask;
 import com.hazelcast.map.impl.journal.MapEventJournal;
@@ -217,4 +218,6 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport,
      * @return {@link EventListenerCounter} object.
      */
     EventListenerCounter getEventListenerCounter();
+
+    StripedExecutor getMapStoreOffloadExecutor();
 }
