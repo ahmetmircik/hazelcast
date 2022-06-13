@@ -35,6 +35,7 @@ public enum ClearOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             OpStep.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
+
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore == null) {
                 state.setResult(0);
