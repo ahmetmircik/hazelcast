@@ -18,22 +18,31 @@ package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.operationservice.Offload;
-import com.hazelcast.spi.impl.operationservice.Operation;
+
+import java.util.Queue;
 
 public class OpStepOffload extends Offload {
 
     private final OpStepRunner runner;
+    private final Queue<OpStepRunner> offloadQueue;
 
-    public OpStepOffload(Operation offloadedOperation,
+    public OpStepOffload(MapOperation offloadedOperation,
                          String mapName, State state, OpStep startingOpStep) {
         super(offloadedOperation);
         this.runner = new OpStepRunner(offloadedOperation, state,
                 startingOpStep, mapName);
+        this.offloadQueue = ((MapOperation) offloadedOperation()).getMapContainer().getOffloadQueue();
     }
 
     @Override
     public void start() {
-        ((MapOperation) offloadedOperation()).getMapContainer()
-                .getMapServiceContext().getMapStoreOffloadExecutor().execute(runner);
+        offloadQueue.offer(runner);
+
+        if (offloadQueue.peek() == runner) {
+            runner.run();
+        } else {
+            // TODO remove this
+            System.out.println("waiting... " );
+        }
     }
 }

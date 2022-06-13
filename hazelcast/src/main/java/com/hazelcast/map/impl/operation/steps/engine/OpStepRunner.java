@@ -22,8 +22,8 @@ import com.hazelcast.instance.impl.NodeState;
 import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.internal.util.executor.StripedRunnable;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -31,6 +31,7 @@ import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -40,7 +41,7 @@ import static com.hazelcast.map.impl.operation.steps.engine.OpStepSupplier.newOp
 import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public class OpStepRunner implements StripedRunnable {
+public class OpStepRunner implements PartitionSpecificRunnable {
 
     // TODO is this too much? per-partition-per-map
     // TODO destroy this on map destroy
@@ -52,9 +53,10 @@ public class OpStepRunner implements StripedRunnable {
     private final Supplier<Runnable> opStepSupplier;
     private final OperationExecutor operationExecutor;
     private final Operation operation;
-    private final int executorKey;
+    private final Queue<OpStepRunner> offloadQueue;
+    private int partitionId;
 
-    public OpStepRunner(Operation operation,
+    public OpStepRunner(MapOperation operation,
                         State state,
                         OpStep startingOpStep,
                         String mapName) {
@@ -71,25 +73,55 @@ public class OpStepRunner implements StripedRunnable {
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
                         Thread.currentThread().getId(), mapName));
-        this.executorKey = mapName.hashCode();
+        this.offloadQueue = operation.getMapContainer().getOffloadQueue();
+        this.partitionId = state.getPartitionId();
     }
 
     // TODO: What happens in the event of exception?
     @Override
     public void run() {
-        OpStep.log("---> start running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
         try {
+            Runnable step;
             do {
-                Runnable step = opStepSupplier.get();
+                step = opStepSupplier.get();
                 if (step == null) {
-                    OpStep.log("---> end running: " + getClass().getSimpleName() + "-" + System.identityHashCode(this));
+                    nextRunner();
+
                     return;
                 }
-
-                executeAsync(step).get();
-            } while (true);
+            } while (doRun(step));
         } catch (Throwable t) {
             handleOperationError(operation, t);
+            nextRunner();
+        }
+    }
+
+    private void nextRunner() {
+        assert offloadQueue.peek() == this;
+        offloadQueue.poll();
+        OpStepRunner runner = offloadQueue.peek();
+        if (runner != null) {
+            runner.run();
+        }
+    }
+
+    private boolean doRun(Runnable step) {
+        if (step instanceof PartitionSpecificRunnable) {
+            if (isRunningOnPartitionThread()) {
+                step.run();
+                return true;
+            } else {
+                operationExecutor.execute(this);
+                return false;
+            }
+        } else {
+            if (isRunningOnPartitionThread()) {
+                executor.execute(this);
+                return false;
+            } else {
+                step.run();
+                return true;
+            }
         }
     }
 
@@ -162,7 +194,7 @@ public class OpStepRunner implements StripedRunnable {
     }
 
     @Override
-    public int getKey() {
-        return executorKey;
+    public int getPartitionId() {
+        return partitionId;
     }
 }

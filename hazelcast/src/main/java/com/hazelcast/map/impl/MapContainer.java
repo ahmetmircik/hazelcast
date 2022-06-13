@@ -44,6 +44,7 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.eviction.EvictorImpl;
 import com.hazelcast.map.impl.mapstore.MapStoreContext;
 import com.hazelcast.map.impl.nearcache.invalidation.InvalidationListener;
+import com.hazelcast.map.impl.operation.steps.engine.OpStepRunner;
 import com.hazelcast.map.impl.query.QueryEntryFactory;
 import com.hazelcast.map.impl.record.DataRecordFactory;
 import com.hazelcast.map.impl.record.ObjectRecordFactory;
@@ -64,6 +65,8 @@ import com.hazelcast.wan.impl.WanReplicationService;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -177,6 +180,11 @@ public class MapContainer {
 
     public AtomicLong getLastInvalidMergePolicyCheckTime() {
         return lastInvalidMergePolicyCheckTime;
+    }
+
+    Queue<OpStepRunner> off = new ConcurrentLinkedQueue();
+    public Queue<OpStepRunner> getOffloadQueue() {
+        return off;
     }
 
     private class IndexResultFilterFactory implements Supplier<Predicate<QueryableEntry>> {
