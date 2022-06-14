@@ -93,8 +93,18 @@ public class OpStepRunner implements PartitionSpecificRunnable {
                 }
             } while (doRun(step));
         } catch (Throwable t) {
-            handleOperationError(operation, t);
-            nextRunner();
+            handleErrorStep(new PartitionSpecificRunnable() {
+                @Override
+                public void run() {
+                    handleOperationError(operation, t);
+                    nextRunner();
+                }
+
+                @Override
+                public int getPartitionId() {
+                    return partitionId;
+                }
+            });
         }
     }
 
@@ -122,6 +132,27 @@ public class OpStepRunner implements PartitionSpecificRunnable {
         } else {
             if (isRunningOnPartitionThread()) {
                 executor.execute(this);
+                return false;
+            } else {
+                step.run();
+                return true;
+            }
+        }
+    }
+
+    // TODO refactor this step and unify it with `doRun` method.
+    private boolean handleErrorStep(Runnable step) {
+        if (step instanceof PartitionSpecificRunnable) {
+            if (isRunningOnPartitionThread()) {
+                step.run();
+                return true;
+            } else {
+                operationExecutor.execute(((PartitionSpecificRunnable) step));
+                return false;
+            }
+        } else {
+            if (isRunningOnPartitionThread()) {
+                executor.execute(step);
                 return false;
             } else {
                 step.run();
