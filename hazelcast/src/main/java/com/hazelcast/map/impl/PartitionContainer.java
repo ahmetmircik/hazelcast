@@ -84,14 +84,15 @@ public class PartitionContainer {
      */
     private long lastCleanupTimeCopy;
 
+    private Map<String, Queue<OpStepRunner>> map = new HashMap<>();
+
     public PartitionContainer(final MapService mapService, final int partitionId) {
         this.mapService = mapService;
         this.partitionId = partitionId;
-        int approxMapCount = mapService.mapServiceContext.getNodeEngine().getConfig().getMapConfigs().size();
+        int approxMapCount = mapService.mapServiceContext.getNodeEngine()
+                .getConfig().getMapConfigs().size();
         this.maps = MapUtil.createConcurrentHashMap(approxMapCount);
     }
-
-    Map<String, Queue<OpStepRunner>> map = new HashMap<>();
 
     public Queue<OpStepRunner> getOffloadQueue(String mapName) {
         return map.computeIfAbsent(mapName, s -> new ArrayDeque<>());

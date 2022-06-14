@@ -116,7 +116,7 @@ public abstract class MapOperation extends AbstractNamedOperation
 //        mapStoreOffloadEnabled = hasMapStore
         MapConfig mapConfig = mapContainer.getMapConfig();
         mapStoreOffloadEnabled = getStartingOpStep() != null
-                && true
+                && hasMapStore
                 && !mapConfig.getTieredStoreConfig().isEnabled()
                 && mapConfig.getMapStoreConfig().getWriteDelaySeconds() == 0;
 
