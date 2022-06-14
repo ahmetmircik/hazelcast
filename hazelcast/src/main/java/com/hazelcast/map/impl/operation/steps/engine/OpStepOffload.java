@@ -31,7 +31,9 @@ public class OpStepOffload extends Offload {
         super(offloadedOperation);
         this.runner = new OpStepRunner(offloadedOperation, state,
                 startingOpStep, mapName);
-        this.offloadQueue = ((MapOperation) offloadedOperation()).getMapContainer().getOffloadQueue();
+        this.offloadQueue = offloadedOperation.getMapContainer().getMapServiceContext()
+                .getPartitionContainer(state.getPartitionId())
+                .getOffloadQueue(mapName);
     }
 
     @Override
@@ -42,7 +44,7 @@ public class OpStepOffload extends Offload {
             runner.run();
         } else {
             // TODO remove this
-            System.out.println("waiting... " );
+            System.out.println("waiting... ");
         }
     }
 }

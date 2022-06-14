@@ -73,8 +73,10 @@ public class OpStepRunner implements PartitionSpecificRunnable {
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
                         Thread.currentThread().getId(), mapName));
-        this.offloadQueue = operation.getMapContainer().getOffloadQueue();
         this.partitionId = state.getPartitionId();
+        this.offloadQueue = operation.getMapContainer().getMapServiceContext()
+                .getPartitionContainer(state.getPartitionId())
+                .getOffloadQueue(mapName);
     }
 
     // TODO: What happens in the event of exception?
@@ -97,7 +99,10 @@ public class OpStepRunner implements PartitionSpecificRunnable {
     }
 
     private void nextRunner() {
+        assert ThreadUtil.isRunningOnPartitionThread()
+                : Thread.currentThread().getName();
         assert offloadQueue.peek() == this;
+
         offloadQueue.poll();
         OpStepRunner runner = offloadQueue.peek();
         if (runner != null) {
