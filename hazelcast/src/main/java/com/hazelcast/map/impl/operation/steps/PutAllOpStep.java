@@ -225,8 +225,6 @@ public enum PutAllOpStep implements OpStep {
             }
 
             operation.invalidateNearCache(operation.getInvalidationKeys());
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

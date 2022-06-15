@@ -23,7 +23,6 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.BasePutOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -150,7 +149,7 @@ public enum PutOpStep implements OpStep {
         public OpStep nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
-                return RESPONSE;
+                return AFTER_RUN;
             }
             return STORE;
         }
@@ -203,22 +202,6 @@ public enum PutOpStep implements OpStep {
             }
 
             state.setRecord(record);
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            return RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

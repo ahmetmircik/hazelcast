@@ -36,6 +36,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.steps.engine.OpStepSupplier.newOpStepSupplier;
 import static java.lang.String.format;
@@ -54,6 +55,7 @@ public class OpStepRunner implements PartitionSpecificRunnable {
     private final OperationExecutor operationExecutor;
     private final Operation operation;
     private final Queue<OpStepRunner> offloadQueue;
+    private final State state;
     private int partitionId;
 
     public OpStepRunner(MapOperation operation,
@@ -61,6 +63,7 @@ public class OpStepRunner implements PartitionSpecificRunnable {
                         OpStep startingOpStep,
                         String mapName) {
         this.operation = operation;
+        this.state = state;
 
         ThreadUtil.assertRunningOnPartitionThread();
 
@@ -87,13 +90,26 @@ public class OpStepRunner implements PartitionSpecificRunnable {
             do {
                 step = opStepSupplier.get();
                 if (step == null) {
-                    nextRunner();
+                    runSingleStep(new PartitionSpecificRunnable() {
+                        @Override
+                        public void run() {
+                            assertRunningOnPartitionThread();
+
+                            OpStepResponseHandler.sendResponse(state);
+                            nextRunner();
+                        }
+
+                        @Override
+                        public int getPartitionId() {
+                            return partitionId;
+                        }
+                    });
 
                     return;
                 }
             } while (doRun(step));
         } catch (Throwable t) {
-            handleErrorStep(new PartitionSpecificRunnable() {
+            runSingleStep(new PartitionSpecificRunnable() {
                 @Override
                 public void run() {
                     handleOperationError(operation, t);
@@ -141,7 +157,7 @@ public class OpStepRunner implements PartitionSpecificRunnable {
     }
 
     // TODO refactor this step and unify it with `doRun` method.
-    private boolean handleErrorStep(Runnable step) {
+    private boolean runSingleStep(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             if (isRunningOnPartitionThread()) {
                 step.run();

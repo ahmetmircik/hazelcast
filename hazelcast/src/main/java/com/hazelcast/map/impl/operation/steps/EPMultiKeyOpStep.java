@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -236,8 +235,6 @@ public enum EPMultiKeyOpStep implements OpStep {
                     ((MapEntries) state.getResult()).add(s.getKey(), result);
                 }
             }
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

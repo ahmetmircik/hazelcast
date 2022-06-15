@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.MergeOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -270,7 +269,6 @@ public enum MergeOpStep implements OpStep {
             }
 
             state.setResult(hasMergedValues);
-            OpStepResponseHandler.sendResponse(state);
 
             operation.invalidateNearCache(invalidationKeys);
         }

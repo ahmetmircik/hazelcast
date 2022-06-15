@@ -22,7 +22,6 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
@@ -250,8 +249,6 @@ public enum EPSingleKeyOpStep implements OpStep {
                         break;
                 }
             }
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

@@ -22,7 +22,6 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -53,7 +52,7 @@ public enum RemoveOpStep implements OpStep {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             return state.isNullRecord() ? RemoveOpStep.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveOpStep.DELETE : RemoveOpStep.RESPONSE);
+                    ? RemoveOpStep.DELETE : RemoveOpStep.AFTER_RUN);
         }
     },
 
@@ -77,7 +76,7 @@ public enum RemoveOpStep implements OpStep {
 
         @Override
         public RemoveOpStep nextStep(State state) {
-            return state.getOldValue() == null ? RemoveOpStep.RESPONSE : RemoveOpStep.ON_LOAD;
+            return state.getOldValue() == null ? RemoveOpStep.AFTER_RUN : RemoveOpStep.ON_LOAD;
         }
     },
 
@@ -92,7 +91,7 @@ public enum RemoveOpStep implements OpStep {
 
         @Override
         public RemoveOpStep nextStep(State state) {
-            return RemoveOpStep.RESPONSE;
+            return RemoveOpStep.AFTER_RUN;
         }
     },
 
@@ -131,21 +130,7 @@ public enum RemoveOpStep implements OpStep {
 
         @Override
         public RemoveOpStep nextStep(State state) {
-            return RemoveOpStep.RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-
-            OpStepResponseHandler.sendResponse(state);
-        }
-
-        @Override
-        public RemoveOpStep nextStep(State state) {
-            return AFTER_RUN;
+            return RemoveOpStep.AFTER_RUN;
         }
     },
 

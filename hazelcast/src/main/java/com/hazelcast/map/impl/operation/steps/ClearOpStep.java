@@ -21,7 +21,6 @@ import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.ClearOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -69,7 +68,7 @@ public enum ClearOpStep implements OpStep {
         @Override
         public ClearOpStep nextStep(State state) {
             return state.getRecordStore() == null
-                    ? ClearOpStep.RESPONSE : ClearOpStep.CLEAR_MAP_STORE;
+                    ? ClearOpStep.AFTER_RUN : ClearOpStep.CLEAR_MAP_STORE;
         }
     },
 
@@ -107,21 +106,7 @@ public enum ClearOpStep implements OpStep {
 
         @Override
         public ClearOpStep nextStep(State state) {
-            return ClearOpStep.RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            OpStep.log("==> clear all sending response");
-
-            OpStepResponseHandler.sendResponse(state);
-        }
-
-        @Override
-        public ClearOpStep nextStep(State state) {
-            return AFTER_RUN;
+            return ClearOpStep.AFTER_RUN;
         }
     },
 

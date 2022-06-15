@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -76,7 +75,8 @@ public enum RemoveIfSameOpStep implements OpStep {
 
         @Override
         public RemoveIfSameOpStep nextStep(State state) {
-            return state.getOldValue() == null ? RemoveIfSameOpStep.RESPONSE : RemoveIfSameOpStep.ON_LOAD;
+            return state.getOldValue() == null
+                    ? RemoveIfSameOpStep.AFTER_RUN : RemoveIfSameOpStep.ON_LOAD;
         }
     },
 
@@ -104,7 +104,7 @@ public enum RemoveIfSameOpStep implements OpStep {
         @Override
         public RemoveIfSameOpStep nextStep(State state) {
             return state.isStopExecution()
-                    ? RemoveIfSameOpStep.RESPONSE : RemoveIfSameOpStep.DELETE;
+                    ? RemoveIfSameOpStep.AFTER_RUN : RemoveIfSameOpStep.DELETE;
         }
     },
 
@@ -147,20 +147,7 @@ public enum RemoveIfSameOpStep implements OpStep {
 
         @Override
         public RemoveIfSameOpStep nextStep(State state) {
-            return RemoveIfSameOpStep.RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            OpStepResponseHandler.sendResponse(state);
-        }
-
-        @Override
-        public RemoveIfSameOpStep nextStep(State state) {
-            return AFTER_RUN;
+            return RemoveIfSameOpStep.AFTER_RUN;
         }
     },
 

@@ -24,7 +24,6 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.GetOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -110,7 +109,6 @@ public enum GetOpStep implements OpStep {
                 recordStore.accessRecord(state.getKey(), record, state.getNow());
             }
 
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

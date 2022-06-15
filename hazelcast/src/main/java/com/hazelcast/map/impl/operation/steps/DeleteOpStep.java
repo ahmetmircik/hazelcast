@@ -22,7 +22,6 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -80,7 +79,7 @@ public enum DeleteOpStep implements OpStep {
 
         @Override
         public OpStep nextStep(State state) {
-            return state.isNullRecord() ? DeleteOpStep.RESPONSE : DeleteOpStep.ON_DELETE;
+            return state.isNullRecord() ? DeleteOpStep.AFTER_RUN : DeleteOpStep.ON_DELETE;
         }
     },
 
@@ -98,20 +97,7 @@ public enum DeleteOpStep implements OpStep {
 
         @Override
         public OpStep nextStep(State state) {
-            return DeleteOpStep.RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-            OpStepResponseHandler.sendResponse(state);
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            return AFTER_RUN;
+            return DeleteOpStep.AFTER_RUN;
         }
     },
 

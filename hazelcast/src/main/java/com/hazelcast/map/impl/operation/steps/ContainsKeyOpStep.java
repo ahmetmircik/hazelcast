@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -42,7 +41,7 @@ public enum ContainsKeyOpStep implements OpStep {
         @Override
         public OpStep nextStep(State state) {
             return state.getOldValue() == null
-                    ? ContainsKeyOpStep.LOAD : ContainsKeyOpStep.RESPONSE;
+                    ? ContainsKeyOpStep.LOAD : null;
         }
     },
 
@@ -62,7 +61,7 @@ public enum ContainsKeyOpStep implements OpStep {
         @Override
         public OpStep nextStep(State state) {
             return state.getOldValue() == null
-                    ? ContainsKeyOpStep.RESPONSE : ContainsKeyOpStep.ON_LOAD;
+                    ? null : ContainsKeyOpStep.ON_LOAD;
         }
     },
 
@@ -75,20 +74,6 @@ public enum ContainsKeyOpStep implements OpStep {
                     state.getOldValue(), false, state.getCallerAddress());
             record = recordStore.evictIfExpired(state.getKey(), state.getNow(), false) ? null : record;
             state.setOldValue(record == null ? null : record.getValue());
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            return ContainsKeyOpStep.RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            OpStep.log("==> sending response");
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override

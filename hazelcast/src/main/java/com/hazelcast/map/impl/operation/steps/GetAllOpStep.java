@@ -21,7 +21,6 @@ import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.GetAllOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -38,7 +37,8 @@ public enum GetAllOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> PuAllOpStep reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            OpStep.log("==> PuAllOpStep reading old value"
+                    + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             GetAllOperation operation = (GetAllOperation) state.getOperation();
@@ -93,22 +93,6 @@ public enum GetAllOpStep implements OpStep {
             recordStore.addToMapEntrySet(mapEntries, loaded);
 
             state.setMapEntries(mapEntries);
-        }
-
-        @Override
-        public OpStep nextStep(State state) {
-            return RESPONSE;
-        }
-    },
-
-    RESPONSE() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
-
-            OpStepResponseHandler.sendResponse(state);
         }
 
         @Override
