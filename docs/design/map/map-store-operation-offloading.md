@@ -9,10 +9,11 @@ By implementing MapStore MapLoader operation offloading,
 next operations will not be blocked in a partition.
 
 ## Goals
-Having MapStore and MapLoader operations offloaded.
+- Having MapStore and MapLoader operations offloaded for IMap
 
 ## Non-Goals
-JCache CacheLoader and CacheWriter are out of scope.
+- Changes in cluster wide map bulk loading mechanism.
+- JCache CacheLoader and CacheWriter are out of scope.
 
 ## Description
 In its essence this is a [Head-of-line
@@ -49,6 +50,7 @@ interface Step {
     boolean isOffloadStep();
 }
 ```
+In its essence, a step is either an instance of a `PartitionSpecificRunnable` or a `Runnable`.
 
 And we model an operation as a sequence of `Step`s.
 

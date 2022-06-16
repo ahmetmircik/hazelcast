@@ -23,8 +23,8 @@ import javax.annotation.Nullable;
  * {@link  com.hazelcast.map.impl.operation.PutOperation}
  * <p>
  * By using this interface, an operation can be modeled as
- * a collection of {@link Step}. This model is helpful
- * to run Steps in threads other than partition threads.
+ * a collection of {@link Step}. With this model, offloadable steps
+ * can be run in other threads than partitioned ones.
  */
 public interface Step {
 
