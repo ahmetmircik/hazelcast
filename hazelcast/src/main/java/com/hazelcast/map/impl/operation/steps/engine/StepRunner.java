@@ -38,11 +38,11 @@ import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-import static com.hazelcast.map.impl.operation.steps.engine.OpStepSupplier.newOpStepSupplier;
+import static com.hazelcast.map.impl.operation.steps.engine.StepSupplier.newStepSupplier;
 import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
-public class OpStepRunner implements PartitionSpecificRunnable {
+public class StepRunner implements PartitionSpecificRunnable {
 
     // TODO is this too much? per-partition-per-map
     // TODO destroy this on map destroy
@@ -51,17 +51,17 @@ public class OpStepRunner implements PartitionSpecificRunnable {
     private final Node node;
     private final ILogger logger;
     private final Executor executor;
-    private final Supplier<Runnable> opStepSupplier;
+    private final Supplier<Runnable> stepSupplier;
     private final OperationExecutor operationExecutor;
     private final Operation operation;
-    private final Queue<OpStepRunner> offloadQueue;
+    private final Queue<StepRunner> offloadQueue;
     private final State state;
     private int partitionId;
 
-    public OpStepRunner(MapOperation operation,
-                        State state,
-                        OpStep startingOpStep,
-                        String mapName) {
+    public StepRunner(MapOperation operation,
+                      State state,
+                      Step startingStep,
+                      String mapName) {
         this.operation = operation;
         this.state = state;
 
@@ -72,7 +72,7 @@ public class OpStepRunner implements PartitionSpecificRunnable {
         this.logger = nodeEngine.getLogger(getClass());
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
-        this.opStepSupplier = newOpStepSupplier(startingOpStep, state);
+        this.stepSupplier = newStepSupplier(startingStep, state);
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
                         Thread.currentThread().getId(), mapName));
@@ -88,14 +88,14 @@ public class OpStepRunner implements PartitionSpecificRunnable {
         try {
             Runnable step;
             do {
-                step = opStepSupplier.get();
+                step = stepSupplier.get();
                 if (step == null) {
                     runSingleStep(new PartitionSpecificRunnable() {
                         @Override
                         public void run() {
                             assertRunningOnPartitionThread();
 
-                            OpStepResponseHandler.sendResponse(state);
+                            StepResponseHandler.sendResponse(state);
                             nextRunner();
                         }
 
@@ -130,7 +130,7 @@ public class OpStepRunner implements PartitionSpecificRunnable {
         assert offloadQueue.peek() == this;
 
         offloadQueue.poll();
-        OpStepRunner runner = offloadQueue.peek();
+        StepRunner runner = offloadQueue.peek();
         if (runner != null) {
             runner.run();
         }

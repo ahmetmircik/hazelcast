@@ -20,7 +20,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -28,7 +28,7 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-public enum DeleteOpStep implements OpStep {
+public enum DeleteSteps implements Step {
 
     READ() {
         @Override
@@ -53,8 +53,8 @@ public enum DeleteOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return DeleteOpStep.DELETE;
+        public Step nextStep(State state) {
+            return DeleteSteps.DELETE;
         }
     },
 
@@ -76,8 +76,8 @@ public enum DeleteOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return state.isNullRecord() ? DeleteOpStep.AFTER_RUN : DeleteOpStep.ON_DELETE;
+        public Step nextStep(State state) {
+            return state.isNullRecord() ? DeleteSteps.AFTER_RUN : DeleteSteps.ON_DELETE;
         }
     },
 
@@ -93,8 +93,8 @@ public enum DeleteOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return DeleteOpStep.AFTER_RUN;
+        public Step nextStep(State state) {
+            return DeleteSteps.AFTER_RUN;
         }
     },
 
@@ -110,11 +110,11 @@ public enum DeleteOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    DeleteOpStep() {
+    DeleteSteps() {
     }
 }

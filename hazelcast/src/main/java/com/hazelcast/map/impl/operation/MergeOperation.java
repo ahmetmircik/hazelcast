@@ -21,8 +21,8 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.MergeOpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.MergeSteps;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
@@ -109,8 +109,8 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return MergeOpStep.READ;
+    protected Step getStartingStep() {
+        return MergeSteps.READ;
     }
 
     @Override

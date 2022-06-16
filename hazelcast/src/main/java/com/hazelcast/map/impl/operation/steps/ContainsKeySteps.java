@@ -17,7 +17,7 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -26,7 +26,7 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum ContainsKeyOpStep implements OpStep {
+public enum ContainsKeySteps implements Step {
 
     // TODO add touch record test?
     READ() {
@@ -43,9 +43,9 @@ public enum ContainsKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ContainsKeyOpStep.LOAD : null;
+                    ? ContainsKeySteps.LOAD : null;
         }
     },
 
@@ -59,13 +59,13 @@ public enum ContainsKeyOpStep implements OpStep {
         public void runStep(State state) {
             assert !ThreadUtil.isRunningOnPartitionThread();
 
-            GetOpStep.LOAD.runStep(state);
+            GetSteps.LOAD.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? null : ContainsKeyOpStep.ON_LOAD;
+                    ? null : ContainsKeySteps.ON_LOAD;
         }
     },
 
@@ -80,11 +80,11 @@ public enum ContainsKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    ContainsKeyOpStep() {
+    ContainsKeySteps() {
     }
 }

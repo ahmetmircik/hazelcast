@@ -23,12 +23,12 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
-public enum RemoveIfSameOpStep implements OpStep {
+public enum RemoveIfSameSteps implements Step {
 
     READ() {
         @Override
@@ -48,8 +48,8 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
-            return state.isNullRecord() ? RemoveIfSameOpStep.LOAD : RemoveIfSameOpStep.ON_LOAD;
+        public RemoveIfSameSteps nextStep(State state) {
+            return state.isNullRecord() ? RemoveIfSameSteps.LOAD : RemoveIfSameSteps.ON_LOAD;
         }
     },
 
@@ -72,9 +72,9 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
+        public RemoveIfSameSteps nextStep(State state) {
             return state.getOldValue() == null
-                    ? RemoveIfSameOpStep.AFTER_RUN : RemoveIfSameOpStep.ON_LOAD;
+                    ? RemoveIfSameSteps.AFTER_RUN : RemoveIfSameSteps.ON_LOAD;
         }
     },
 
@@ -98,9 +98,9 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
+        public RemoveIfSameSteps nextStep(State state) {
             return state.isStopExecution()
-                    ? RemoveIfSameOpStep.AFTER_RUN : RemoveIfSameOpStep.DELETE;
+                    ? RemoveIfSameSteps.AFTER_RUN : RemoveIfSameSteps.DELETE;
         }
     },
 
@@ -117,8 +117,8 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
-            return RemoveIfSameOpStep.ON_DELETE;
+        public RemoveIfSameSteps nextStep(State state) {
+            return RemoveIfSameSteps.ON_DELETE;
         }
     },
 
@@ -139,8 +139,8 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
-            return RemoveIfSameOpStep.AFTER_RUN;
+        public RemoveIfSameSteps nextStep(State state) {
+            return RemoveIfSameSteps.AFTER_RUN;
         }
     },
 
@@ -157,12 +157,12 @@ public enum RemoveIfSameOpStep implements OpStep {
         }
 
         @Override
-        public RemoveIfSameOpStep nextStep(State state) {
+        public RemoveIfSameSteps nextStep(State state) {
             return null;
         }
     };
 
 
-    RemoveIfSameOpStep() {
+    RemoveIfSameSteps() {
     }
 }

@@ -21,13 +21,13 @@ import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
 import java.util.function.Supplier;
 
-public class OpStepSupplier implements Supplier<Runnable> {
+public class StepSupplier implements Supplier<Runnable> {
 
     private final State state;
 
-    private volatile OpStep currentStep;
+    private volatile Step currentStep;
 
-    public OpStepSupplier(OpStep startingStep, State state) {
+    public StepSupplier(Step startingStep, State state) {
         this.state = state;
         this.currentStep = startingStep;
     }
@@ -72,14 +72,14 @@ public class OpStepSupplier implements Supplier<Runnable> {
     }
 
     // TODO remove this method
-    private void assertStepTypeSameWithInitial(OpStep nextOpStep) {
+    private void assertStepTypeSameWithInitial(Step nextStep) {
 //                assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
 //                        : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
 //                        nextStep.getClass().getSuperclass());
     }
 
-    public static Supplier<Runnable> newOpStepSupplier(OpStep startingStep, State state) {
-        return new OpStepSupplier(startingStep, state);
+    public static Supplier<Runnable> newStepSupplier(Step startingStep, State state) {
+        return new StepSupplier(startingStep, state);
     }
 
 

@@ -20,7 +20,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.GetAllOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -32,7 +32,7 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // FIXME: map-store load all should be called
 // TODO: re-run upon NOOME
-public enum GetAllOpStep implements OpStep {
+public enum GetAllSteps implements Step {
 
     READ() {
         @Override
@@ -48,9 +48,9 @@ public enum GetAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return !state.getKeysToLoad().isEmpty()
-                    ? GetAllOpStep.LOAD_ALL : GetAllOpStep.PROCESS;
+                    ? GetAllSteps.LOAD_ALL : GetAllSteps.PROCESS;
         }
     },
 
@@ -64,12 +64,12 @@ public enum GetAllOpStep implements OpStep {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            EPMultiKeyOpStep.LOAD_ALL.runStep(state);
+            EPMultiKeySteps.LOAD_ALL.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return GetAllOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return GetAllSteps.PROCESS;
         }
     },
 
@@ -90,11 +90,11 @@ public enum GetAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    GetAllOpStep() {
+    GetAllSteps() {
     }
 }

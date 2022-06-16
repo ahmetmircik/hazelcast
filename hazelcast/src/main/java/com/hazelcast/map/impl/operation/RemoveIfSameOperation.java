@@ -19,8 +19,8 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.RemoveIfSameOpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.RemoveIfSameSteps;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -63,8 +63,8 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return RemoveIfSameOpStep.READ;
+    protected Step getStartingStep() {
+        return RemoveIfSameSteps.READ;
     }
 
     @Override

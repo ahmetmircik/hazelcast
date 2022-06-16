@@ -23,7 +23,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -41,7 +41,7 @@ import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: Handle backup operations for this step since backup handling a bit different here.
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPFullScanOpStep implements OpStep {
+public enum EPFullScanSteps implements Step {
 
     PROCESS() {
         @Override
@@ -125,7 +125,7 @@ public enum EPFullScanOpStep implements OpStep {
                     .setEntryOperator(operator(state.getOperation(),
                             state.getEntryProcessor(), state.getPredicate()));
 
-            EPSingleKeyOpStep.PROCESS.runStep(singleKeyState);
+            EPSingleKeySteps.PROCESS.runStep(singleKeyState);
 
             EntryEventType eventType = singleKeyState.getOperator().getEventType();
             if (eventType == null) {
@@ -149,7 +149,7 @@ public enum EPFullScanOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return !state.getToStore().isEmpty() || !state.getToRemove().isEmpty()
                     ? STORE_OR_DELETE : ON_STORE_OR_DELETE;
         }
@@ -165,17 +165,17 @@ public enum EPFullScanOpStep implements OpStep {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutOpStep.STORE.runStep(s);
+                PutSteps.STORE.runStep(s);
             }
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteOpStep.DELETE.runStep(s);
+                DeleteSteps.DELETE.runStep(s);
             }
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return ON_STORE_OR_DELETE;
         }
     },
@@ -185,7 +185,7 @@ public enum EPFullScanOpStep implements OpStep {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutOpStep.ON_STORE.runStep(s);
+                PutSteps.ON_STORE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onAddedOrUpdated0(s.getNewValue());
@@ -199,7 +199,7 @@ public enum EPFullScanOpStep implements OpStep {
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteOpStep.ON_DELETE.runStep(s);
+                DeleteSteps.ON_DELETE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onRemove0();
@@ -213,11 +213,11 @@ public enum EPFullScanOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    EPFullScanOpStep() {
+    EPFullScanSteps() {
     }
 }

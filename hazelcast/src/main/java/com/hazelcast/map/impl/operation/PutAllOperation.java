@@ -22,8 +22,8 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.IMap;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.PutAllOpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.PutAllSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
@@ -104,8 +104,8 @@ public class PutAllOperation extends MapOperation
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return PutAllOpStep.READ;
+    protected Step getStartingStep() {
+        return PutAllSteps.READ;
     }
 
     public boolean isTriggerMapLoader() {

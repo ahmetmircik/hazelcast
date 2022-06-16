@@ -24,7 +24,7 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.PutAllOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -45,7 +45,7 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // FIXME: map-store load all should be called
 // TODO: re-run upon NOOME
-public enum PutAllOpStep implements OpStep {
+public enum PutAllSteps implements Step {
 
     READ() {
         @Override
@@ -74,8 +74,8 @@ public enum PutAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return PutAllOpStep.LOAD_ALL_STORE_ALL;
+        public Step nextStep(State state) {
+            return PutAllSteps.LOAD_ALL_STORE_ALL;
         }
     },
 
@@ -90,7 +90,7 @@ public enum PutAllOpStep implements OpStep {
             assert !isRunningOnPartitionThread();
 
             if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
-                EPMultiKeyOpStep.LOAD_ALL.runStep(state);
+                EPMultiKeySteps.LOAD_ALL.runStep(state);
             }
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
@@ -113,8 +113,8 @@ public enum PutAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return PutAllOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return PutAllSteps.PROCESS;
         }
     },
 
@@ -156,7 +156,7 @@ public enum PutAllOpStep implements OpStep {
                         .setStaticPutParams(loadOldValue
                                 ? StaticParams.PUT_PARAMS : StaticParams.SET_PARAMS);
 
-                PutOpStep.ON_STORE.runStep(perKeyState);
+                PutSteps.ON_STORE.runStep(perKeyState);
 
                 if (loadOldValue && oldValue != null) {
                     // TODO why do we need to convert to heap data here?
@@ -168,7 +168,7 @@ public enum PutAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -221,11 +221,11 @@ public enum PutAllOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    PutAllOpStep() {
+    PutAllSteps() {
     }
 }

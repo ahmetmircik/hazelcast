@@ -20,8 +20,8 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.ContainsKeyOpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.ContainsKeySteps;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.WaitNotifyKey;
@@ -57,8 +57,8 @@ public class ContainsKeyOperation
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return ContainsKeyOpStep.READ;
+    protected Step getStartingStep() {
+        return ContainsKeySteps.READ;
     }
 
     @Override

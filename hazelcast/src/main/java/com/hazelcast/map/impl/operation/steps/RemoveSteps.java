@@ -16,19 +16,18 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
-public enum RemoveOpStep implements OpStep {
+public enum RemoveSteps implements Step {
 
     READ() {
         @Override
@@ -48,11 +47,11 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
+        public RemoveSteps nextStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            return state.isNullRecord() ? RemoveOpStep.LOAD
+            return state.isNullRecord() ? RemoveSteps.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveOpStep.DELETE : RemoveOpStep.AFTER_RUN);
+                    ? RemoveSteps.DELETE : RemoveSteps.AFTER_RUN);
         }
     },
 
@@ -73,8 +72,8 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
-            return state.getOldValue() == null ? RemoveOpStep.AFTER_RUN : RemoveOpStep.ON_LOAD;
+        public RemoveSteps nextStep(State state) {
+            return state.getOldValue() == null ? RemoveSteps.AFTER_RUN : RemoveSteps.ON_LOAD;
         }
     },
 
@@ -86,8 +85,8 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
-            return RemoveOpStep.AFTER_RUN;
+        public RemoveSteps nextStep(State state) {
+            return RemoveSteps.AFTER_RUN;
         }
     },
 
@@ -104,8 +103,8 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
-            return RemoveOpStep.ON_DELETE;
+        public RemoveSteps nextStep(State state) {
+            return RemoveSteps.ON_DELETE;
         }
     },
 
@@ -121,8 +120,8 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
-            return RemoveOpStep.AFTER_RUN;
+        public RemoveSteps nextStep(State state) {
+            return RemoveSteps.AFTER_RUN;
         }
     },
 
@@ -139,12 +138,12 @@ public enum RemoveOpStep implements OpStep {
         }
 
         @Override
-        public RemoveOpStep nextStep(State state) {
+        public RemoveSteps nextStep(State state) {
             return null;
         }
     };
 
 
-    RemoveOpStep() {
+    RemoveSteps() {
     }
 }

@@ -22,8 +22,8 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.KeyBasedMapOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.RemoveOpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.RemoveSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.proxy.MapProxyImpl;
 import com.hazelcast.nio.serialization.DataSerializableFactory;
@@ -144,8 +144,8 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
         }
 
         @Override
-        protected OpStep getStartingOpStep() {
-            return RemoveOpStep.READ;
+        protected Step getStartingStep() {
+            return RemoveSteps.READ;
         }
 
         @Override

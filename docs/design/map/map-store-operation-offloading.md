@@ -38,19 +38,19 @@ logic that updates the internals remains same.
 
 #### Implementation
 We divide MapStore interaction needed operations into parts which can be executed separately.
-These self executable parts are called `OpStep`:
+These self executable parts are called `Step`:
 ```java
-interface OpStep {
+interface Step {
 
     void runStep(State state);
 
-    OpStep nextStep(State state);
+    Step nextStep(State state);
 
     boolean isOffloadStep();
 }
 ```
 
-And we model an operation as a sequence of `OpStep`s.
+And we model an operation as a sequence of `Step`s.
 
 #### Example Model for IMap#get
 For instance, sequence of get operation steps are: `READ`,`LOAD`,`ON_LOAD`,`RESPONSE`,`AFTER_RUN`. 
@@ -62,7 +62,7 @@ Upon `LOAD` finishes, execution is restarted in partition thread again from the 
 If no loading from MapStore is required, all steps are
 executed in partition thread and no offloading is done.
 
-`State` is used to pass state between `OpStep`s.
+`State` is used to pass state between `Step`s.
 
 
 #### Flow in Partition Thread
@@ -79,26 +79,26 @@ executed in partition thread and no offloading is done.
                                   | If Yes
                                   |   
           ------------------------------------------------------
-            Put associated OpStep in offloaded MapStore
+            Put associated Step in offloaded MapStore
             operations queue.
           ------------------------------------------------------
                                   | 
                                   |
           -------------------------------------------------------
-          Start running OpStep chain of this operation and execute  <---
-          OpSteps which can be executed here without needing offload.   |
+          Start running Step chain of this operation and execute  <---
+          Steps which can be executed here without needing offload.   |
           --------------------------------------------------------      |
                                   |                                     | 
                                   |                                     |
                                   |                                     |
           ----------------------------------------------------    If No |
-                  Do we encounter offload needed OpStep?      ---------->
+                  Do we encounter offload needed Step?      ---------->
           ----------------------------------------------------
                                   | 
                                   | If Yes
                                   |
           -------------------------------------------------------
-                  Offload next OpStep and free partition thread
+                  Offload next Step and free partition thread
           -------------------------------------------------------
                                   | 
                                   |
@@ -109,18 +109,18 @@ executed in partition thread and no offloading is done.
 
 #### Flow in Offloaded Thread
           -------------------------------------------------------
-            Run offload needed OpStep of this operation here         <---
+            Run offload needed Step of this operation here         <---
           --------------------------------------------------------      |
                                   |                                     | 
                                   |                                     |
           ----------------------------------------------------   If Yes |
-                  Do we encounter offload needed OpStep?      ---------->
+                  Do we encounter offload needed Step?      ---------->
           ----------------------------------------------------
                                   | 
                                   | If No
                                   |
           -------------------------------------------------------
-              Schedule next OpStep to run in partition thread
+              Schedule next Step to run in partition thread
           -------------------------------------------------------
                                   | 
                                   |

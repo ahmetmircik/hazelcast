@@ -23,7 +23,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -38,7 +38,7 @@ import java.util.Map;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPMultiKeyOpStep implements OpStep {
+public enum EPMultiKeySteps implements Step {
 
     FIND_KEYS_TO_LOAD() {
         @Override
@@ -62,12 +62,12 @@ public enum EPMultiKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             if (!state.getKeysToLoad().isEmpty()) {
-                return EPMultiKeyOpStep.LOAD_ALL;
+                return EPMultiKeySteps.LOAD_ALL;
             }
             // FIXME
-            return EPMultiKeyOpStep.PROCESS;
+            return EPMultiKeySteps.PROCESS;
         }
     },
 
@@ -84,9 +84,9 @@ public enum EPMultiKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getLoadedKeyValuePairs().isEmpty()
-                    ? EPMultiKeyOpStep.PROCESS : EPMultiKeyOpStep.ON_LOAD_ALL;
+                    ? EPMultiKeySteps.PROCESS : EPMultiKeySteps.ON_LOAD_ALL;
         }
     },
 
@@ -112,8 +112,8 @@ public enum EPMultiKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return EPMultiKeyOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return EPMultiKeySteps.PROCESS;
         }
     },
 
@@ -143,7 +143,7 @@ public enum EPMultiKeyOpStep implements OpStep {
                         .setEntryOperator(operator(state.getOperation(),
                                 state.getEntryProcessor(), state.getPredicate()));
 
-                EPSingleKeyOpStep.PROCESS.runStep(singleKeyState);
+                EPSingleKeySteps.PROCESS.runStep(singleKeyState);
 
                 EntryEventType eventType = singleKeyState.getOperator().getEventType();
                 if (eventType == null) {
@@ -168,7 +168,7 @@ public enum EPMultiKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return !state.getToStore().isEmpty() || !state.getToRemove().isEmpty()
                     ? STORE_OR_DELETE : ON_STORE_OR_DELETE;
         }
@@ -184,17 +184,17 @@ public enum EPMultiKeyOpStep implements OpStep {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutOpStep.STORE.runStep(s);
+                PutSteps.STORE.runStep(s);
             }
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteOpStep.DELETE.runStep(s);
+                DeleteSteps.DELETE.runStep(s);
             }
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return ON_STORE_OR_DELETE;
         }
     },
@@ -204,7 +204,7 @@ public enum EPMultiKeyOpStep implements OpStep {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutOpStep.ON_STORE.runStep(s);
+                PutSteps.ON_STORE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onAddedOrUpdated0(s.getNewValue());
@@ -218,7 +218,7 @@ public enum EPMultiKeyOpStep implements OpStep {
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteOpStep.ON_DELETE.runStep(s);
+                DeleteSteps.ON_DELETE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onRemove0();
@@ -232,11 +232,11 @@ public enum EPMultiKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    EPMultiKeyOpStep() {
+    EPMultiKeySteps() {
     }
 }

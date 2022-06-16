@@ -23,7 +23,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.MergeOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -40,7 +40,7 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
 
 // TODO: re-run upon NOOME
-public enum MergeOpStep implements OpStep {
+public enum MergeSteps implements Step {
 
     READ() {
         @Override
@@ -87,13 +87,13 @@ public enum MergeOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             boolean persistenceEnabled = ((DefaultRecordStore) state.getRecordStore())
                     .persistenceEnabledFor(state.getCallerProvenance());
 
             List outcomes = (List) state.getResult();
             return !outcomes.isEmpty() && persistenceEnabled
-                    ? MergeOpStep.STORE_OR_DELETE : MergeOpStep.PROCESS;
+                    ? MergeSteps.STORE_OR_DELETE : MergeSteps.PROCESS;
         }
     },
 
@@ -125,12 +125,12 @@ public enum MergeOpStep implements OpStep {
                 if (oldValue == null && newValue != null
                         || oldValue != null && newValue != null) {
                     // put or update
-                    PutOpStep.STORE.runStep(perKeyState);
+                    PutSteps.STORE.runStep(perKeyState);
                     //set new value returned from map-store
                     outcomes.set(i + 2, perKeyState.getNewValue());
                 } else if (oldValue != null && newValue == null) {
                     // remove
-                    DeleteOpStep.DELETE.runStep(perKeyState);
+                    DeleteSteps.DELETE.runStep(perKeyState);
                 }
             }
 
@@ -138,8 +138,8 @@ public enum MergeOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return MergeOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return MergeSteps.PROCESS;
         }
     },
 
@@ -184,16 +184,16 @@ public enum MergeOpStep implements OpStep {
                     }
 
                     // put or update
-                    PutOpStep.ON_STORE.runStep(perKeyState);
+                    PutSteps.ON_STORE.runStep(perKeyState);
                 } else if (oldValue != null && newValue == null) {
                     // remove
-                    DeleteOpStep.ON_DELETE.runStep(perKeyState);
+                    DeleteSteps.ON_DELETE.runStep(perKeyState);
                 }
             }
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -269,11 +269,11 @@ public enum MergeOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    MergeOpStep() {
+    MergeSteps() {
     }
 }

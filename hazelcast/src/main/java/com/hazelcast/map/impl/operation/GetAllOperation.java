@@ -21,8 +21,8 @@ import com.hazelcast.internal.partition.IPartitionService;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.GetAllOpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.GetAllSteps;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -90,8 +90,8 @@ public class GetAllOperation extends MapOperation
     }
 
     @Override
-    protected OpStep getStartingOpStep() {
-        return GetAllOpStep.READ;
+    protected Step getStartingStep() {
+        return GetAllSteps.READ;
     }
 
     @Override

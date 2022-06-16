@@ -22,7 +22,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -32,7 +32,7 @@ import com.hazelcast.map.impl.recordstore.StaticParams;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // TODO: re-run upon NOOME
-public enum PutOpStep implements OpStep {
+public enum PutSteps implements Step {
 
     READ() {
         @Override
@@ -47,8 +47,8 @@ public enum PutOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return state.getOldValue() == null ? PutOpStep.LOAD : PutOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return state.getOldValue() == null ? PutSteps.LOAD : PutSteps.PROCESS;
         }
     },
 
@@ -71,13 +71,13 @@ public enum PutOpStep implements OpStep {
                 state.setOldValue(((DefaultRecordStore) state.getRecordStore())
                         .loadValueOf(state.getKey()));
             } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                GetOpStep.LOAD.runStep(state);
+                GetSteps.LOAD.runStep(state);
             }
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return PutOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return PutSteps.PROCESS;
         }
     },
 
@@ -142,7 +142,7 @@ public enum PutOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
                 return AFTER_RUN;
@@ -167,7 +167,7 @@ public enum PutOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return ON_STORE;
         }
     },
@@ -198,7 +198,7 @@ public enum PutOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -212,11 +212,11 @@ public enum PutOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    PutOpStep() {
+    PutSteps() {
     }
 }

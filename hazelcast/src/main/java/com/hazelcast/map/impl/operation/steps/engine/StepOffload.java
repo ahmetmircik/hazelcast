@@ -21,16 +21,16 @@ import com.hazelcast.spi.impl.operationservice.Offload;
 
 import java.util.Queue;
 
-public class OpStepOffload extends Offload {
+public class StepOffload extends Offload {
 
-    private final OpStepRunner runner;
-    private final Queue<OpStepRunner> offloadQueue;
+    private final StepRunner runner;
+    private final Queue<StepRunner> offloadQueue;
 
-    public OpStepOffload(MapOperation offloadedOperation,
-                         String mapName, State state, OpStep startingOpStep) {
+    public StepOffload(MapOperation offloadedOperation,
+                       String mapName, State state, Step startingStep) {
         super(offloadedOperation);
-        this.runner = new OpStepRunner(offloadedOperation, state,
-                startingOpStep, mapName);
+        this.runner = new StepRunner(offloadedOperation, state,
+                startingStep, mapName);
         this.offloadQueue = offloadedOperation.getMapContainer().getMapServiceContext()
                 .getPartitionContainer(state.getPartitionId())
                 .getOffloadQueue(mapName);

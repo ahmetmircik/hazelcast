@@ -21,7 +21,7 @@ import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
@@ -32,7 +32,7 @@ import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO: UPDATE BACKUP!!!
 // TODO: what happens if partition is migrating and we offload map load.
-public enum EPSingleKeyOpStep implements OpStep {
+public enum EPSingleKeySteps implements Step {
 
     EP_START() {
         @Override
@@ -46,15 +46,15 @@ public enum EPSingleKeyOpStep implements OpStep {
                 return;
             }
 
-            GetOpStep.READ.runStep(state);
+            GetSteps.READ.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             if (state.isStopExecution()) {
-                return EPSingleKeyOpStep.RESPONSE;
+                return EPSingleKeySteps.RESPONSE;
             }
-            EPSingleKeyOpStep epStep = state.getOldValue() == null ? EPSingleKeyOpStep.LOAD : EPSingleKeyOpStep.PROCESS;
+            EPSingleKeySteps epStep = state.getOldValue() == null ? EPSingleKeySteps.LOAD : EPSingleKeySteps.PROCESS;
             return epStep;
         }
     },
@@ -69,24 +69,24 @@ public enum EPSingleKeyOpStep implements OpStep {
         public void runStep(State state) {
             assert !ThreadUtil.isRunningOnPartitionThread();
 
-            GetOpStep.LOAD.runStep(state);
+            GetSteps.LOAD.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return state.getOldValue() == null ? EPSingleKeyOpStep.PROCESS : EPSingleKeyOpStep.ON_LOAD;
+        public Step nextStep(State state) {
+            return state.getOldValue() == null ? EPSingleKeySteps.PROCESS : EPSingleKeySteps.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            GetOpStep.ON_LOAD.runStep(state);
+            GetSteps.ON_LOAD.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return EPSingleKeyOpStep.PROCESS;
+        public Step nextStep(State state) {
+            return EPSingleKeySteps.PROCESS;
         }
     },
 
@@ -137,7 +137,7 @@ public enum EPSingleKeyOpStep implements OpStep {
                         state.setTtl(entryOperator.getEntry().getNewTtl());
                         break;
                     case REMOVED:
-                        DeleteOpStep.READ.runStep(state);
+                        DeleteSteps.READ.runStep(state);
                         break;
                     default:
                         throw new IllegalArgumentException("Unexpected event found:" + eventType);
@@ -146,7 +146,7 @@ public enum EPSingleKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             EntryEventType eventType = state.getOperator().getEventType();
             if (eventType == null) {
                 return RESPONSE;
@@ -172,11 +172,11 @@ public enum EPSingleKeyOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            PutOpStep.STORE.runStep(state);
+            PutSteps.STORE.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return ON_STORE;
         }
     },
@@ -184,11 +184,11 @@ public enum EPSingleKeyOpStep implements OpStep {
     ON_STORE() {
         @Override
         public void runStep(State state) {
-            PutOpStep.ON_STORE.runStep(state);
+            PutSteps.ON_STORE.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -201,11 +201,11 @@ public enum EPSingleKeyOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            DeleteOpStep.DELETE.runStep(state);
+            DeleteSteps.DELETE.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return ON_DELETE;
         }
     },
@@ -213,11 +213,11 @@ public enum EPSingleKeyOpStep implements OpStep {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            DeleteOpStep.ON_DELETE.runStep(state);
+            DeleteSteps.ON_DELETE.runStep(state);
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return RESPONSE;
         }
     },
@@ -245,11 +245,11 @@ public enum EPSingleKeyOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    EPSingleKeyOpStep() {
+    EPSingleKeySteps() {
     }
 }

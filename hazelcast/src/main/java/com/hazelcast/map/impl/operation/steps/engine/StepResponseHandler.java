@@ -28,7 +28,7 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO opLatencyDistributions?
-public class OpStepResponseHandler {
+public class StepResponseHandler {
 
     public static void sendResponse(State state) {
         assert ThreadUtil.isRunningOnPartitionThread();

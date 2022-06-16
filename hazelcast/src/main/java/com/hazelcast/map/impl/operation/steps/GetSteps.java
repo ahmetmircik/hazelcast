@@ -23,14 +23,14 @@ import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
 import com.hazelcast.map.impl.operation.GetOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum GetOpStep implements OpStep {
+public enum GetSteps implements Step {
 
     // TODO add touch record test?
     READ() {
@@ -44,8 +44,8 @@ public enum GetOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return state.getOldValue() == null ? GetOpStep.LOAD : GetOpStep.RESPONSE;
+        public Step nextStep(State state) {
+            return state.getOldValue() == null ? GetSteps.LOAD : GetSteps.RESPONSE;
         }
     },
 
@@ -66,8 +66,8 @@ public enum GetOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return state.getOldValue() == null ? GetOpStep.RESPONSE : GetOpStep.ON_LOAD;
+        public Step nextStep(State state) {
+            return state.getOldValue() == null ? GetSteps.RESPONSE : GetSteps.ON_LOAD;
         }
     },
 
@@ -82,8 +82,8 @@ public enum GetOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
-            return GetOpStep.RESPONSE;
+        public Step nextStep(State state) {
+            return GetSteps.RESPONSE;
         }
     },
 
@@ -106,7 +106,7 @@ public enum GetOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return AFTER_RUN;
         }
     },
@@ -120,11 +120,11 @@ public enum GetOpStep implements OpStep {
         }
 
         @Override
-        public OpStep nextStep(State state) {
+        public Step nextStep(State state) {
             return null;
         }
     };
 
-    GetOpStep() {
+    GetSteps() {
     }
 }

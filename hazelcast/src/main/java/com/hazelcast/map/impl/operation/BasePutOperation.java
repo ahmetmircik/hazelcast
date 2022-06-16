@@ -18,8 +18,8 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.PutOpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.PutSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
@@ -54,8 +54,8 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         throw new UnsupportedOperationException();
     }
 
-    protected OpStep getStartingOpStep() {
-        return PutOpStep.READ;
+    protected Step getStartingStep() {
+        return PutSteps.READ;
     }
 
     protected State newState() {

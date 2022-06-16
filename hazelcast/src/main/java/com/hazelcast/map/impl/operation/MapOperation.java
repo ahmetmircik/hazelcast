@@ -32,8 +32,8 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepOffload;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -115,7 +115,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         // TODO: no map-store offload for tiered storage
 //        mapStoreOffloadEnabled = hasMapStore
         MapConfig mapConfig = mapContainer.getMapConfig();
-        mapStoreOffloadEnabled = getStartingOpStep() != null
+        mapStoreOffloadEnabled = getStartingStep() != null
                 && hasMapStore
                 && !mapConfig.getTieredStoreConfig().isEnabled()
                 && mapConfig.getMapStoreConfig().getWriteDelaySeconds() == 0;
@@ -152,15 +152,15 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (mapStoreOffloadEnabled) {
             // record-store can be null for some ops: see ClearOperation
-            return new OpStepOffload(this, getName(),
-                    newState(), getStartingOpStep());
+            return new StepOffload(this, getName(),
+                    newState(), getStartingStep());
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected OpStep getStartingOpStep() {
+    protected Step getStartingStep() {
         return null;
     }
 

@@ -23,10 +23,10 @@ import javax.annotation.Nullable;
  * {@link  com.hazelcast.map.impl.operation.PutOperation}
  * <p>
  * By using this interface, an operation can be modeled as
- * a collection of {@link OpStep}. This model is helpful
- * to run OpSteps in threads other than partition threads.
+ * a collection of {@link Step}. This model is helpful
+ * to run Steps in threads other than partition threads.
  */
-public interface OpStep {
+public interface Step {
 
     /**
      * Code to run at this step by using the provided state
@@ -42,7 +42,7 @@ public interface OpStep {
      * @return next step or null if there is no next step.
      */
     @Nullable
-    default OpStep nextStep(State state) {
+    default Step nextStep(State state) {
         throw new UnsupportedOperationException();
     }
 

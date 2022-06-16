@@ -19,7 +19,7 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.map.impl.operation.ClearOperation;
-import com.hazelcast.map.impl.operation.steps.engine.OpStep;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -33,7 +33,7 @@ import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThr
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // TODO: what happens if partition is migrating and we offload map load.
-public enum ClearOpStep implements OpStep {
+public enum ClearSteps implements Step {
 
     CLEAR_MEMORY() {
         @Override
@@ -68,9 +68,9 @@ public enum ClearOpStep implements OpStep {
         }
 
         @Override
-        public ClearOpStep nextStep(State state) {
+        public ClearSteps nextStep(State state) {
             return state.getRecordStore() == null
-                    ? ClearOpStep.AFTER_RUN : ClearOpStep.CLEAR_MAP_STORE;
+                    ? ClearSteps.AFTER_RUN : ClearSteps.CLEAR_MAP_STORE;
         }
     },
 
@@ -90,8 +90,8 @@ public enum ClearOpStep implements OpStep {
         }
 
         @Override
-        public ClearOpStep nextStep(State state) {
-            return ClearOpStep.ON_CLEAR;
+        public ClearSteps nextStep(State state) {
+            return ClearSteps.ON_CLEAR;
         }
     },
 
@@ -109,8 +109,8 @@ public enum ClearOpStep implements OpStep {
         }
 
         @Override
-        public ClearOpStep nextStep(State state) {
-            return ClearOpStep.AFTER_RUN;
+        public ClearSteps nextStep(State state) {
+            return ClearSteps.AFTER_RUN;
         }
     },
 
@@ -123,11 +123,11 @@ public enum ClearOpStep implements OpStep {
         }
 
         @Override
-        public ClearOpStep nextStep(State state) {
+        public ClearSteps nextStep(State state) {
             return null;
         }
     };
 
-    ClearOpStep() {
+    ClearSteps() {
     }
 }
