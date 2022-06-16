@@ -31,9 +31,7 @@ public interface Step {
     /**
      * Code to run at this step by using the provided state
      */
-    default void runStep(State state) {
-        throw new UnsupportedOperationException();
-    }
+    void runStep(State state);
 
     /**
      * Idempotent next step finder.
@@ -42,9 +40,7 @@ public interface Step {
      * @return next step or null if there is no next step.
      */
     @Nullable
-    default Step nextStep(State state) {
-        throw new UnsupportedOperationException();
-    }
+    Step nextStep(State state);
 
     /**
      * @return {@code true} if this step must be

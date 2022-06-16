@@ -70,17 +70,4 @@ public class StepSupplier implements Supplier<Runnable> {
             }
         } while (true);
     }
-
-    // TODO remove this method
-    private void assertStepTypeSameWithInitial(Step nextStep) {
-//                assert initial.getClass().getSuperclass() == nextStep.getClass().getSuperclass()
-//                        : String.format("Expected %s but found %s ", initial.getClass().getSuperclass(),
-//                        nextStep.getClass().getSuperclass());
-    }
-
-    public static Supplier<Runnable> newStepSupplier(Step startingStep, State state) {
-        return new StepSupplier(startingStep, state);
-    }
-
-
 }

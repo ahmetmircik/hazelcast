@@ -38,7 +38,6 @@ import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-import static com.hazelcast.map.impl.operation.steps.engine.StepSupplier.newStepSupplier;
 import static java.lang.String.format;
 
 // TODO: only one execution at a time, subsequent executions should wait previous ones finish.
@@ -72,7 +71,7 @@ public class StepRunner implements PartitionSpecificRunnable {
         this.logger = nodeEngine.getLogger(getClass());
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
-        this.stepSupplier = newStepSupplier(startingStep, state);
+        this.stepSupplier = new StepSupplier(startingStep, state);
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
                         Thread.currentThread().getId(), mapName));

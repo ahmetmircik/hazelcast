@@ -163,11 +163,6 @@ public class State {
         return this;
     }
 
-    public State version(long version) {
-        this.version = version;
-        return this;
-    }
-
     public State setTtl(long ttl) {
         this.ttl = ttl;
         return this;

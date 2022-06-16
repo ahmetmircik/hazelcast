@@ -42,9 +42,6 @@ public class StepOffload extends Offload {
 
         if (offloadQueue.peek() == runner) {
             runner.run();
-        } else {
-            // TODO remove this
-            System.out.println("waiting... ");
         }
     }
 }
