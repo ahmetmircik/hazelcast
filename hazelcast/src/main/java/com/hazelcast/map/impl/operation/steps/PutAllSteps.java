@@ -169,11 +169,11 @@ public enum PutAllSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return RESPONSE;
+            return AFTER_RUN;
         }
     },
 
-    RESPONSE() {
+    AFTER_RUN() {
         @Override
         public void runStep(State state) {
             assertRunningOnPartitionThread();
@@ -216,13 +216,11 @@ public enum PutAllSteps implements Step {
 
                 operation.evict(dataKey);
             }
-
-            operation.invalidateNearCache(operation.getInvalidationKeys());
         }
 
         @Override
         public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

@@ -16,15 +16,12 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
-import com.hazelcast.map.impl.operation.GetOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -77,7 +74,8 @@ public enum GetSteps implements Step {
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());
-            record = recordStore.evictIfExpired(state.getKey(), state.getNow(), false) ? null : record;
+            record = recordStore.evictIfExpired(state.getKey(), state.getNow(), false)
+                    ? null : record;
             state.setOldValue(record == null ? null : record.getValue());
         }
 
@@ -107,21 +105,7 @@ public enum GetSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            ((GetOperation) state.getOperation()).afterRunInternal0((Data) state.getOperation().getResponse());
-        }
-
-        @Override
-        public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

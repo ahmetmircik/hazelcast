@@ -124,7 +124,7 @@ public class PutFromLoadAllOperation extends MapOperation
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         invalidateNearCache(invalidationKeys);
         evict(null);
 

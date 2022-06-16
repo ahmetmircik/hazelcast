@@ -17,16 +17,16 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.EntryOperator;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
@@ -38,7 +38,8 @@ public enum EPSingleKeySteps implements Step {
         @Override
         public void runStep(State state) {
             EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
-            operator.init(state.getKey(), null, null, null, null, null, UNSET);
+            operator.init(state.getKey(), null, null,
+                    null, null, null, UNSET);
             state.setEntryOperator(operator);
 
             if (operator.belongsAnotherPartition(state.getKey())) {
@@ -52,10 +53,10 @@ public enum EPSingleKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             if (state.isStopExecution()) {
-                return EPSingleKeySteps.RESPONSE;
+                return EPSingleKeySteps.AFTER_RUN;
             }
-            EPSingleKeySteps epStep = state.getOldValue() == null ? EPSingleKeySteps.LOAD : EPSingleKeySteps.PROCESS;
-            return epStep;
+            return state.getOldValue() == null
+                    ? EPSingleKeySteps.LOAD : EPSingleKeySteps.PROCESS;
         }
     },
 
@@ -67,14 +68,15 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public void runStep(State state) {
-            assert !ThreadUtil.isRunningOnPartitionThread();
+            assert !isRunningOnPartitionThread();
 
             GetSteps.LOAD.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? EPSingleKeySteps.PROCESS : EPSingleKeySteps.ON_LOAD;
+            return state.getOldValue() == null
+                    ? EPSingleKeySteps.PROCESS : EPSingleKeySteps.ON_LOAD;
         }
     },
 
@@ -149,7 +151,7 @@ public enum EPSingleKeySteps implements Step {
         public Step nextStep(State state) {
             EntryEventType eventType = state.getOperator().getEventType();
             if (eventType == null) {
-                return RESPONSE;
+                return AFTER_RUN;
             }
 
             switch (eventType) {
@@ -189,7 +191,7 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return RESPONSE;
+            return AFTER_RUN;
         }
     },
 
@@ -218,11 +220,11 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return RESPONSE;
+            return AFTER_RUN;
         }
     },
 
-    RESPONSE() {
+    AFTER_RUN() {
         @Override
         public void runStep(State state) {
             assertRunningOnPartitionThread();
@@ -246,7 +248,7 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

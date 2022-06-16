@@ -21,9 +21,8 @@ import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
-import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -40,7 +39,8 @@ public enum PutSteps implements Step {
             assert isRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
+            Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(),
+                    state.getStaticParams().isBackup());
             if (record != null) {
                 state.setOldValue(record.getValue());
             }
@@ -48,7 +48,8 @@ public enum PutSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? PutSteps.LOAD : PutSteps.PROCESS;
+            return state.getOldValue() == null
+                    ? PutSteps.LOAD : PutSteps.PROCESS;
         }
     },
 
@@ -145,7 +146,7 @@ public enum PutSteps implements Step {
         public Step nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
-                return AFTER_RUN;
+                return ResponseSteps.SEND_RESPONSE;
             }
             return STORE;
         }
@@ -199,21 +200,7 @@ public enum PutSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            ((BasePutOperation) state.getOperation()).afterRunInternal();
-        }
-
-        @Override
-        public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

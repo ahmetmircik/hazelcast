@@ -16,11 +16,16 @@
 
 package com.hazelcast.map.impl.operation.steps.engine;
 
+import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.spi.impl.operationservice.Notifier;
+import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.spi.impl.operationservice.OperationService;
 import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
@@ -43,17 +48,42 @@ public class StepResponseHandler {
                     backupAcks, operation.isUrgent());
         }
         operation.sendResponse(response);
+
+        try {
+            if (operation instanceof Notifier) {
+                final Notifier notifier = (Notifier) operation;
+                if (notifier.shouldNotify()) {
+                    ((NodeEngineImpl) state.getRecordStore().getMapContainer().getMapServiceContext().getNodeEngine())
+                            .getOperationParker().unpark(notifier);
+                }
+            }
+        } catch (Throwable e) {
+            logOperationError(operation, e);
+        }
+    }
+
+
+    private static void logOperationError(Operation op, Throwable e) {
+        if (e instanceof OutOfMemoryError) {
+            OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
+        }
+        op.logError(e);
     }
 
     private static int handleBackup(State state) {
         assert state.getPartitionId() != UNSET;
 
-        MapContainer mapContainer = state.getOperation().getMapContainer();
-        MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-
-        OperationRunner runner = ((OperationServiceImpl) mapServiceContext.getNodeEngine().getOperationService())
+        OperationService operationService = getOperationService(state);
+        OperationRunner runner = ((OperationServiceImpl) operationService)
                 .getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
         return ((OperationRunnerImpl) runner).getBackupHandler().sendBackups(state.getOperation());
+    }
+
+    private static OperationService getOperationService(State state) {
+        MapContainer mapContainer = state.getOperation().getMapContainer();
+        MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+        OperationService operationService = mapServiceContext.getNodeEngine().getOperationService();
+        return operationService;
     }
 
 }

@@ -62,7 +62,7 @@ public class DeleteOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (success) {
             super.afterRunInternal();
         }

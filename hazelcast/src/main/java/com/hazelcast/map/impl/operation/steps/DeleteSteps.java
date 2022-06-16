@@ -19,9 +19,8 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
-import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -77,7 +76,8 @@ public enum DeleteSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return state.isNullRecord() ? DeleteSteps.AFTER_RUN : DeleteSteps.ON_DELETE;
+            return state.isNullRecord()
+                    ? ResponseSteps.SEND_RESPONSE : DeleteSteps.ON_DELETE;
         }
     },
 
@@ -94,27 +94,9 @@ public enum DeleteSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return DeleteSteps.AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
-            // TODO: prevent unneeded serialization for oldValue
-            if (!state.isNullRecord()) {
-                ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
-            }
-        }
-
-        @Override
-        public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
-
     DeleteSteps() {
     }
 }

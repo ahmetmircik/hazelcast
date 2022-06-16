@@ -196,7 +196,7 @@ public class PutAllOperation extends MapOperation
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         invalidateNearCache(invalidationKeys);
 
         super.afterRunInternal();

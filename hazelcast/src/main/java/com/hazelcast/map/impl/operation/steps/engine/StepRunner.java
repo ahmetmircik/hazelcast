@@ -20,7 +20,6 @@ import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.instance.impl.Node;
 import com.hazelcast.instance.impl.NodeState;
 import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
-import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.operation.MapOperation;
@@ -32,40 +31,30 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-import static java.lang.String.format;
+import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 
-// TODO: only one execution at a time, subsequent executions should wait previous ones finish.
 public class StepRunner implements PartitionSpecificRunnable {
 
-    // TODO is this too much? per-partition-per-map
-    // TODO destroy this on map destroy
-    private static final String OFFLOAD_EXECUTOR_NAME_FORMAT = "%d-%s-mapStoreOffloadingExecutor";
-
+    private final int partitionId;
     private final Node node;
     private final ILogger logger;
     private final Executor executor;
-    private final Supplier<Runnable> stepSupplier;
-    private final OperationExecutor operationExecutor;
     private final Operation operation;
     private final Queue<StepRunner> offloadQueue;
-    private final State state;
-    private int partitionId;
+    private final Supplier<Runnable> stepSupplier;
+    private final OperationExecutor operationExecutor;
 
     public StepRunner(MapOperation operation,
                       State state,
                       Step startingStep,
                       String mapName) {
+        assertRunningOnPartitionThread();
         this.operation = operation;
-        this.state = state;
-
-        ThreadUtil.assertRunningOnPartitionThread();
-
         NodeEngine nodeEngine = operation.getNodeEngine();
         this.node = ((NodeEngineImpl) nodeEngine).getNode();
         this.logger = nodeEngine.getLogger(getClass());
@@ -73,12 +62,16 @@ public class StepRunner implements PartitionSpecificRunnable {
                 .getOperationService()).getOperationExecutor();
         this.stepSupplier = new StepSupplier(startingStep, state);
         this.executor = nodeEngine.getExecutionService()
-                .getExecutor(format(OFFLOAD_EXECUTOR_NAME_FORMAT,
-                        Thread.currentThread().getId(), mapName));
+                .getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
         this.partitionId = state.getPartitionId();
         this.offloadQueue = operation.getMapContainer().getMapServiceContext()
                 .getPartitionContainer(state.getPartitionId())
                 .getOffloadQueue(mapName);
+    }
+
+    @Override
+    public int getPartitionId() {
+        return partitionId;
     }
 
     // TODO: What happens in the event of exception?
@@ -89,37 +82,56 @@ public class StepRunner implements PartitionSpecificRunnable {
             do {
                 step = stepSupplier.get();
                 if (step == null) {
-                    runSingleStep(new PartitionSpecificRunnable() {
-                        @Override
-                        public void run() {
-                            assertRunningOnPartitionThread();
-
-                            StepResponseHandler.sendResponse(state);
-                            nextRunner();
-                        }
-
-                        @Override
-                        public int getPartitionId() {
-                            return partitionId;
-                        }
-                    });
-
+                    startNextStepRunner();
                     return;
                 }
-            } while (doRun(step));
-        } catch (Throwable t) {
-            runSingleStep(new PartitionSpecificRunnable() {
-                @Override
-                public void run() {
-                    handleOperationError(operation, t);
-                    nextRunner();
-                }
 
-                @Override
-                public int getPartitionId() {
-                    return partitionId;
+                if (!runDirect(step)) {
+                    offloadRun(step, this);
+                    return;
                 }
-            });
+            } while (true);
+        } catch (Throwable t) {
+            handleErrorAndStartNexStepRunner(t);
+        }
+    }
+
+    private void handleErrorAndStartNexStepRunner(Throwable t) {
+        PartitionSpecificRunnable runnable = new PartitionSpecificRunnable() {
+            @Override
+            public void run() {
+                handleOperationError(operation, t);
+                nextRunner();
+            }
+
+            @Override
+            public int getPartitionId() {
+                return partitionId;
+            }
+        };
+
+        if (!runDirect(runnable)) {
+            offloadRun(runnable, runnable);
+        }
+    }
+
+    private void startNextStepRunner() {
+        PartitionSpecificRunnable runnable = new PartitionSpecificRunnable() {
+            @Override
+            public void run() {
+                assertRunningOnPartitionThread();
+
+                nextRunner();
+            }
+
+            @Override
+            public int getPartitionId() {
+                return partitionId;
+            }
+        };
+
+        if (!runDirect(runnable)) {
+            offloadRun(runnable, runnable);
         }
     }
 
@@ -132,6 +144,31 @@ public class StepRunner implements PartitionSpecificRunnable {
         StepRunner runner = offloadQueue.peek();
         if (runner != null) {
             runner.run();
+        }
+    }
+
+    private boolean runDirect(Runnable step) {
+        if (step instanceof PartitionSpecificRunnable) {
+            if (isRunningOnPartitionThread()) {
+                step.run();
+                return true;
+            }
+        } else {
+            if (!isRunningOnPartitionThread()) {
+                step.run();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // TODO handle this better
+    private void offloadRun(Runnable step,
+                            PartitionSpecificRunnable offload) {
+        if (step instanceof PartitionSpecificRunnable) {
+            operationExecutor.execute(offload);
+        } else {
+            executor.execute(offload);
         }
     }
 
@@ -155,71 +192,17 @@ public class StepRunner implements PartitionSpecificRunnable {
         }
     }
 
-    // TODO refactor this step and unify it with `doRun` method.
-    private boolean runSingleStep(Runnable step) {
-        if (step instanceof PartitionSpecificRunnable) {
-            if (isRunningOnPartitionThread()) {
-                step.run();
-                return true;
-            } else {
-                operationExecutor.execute(((PartitionSpecificRunnable) step));
-                return false;
-            }
-        } else {
-            if (isRunningOnPartitionThread()) {
-                executor.execute(step);
-                return false;
-            } else {
-                step.run();
-                return true;
-            }
-        }
-    }
-
-    private CompletableFuture executeAsync(Runnable step) {
-        if (step instanceof PartitionSpecificRunnable) {
-            CompletableFuture completableFuture = new CompletableFuture<>();
-            PartitionSpecificRunnable runnable = wrapRunnable(step, completableFuture);
-            if (isRunningOnPartitionThread()) {
-                runnable.run();
-            } else {
-                operationExecutor.execute(runnable);
-            }
-            return completableFuture;
-        }
-        return CompletableFuture.runAsync(step, executor);
-    }
-
-    private PartitionSpecificRunnable wrapRunnable(Runnable step,
-                                                   CompletableFuture completableFuture) {
-        return new PartitionSpecificRunnable() {
-            @Override
-            public int getPartitionId() {
-                return ((PartitionSpecificRunnable) step).getPartitionId();
-            }
-
-            @Override
-            public void run() {
-                try {
-                    step.run();
-                    completableFuture.complete(null);
-                } catch (Throwable t) {
-                    completableFuture.completeExceptionally(t);
-                    throw ExceptionUtil.rethrow(t);
-                }
-            }
-        };
-    }
-
-    // TODO handle this inside partition thread
     private void handleOperationError(Operation operation, Throwable e) {
+        assertRunningOnPartitionThread();
+
         if (e instanceof OutOfMemoryError) {
             OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
         }
         try {
             operation.onExecutionFailure(e);
         } catch (Throwable t) {
-            logger.warning("While calling 'operation.onFailure(e)'... op: " + operation + ", error: " + e, t);
+            logger.warning("While calling 'operation.onFailure(e)'... op: "
+                    + operation + ", error: " + e, t);
         }
 
         operation.logError(e);
@@ -242,10 +225,5 @@ public class StepRunner implements PartitionSpecificRunnable {
         } catch (Throwable t) {
             logger.warning("While sending op error... op: " + operation + ", error: " + e, t);
         }
-    }
-
-    @Override
-    public int getPartitionId() {
-        return partitionId;
     }
 }

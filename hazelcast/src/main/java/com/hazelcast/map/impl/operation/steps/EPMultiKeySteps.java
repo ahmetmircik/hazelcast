@@ -233,7 +233,7 @@ public enum EPMultiKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

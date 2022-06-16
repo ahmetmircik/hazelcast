@@ -96,6 +96,7 @@ public class TxnDeleteOperation
     public void applyState(State state) {
         super.applyState(state);
         dataOldValue = mapServiceContext.toData(state.getOldValue());
+        successful = dataOldValue != null;
     }
 
     @Override
@@ -104,7 +105,7 @@ public class TxnDeleteOperation
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
             super.afterRunInternal();
         }

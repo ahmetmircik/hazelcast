@@ -46,7 +46,7 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
             dataOldValue = expect;
             super.afterRunInternal();

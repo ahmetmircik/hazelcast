@@ -18,9 +18,8 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
-import com.hazelcast.map.impl.operation.ClearOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -68,9 +67,9 @@ public enum ClearSteps implements Step {
         }
 
         @Override
-        public ClearSteps nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getRecordStore() == null
-                    ? ClearSteps.AFTER_RUN : ClearSteps.CLEAR_MAP_STORE;
+                    ? ResponseSteps.SEND_RESPONSE : ClearSteps.CLEAR_MAP_STORE;
         }
     },
 
@@ -109,22 +108,8 @@ public enum ClearSteps implements Step {
         }
 
         @Override
-        public ClearSteps nextStep(State state) {
-            return ClearSteps.AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
-            ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
-        }
-
-        @Override
-        public ClearSteps nextStep(State state) {
-            return null;
+        public Step nextStep(State state) {
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

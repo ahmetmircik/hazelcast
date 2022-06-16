@@ -28,6 +28,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.query.Predicate;
+import com.hazelcast.query.impl.InternalIndex;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes;
 import com.hazelcast.wan.impl.CallerProvenance;
@@ -37,6 +38,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.UUID;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -85,6 +87,7 @@ public class State {
     private volatile MapEntries mapEntries;
     private volatile EntryEventType entryEventType;
     private volatile Record record;
+    private volatile Queue<InternalIndex> notMarkedIndexes;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -434,5 +437,13 @@ public class State {
 
     public void setEntryEventType(EntryEventType entryEventType) {
         this.entryEventType = entryEventType;
+    }
+
+    public void setNotMarkedIndexes(Queue<InternalIndex> notMarkedIndexes) {
+        this.notMarkedIndexes = notMarkedIndexes;
+    }
+
+    public Queue<InternalIndex> getNotMarkedIndexes() {
+        return notMarkedIndexes;
     }
 }

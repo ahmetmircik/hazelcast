@@ -60,19 +60,19 @@ public class ClearOperation extends MapOperation
 
     @Override
     public void applyState(State state) {
+        if (recordStore == null) {
+            return;
+        }
         super.applyState(state);
         numberOfClearedEntries = (int) state.getResult();
+        shouldBackup = true;
     }
 
     @Override
-    protected void afterRunInternal() {
-        afterRunInternal0(numberOfClearedEntries);
-        super.afterRunInternal();
-    }
-
-    public void afterRunInternal0(int numberOfClearedEntries) {
+    public void afterRunInternal() {
         invalidateAllKeysInNearCaches();
         hintMapEvent(numberOfClearedEntries);
+        super.afterRunInternal();
     }
 
     private void hintMapEvent(int numberOfClearedEntries) {
@@ -100,10 +100,10 @@ public class ClearOperation extends MapOperation
         return numberOfClearedEntries;
     }
 
+    @Override
     public Operation getBackupOperation() {
-        ClearBackupOperation clearBackupOperation = new ClearBackupOperation(name);
-        clearBackupOperation.setServiceName(SERVICE_NAME);
-        return clearBackupOperation;
+        return new ClearBackupOperation(name)
+                .setServiceName(SERVICE_NAME);
     }
 
     @Override

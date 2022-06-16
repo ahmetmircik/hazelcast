@@ -87,11 +87,7 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    protected void afterRunInternal() {
-        afterRunInternal0(result);
-    }
-
-    public void afterRunInternal0(Data result) {
+    public void afterRunInternal() {
         mapServiceContext.interceptAfterGet(mapContainer.getInterceptorRegistry(), result);
         super.afterRunInternal();
     }

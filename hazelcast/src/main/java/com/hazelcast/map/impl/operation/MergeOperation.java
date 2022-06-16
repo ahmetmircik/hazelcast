@@ -174,14 +174,14 @@ public class MergeOperation extends MapOperation
         }
     }
 
-    private void finishIndexMarking(Queue<InternalIndex> notIndexedPartitions) {
+    public void finishIndexMarking(Queue<InternalIndex> notIndexedPartitions) {
         InternalIndex indexToMark;
         while ((indexToMark = notIndexedPartitions.poll()) != null) {
             indexToMark.markPartitionAsIndexed(getPartitionId());
         }
     }
 
-    private Queue<InternalIndex> beginIndexMarking() {
+    public Queue<InternalIndex> beginIndexMarking() {
         int partitionId = getPartitionId();
         Indexes indexes = mapContainer.getIndexes(partitionId);
         InternalIndex[] indexesSnapshot = indexes.getIndexes();
@@ -275,7 +275,7 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         invalidateNearCache(invalidationKeys);
 
         super.afterRunInternal();

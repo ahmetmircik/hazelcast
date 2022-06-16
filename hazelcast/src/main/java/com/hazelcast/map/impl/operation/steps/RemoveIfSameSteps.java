@@ -22,9 +22,8 @@ import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
-import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -49,7 +48,8 @@ public enum RemoveIfSameSteps implements Step {
 
         @Override
         public RemoveIfSameSteps nextStep(State state) {
-            return state.isNullRecord() ? RemoveIfSameSteps.LOAD : RemoveIfSameSteps.ON_LOAD;
+            return state.isNullRecord()
+                    ? RemoveIfSameSteps.LOAD : RemoveIfSameSteps.ON_LOAD;
         }
     },
 
@@ -72,9 +72,9 @@ public enum RemoveIfSameSteps implements Step {
         }
 
         @Override
-        public RemoveIfSameSteps nextStep(State state) {
+        public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? RemoveIfSameSteps.AFTER_RUN : RemoveIfSameSteps.ON_LOAD;
+                    ? ResponseSteps.SEND_RESPONSE : RemoveIfSameSteps.ON_LOAD;
         }
     },
 
@@ -98,9 +98,9 @@ public enum RemoveIfSameSteps implements Step {
         }
 
         @Override
-        public RemoveIfSameSteps nextStep(State state) {
+        public Step nextStep(State state) {
             return state.isStopExecution()
-                    ? RemoveIfSameSteps.AFTER_RUN : RemoveIfSameSteps.DELETE;
+                    ? ResponseSteps.SEND_RESPONSE : RemoveIfSameSteps.DELETE;
         }
     },
 
@@ -139,29 +139,10 @@ public enum RemoveIfSameSteps implements Step {
         }
 
         @Override
-        public RemoveIfSameSteps nextStep(State state) {
-            return RemoveIfSameSteps.AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
-            // TODO: prevent unneeded serialization for oldValue
-            if (((Boolean) state.getResult())) {
-                ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(),
-                        state.getOldValue());
-            }
-        }
-
-        @Override
-        public RemoveIfSameSteps nextStep(State state) {
-            return null;
+        public Step nextStep(State state) {
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
-
 
     RemoveIfSameSteps() {
     }

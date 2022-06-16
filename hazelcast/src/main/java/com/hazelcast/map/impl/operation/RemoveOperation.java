@@ -33,11 +33,12 @@ public class RemoveOperation extends BaseRemoveOperation {
 
     @Override
     protected void runInternal() {
-        dataOldValue = mapServiceContext.toData(recordStore.remove(dataKey, getCallerProvenance()));
+        dataOldValue = mapServiceContext.toData(recordStore.remove(dataKey,
+                getCallerProvenance()));
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (dataOldValue != null) {
             super.afterRunInternal();
         }

@@ -200,7 +200,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         super.afterRun();
     }
 
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         // Intentionally empty method body.
         // Concrete classes can override this method.
     }
@@ -263,7 +263,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
     }
 
-    void disposeDeferredBlocks() {
+    public void disposeDeferredBlocks() {
         if (!disposeDeferredBlocks
                 || recordStore == null
                 || recordStore.getInMemoryFormat() != NATIVE) {

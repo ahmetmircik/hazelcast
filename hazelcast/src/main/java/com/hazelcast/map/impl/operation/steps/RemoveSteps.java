@@ -19,9 +19,8 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
-import com.hazelcast.map.impl.operation.BaseRemoveOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
@@ -47,11 +46,11 @@ public enum RemoveSteps implements Step {
         }
 
         @Override
-        public RemoveSteps nextStep(State state) {
+        public Step nextStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             return state.isNullRecord() ? RemoveSteps.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveSteps.DELETE : RemoveSteps.AFTER_RUN);
+                    ? RemoveSteps.DELETE : ResponseSteps.SEND_RESPONSE);
         }
     },
 
@@ -65,28 +64,14 @@ public enum RemoveSteps implements Step {
         public void runStep(State state) {
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Object oldValue = recordStore.loadValueOf(state.getKey());
-            if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
-                recordStore.getMapDataStore().remove(state.getKey(), state.getNow(), state.getTxnId());
-                state.setOldValue(oldValue);
-            }
+
+            state.setOldValue(oldValue);
         }
 
         @Override
-        public RemoveSteps nextStep(State state) {
-            return state.getOldValue() == null ? RemoveSteps.AFTER_RUN : RemoveSteps.ON_LOAD;
-        }
-    },
-
-    ON_LOAD() {
-        @Override
-        public void runStep(State state) {
-            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-            recordStore.updateStatsOnRemove(state.getNow());
-        }
-
-        @Override
-        public RemoveSteps nextStep(State state) {
-            return RemoveSteps.AFTER_RUN;
+        public Step nextStep(State state) {
+            return state.getOldValue() == null
+                    ? ResponseSteps.SEND_RESPONSE : RemoveSteps.DELETE;
         }
     },
 
@@ -98,8 +83,14 @@ public enum RemoveSteps implements Step {
 
         @Override
         public void runStep(State state) {
-            MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
-            mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+            Object oldValue = state.getOldValue();
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
+                MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
+                mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+
+                recordStore.updateStatsOnRemove(state.getNow());
+            }
         }
 
         @Override
@@ -115,34 +106,18 @@ public enum RemoveSteps implements Step {
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
+            if (record == null) {
+                return;
+            }
             recordStore.removeRecord0(state.getKey(), record);
             recordStore.onStore(record);
         }
 
         @Override
-        public RemoveSteps nextStep(State state) {
-            return RemoveSteps.AFTER_RUN;
-        }
-    },
-
-    AFTER_RUN() {
-        @Override
-        public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
-            // TODO: prevent unneeded serialization for oldValue
-            Object oldValue = state.getOldValue();
-            if (oldValue != null) {
-                ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), oldValue);
-            }
-        }
-
-        @Override
-        public RemoveSteps nextStep(State state) {
-            return null;
+        public Step nextStep(State state) {
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
-
 
     RemoveSteps() {
     }

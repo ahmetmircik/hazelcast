@@ -130,7 +130,7 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
         }
 
         @Override
-        protected void afterRunInternal() {
+        public void afterRunInternal() {
             if (successful) {
                 super.afterRunInternal();
             }

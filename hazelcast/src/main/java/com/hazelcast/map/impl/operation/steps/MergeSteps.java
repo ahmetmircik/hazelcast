@@ -23,17 +23,19 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.MergeOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
+import com.hazelcast.query.impl.InternalIndex;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 
 import static com.hazelcast.core.EntryEventType.MERGED;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
@@ -45,6 +47,7 @@ public enum MergeSteps implements Step {
     READ() {
         @Override
         public void runStep(State state) {
+            MergeOperation operation = ((MergeOperation) state.getOperation());
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -54,8 +57,10 @@ public enum MergeSteps implements Step {
 
             MergeOperation.checkMergePolicy(mapContainer, mergePolicy);
 
-            // TODO index marking
-            // key + oldValue + newValue
+            Queue<InternalIndex> notMarkedIndexes = operation.beginIndexMarking();
+            state.setNotMarkedIndexes(notMarkedIndexes);
+
+            // key + oldValue + newValue + mergingEntry
             List outcomes = new ArrayList<>(4 * mergingEntries.size());
 
             for (SplitBrainMergeTypes.MapMergeTypes<Object, Object> mergingEntry : mergingEntries) {
@@ -107,7 +112,9 @@ public enum MergeSteps implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
+            // key + oldValue + newValue + mergingEntry
             List outcomes = (List) state.getResult();
+
             State perKeyState = new State(state);
             for (int i = 0; i < outcomes.size(); i += 4) {
                 Object key = outcomes.get(i);
@@ -154,6 +161,7 @@ public enum MergeSteps implements Step {
             SerializationService serializationService = mapServiceContext
                     .getNodeEngine().getSerializationService();
 
+            // key + oldValue + newValue + mergingEntry
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
             for (int i = 0; i < outcomes.size(); i += 4) {
@@ -220,6 +228,7 @@ public enum MergeSteps implements Step {
             boolean hasBackups = mapContainer.getTotalBackupCount() > 0;
             boolean hasInvalidation = mapContainer.hasInvalidationListener();
 
+            // key + oldValue + newValue + mergingEntry
             List outcomes = (List) state.getResult();
 
             if (hasBackups) {
@@ -266,11 +275,13 @@ public enum MergeSteps implements Step {
             state.setResult(hasMergedValues);
 
             operation.invalidateNearCache(invalidationKeys);
+
+            operation.finishIndexMarking(state.getNotMarkedIndexes());
         }
 
         @Override
         public Step nextStep(State state) {
-            return null;
+            return ResponseSteps.SEND_RESPONSE;
         }
     };
 

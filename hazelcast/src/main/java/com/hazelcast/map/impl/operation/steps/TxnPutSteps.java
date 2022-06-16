@@ -18,12 +18,14 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import java.util.UUID;
+
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
 // TODO: re-run upon NOOME
 public enum TxnPutSteps implements Step {
@@ -31,6 +33,8 @@ public enum TxnPutSteps implements Step {
     READ() {
         @Override
         public void runStep(State state) {
+            assertRunningOnPartitionThread();
+
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();

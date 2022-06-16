@@ -52,7 +52,7 @@ public class TryRemoveOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
             super.afterRunInternal();
         }
