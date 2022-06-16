@@ -60,8 +60,6 @@ public enum EPFullScanOpStep implements OpStep {
         }
 
         private boolean runWithIndex(State state) {
-            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
-
             Predicate predicate = state.getPredicate();
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -101,7 +99,6 @@ public enum EPFullScanOpStep implements OpStep {
         }
 
         private void runWithPartitionScan(State state) {
-            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore<Record> recordStore = state.getRecordStore();
 
             List<State> toStore = new ArrayList<>();

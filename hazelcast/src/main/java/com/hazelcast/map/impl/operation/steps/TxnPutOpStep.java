@@ -31,8 +31,6 @@ public enum TxnPutOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("TxnPutOpStep ==> reading old value"
-                    + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();

@@ -45,8 +45,6 @@ public enum MergeOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> MergeOpStep reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -108,8 +106,6 @@ public enum MergeOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
-
-            OpStep.log("==> MergeOpStep STORE_OR_DELETE " + " (thread:" + Thread.currentThread().getName() + ")");
 
             List outcomes = (List) state.getResult();
             State perKeyState = new State(state);
@@ -207,7 +203,6 @@ public enum MergeOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

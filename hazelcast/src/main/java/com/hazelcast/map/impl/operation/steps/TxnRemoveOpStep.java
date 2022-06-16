@@ -30,9 +30,6 @@ public enum TxnRemoveOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value"
-                    + " (thread:" + Thread.currentThread().getName() + ")");
-
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();

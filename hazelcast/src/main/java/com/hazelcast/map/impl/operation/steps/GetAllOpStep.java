@@ -37,9 +37,6 @@ public enum GetAllOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> PuAllOpStep reading old value"
-                    + " (thread:" + Thread.currentThread().getName() + ")");
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             GetAllOperation operation = (GetAllOperation) state.getOperation();
             Set<Data> partitionKeySet = operation.getPartitionKeySet((List<Data>) state.getKeys());
@@ -66,9 +63,6 @@ public enum GetAllOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
-
-            OpStep.log("==> PuAllOpStep LOAD_ALL "
-                    + " (thread:" + Thread.currentThread().getName() + ")");
 
             EPMultiKeyOpStep.LOAD_ALL.runStep(state);
         }

@@ -19,14 +19,12 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.CollectionUtil;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.PutAllOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepResponseHandler;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
@@ -42,6 +40,7 @@ import java.util.Map;
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // FIXME: map-store load all should be called
@@ -51,8 +50,6 @@ public enum PutAllOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> PuAllOpStep reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
 
             MapEntries mapEntries = state.getMapEntries();
@@ -93,11 +90,8 @@ public enum PutAllOpStep implements OpStep {
             assert !isRunningOnPartitionThread();
 
             if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
-                OpStep.log("==> PuAllOpStep LOAD_ALL " + " (thread:" + Thread.currentThread().getName() + ")");
                 EPMultiKeyOpStep.LOAD_ALL.runStep(state);
             }
-
-            OpStep.log("==> PuAllOpStep STORE_ALL " + " (thread:" + Thread.currentThread().getName() + ")");
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             long expirationTime = recordStore.getExpirySystem().calculateExpirationTime(state.getTtl(),
@@ -127,7 +121,7 @@ public enum PutAllOpStep implements OpStep {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -182,9 +176,8 @@ public enum PutAllOpStep implements OpStep {
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
-            OpStep.log("==> sending response" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

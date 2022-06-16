@@ -55,8 +55,4 @@ public interface OpStep {
     default boolean isOffloadStep() {
         return false;
     }
-
-    static void log(String msg) {
-//        System.out.println("msg = " + msg);
-    }
 }

@@ -43,8 +43,6 @@ public enum EPMultiKeyOpStep implements OpStep {
     FIND_KEYS_TO_LOAD() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> EP start" + " (thread:" + Thread.currentThread().getName() + ")");
-
             RecordStore recordStore = state.getRecordStore();
             IPartitionService partitionService = recordStore.getMapContainer()
                     .getMapServiceContext().getNodeEngine().getPartitionService();
@@ -95,9 +93,6 @@ public enum EPMultiKeyOpStep implements OpStep {
     ON_LOAD_ALL() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> on old all"
-                    + " (thread:" + Thread.currentThread().getName() + ")");
-
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -125,7 +120,6 @@ public enum EPMultiKeyOpStep implements OpStep {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
 
             List<State> toStore = new ArrayList<>();

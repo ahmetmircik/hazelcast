@@ -33,7 +33,6 @@ public enum RemoveIfSameOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -62,7 +61,6 @@ public enum RemoveIfSameOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            OpStep.log("==> loading old value");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Object oldValue = recordStore.loadValueOf(state.getKey());
             if (oldValue != null) {
@@ -83,8 +81,6 @@ public enum RemoveIfSameOpStep implements OpStep {
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> on load" + " (thread:" + Thread.currentThread().getName() + ")");
-
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -116,7 +112,6 @@ public enum RemoveIfSameOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            OpStep.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
             MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
             mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
         }
@@ -131,8 +126,6 @@ public enum RemoveIfSameOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
-
-            OpStep.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
 
             if (!state.isNullRecord()) {
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();

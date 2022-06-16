@@ -36,7 +36,6 @@ public enum GetOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
@@ -58,13 +57,11 @@ public enum GetOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            OpStep.log("==> loading old value");
             MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
             if (mapDataStore == MapDataStores.EMPTY_MAP_DATA_STORE) {
                 return;
             }
             Object load = mapDataStore.load(state.getKey());
-            OpStep.log("==> loaded " + load);
             state.setOldValue(load);
         }
 
@@ -77,7 +74,6 @@ public enum GetOpStep implements OpStep {
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());
@@ -94,8 +90,6 @@ public enum GetOpStep implements OpStep {
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> sending response");
-
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

@@ -25,8 +25,8 @@ import com.hazelcast.map.impl.operation.steps.engine.OpStep;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
-import com.hazelcast.spi.impl.operationservice.Operation;
 
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
@@ -37,8 +37,6 @@ public enum EPSingleKeyOpStep implements OpStep {
     EP_START() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> EP_START reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
-
             EntryOperator operator = operator(state.getOperation(), state.getEntryProcessor());
             operator.init(state.getKey(), null, null, null, null, null, UNSET);
             state.setEntryOperator(operator);
@@ -57,7 +55,6 @@ public enum EPSingleKeyOpStep implements OpStep {
                 return EPSingleKeyOpStep.RESPONSE;
             }
             EPSingleKeyOpStep epStep = state.getOldValue() == null ? EPSingleKeyOpStep.LOAD : EPSingleKeyOpStep.PROCESS;
-            OpStep.log(state.getOldValue() == null ? "EPStep.LOAD" : "EPStep.PROCESS");
             return epStep;
         }
     },
@@ -96,7 +93,6 @@ public enum EPSingleKeyOpStep implements OpStep {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> processing entry" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -229,11 +225,8 @@ public enum EPSingleKeyOpStep implements OpStep {
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
-            OpStep.log("==> sending response");
-
-            Operation operation = state.getOperation();
             EntryOperator operator = state.getOperator();
             EntryEventType eventType = operator.getEventType();
             if (eventType != null) {

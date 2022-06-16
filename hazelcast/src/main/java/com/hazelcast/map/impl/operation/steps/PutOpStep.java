@@ -39,7 +39,6 @@ public enum PutOpStep implements OpStep {
         public void runStep(State state) {
             assert isRunningOnPartitionThread();
 
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(), state.getStaticParams().isBackup());
             if (record != null) {
@@ -62,8 +61,6 @@ public enum PutOpStep implements OpStep {
         @Override
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
-
-            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
 
             if (state.getRecordStore().getMapDataStore() == MapDataStores.EMPTY_MAP_DATA_STORE) {
                 return;
@@ -89,7 +86,6 @@ public enum PutOpStep implements OpStep {
         public void runStep(State state) {
             ThreadUtil.assertRunningOnPartitionThread();
 
-            OpStep.log("==> meta processing" + " (thread:" + Thread.currentThread().getName() + ")");
             StaticParams staticParams = state.getStaticParams();
             Object newValue = state.getNewValue();
 
@@ -165,7 +161,6 @@ public enum PutOpStep implements OpStep {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            OpStep.log("==> store into map-store" + " (thread:" + Thread.currentThread().getName() + ")");
             Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore0(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             state.setNewValue(newValue);
@@ -183,8 +178,6 @@ public enum PutOpStep implements OpStep {
             ThreadUtil.assertRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
-
-            OpStep.log("==> write into memory" + " (thread:" + Thread.currentThread().getName() + ")");
 
             // TODO: read  record efficiently
             Record record = recordStore.getRecord(state.getKey());

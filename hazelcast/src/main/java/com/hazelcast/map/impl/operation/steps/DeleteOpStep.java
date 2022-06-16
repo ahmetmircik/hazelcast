@@ -16,7 +16,6 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
@@ -26,6 +25,7 @@ import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 public enum DeleteOpStep implements OpStep {
@@ -33,7 +33,7 @@ public enum DeleteOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            assertRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
@@ -68,8 +68,6 @@ public enum DeleteOpStep implements OpStep {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            OpStep.log("==> deleting " + " (thread:" + Thread.currentThread().getName() + ")");
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
                 MapDataStore mapDataStore = recordStore.getMapDataStore();
@@ -86,9 +84,8 @@ public enum DeleteOpStep implements OpStep {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
-            OpStep.log("==> on delete" + " (thread:" + Thread.currentThread().getName() + ")");
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);
@@ -104,14 +101,11 @@ public enum DeleteOpStep implements OpStep {
     AFTER_RUN() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
             // TODO: prevent unneeded serialization for oldValue
             if (!state.isNullRecord()) {
-                OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
                 ((BaseRemoveOperation) state.getOperation()).afterRunInternal0(state.getKey(), state.getOldValue());
-            } else {
-                OpStep.log("==> after run delete" + " (thread:" + Thread.currentThread().getName() + ")");
             }
         }
 

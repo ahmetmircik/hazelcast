@@ -16,11 +16,14 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
+
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
 // TODO: what happens if partition is migrating and we offload map load.
 public enum ContainsKeyOpStep implements OpStep {
@@ -29,7 +32,8 @@ public enum ContainsKeyOpStep implements OpStep {
     READ() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            assertRunningOnPartitionThread();
+
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
@@ -53,7 +57,7 @@ public enum ContainsKeyOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            OpStep.log("==> loading old value");
+            assert !ThreadUtil.isRunningOnPartitionThread();
 
             GetOpStep.LOAD.runStep(state);
         }
@@ -68,7 +72,6 @@ public enum ContainsKeyOpStep implements OpStep {
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> loading old value" + " (thread:" + Thread.currentThread().getName() + ")");
             RecordStore recordStore = state.getRecordStore();
             Record record = ((DefaultRecordStore) recordStore).onLoadRecord(state.getKey(),
                     state.getOldValue(), false, state.getCallerAddress());

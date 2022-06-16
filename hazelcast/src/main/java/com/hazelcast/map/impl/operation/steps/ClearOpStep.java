@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.ClearOperation;
 import com.hazelcast.map.impl.operation.steps.engine.OpStep;
 import com.hazelcast.map.impl.operation.steps.engine.State;
@@ -30,13 +29,16 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+
 // TODO: what happens if partition is migrating and we offload map load.
 public enum ClearOpStep implements OpStep {
 
     CLEAR_MEMORY() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> clearing memory" + " (thread:" + Thread.currentThread().getName() + ")");
+            assertRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore == null) {
@@ -80,7 +82,8 @@ public enum ClearOpStep implements OpStep {
 
         @Override
         public void runStep(State state) {
-            OpStep.log("==> clearing map store");
+            assert !isRunningOnPartitionThread();
+
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Collection<Data> keys = state.getKeys();
             recordStore.getMapDataStore().removeAll(keys);
@@ -95,7 +98,8 @@ public enum ClearOpStep implements OpStep {
     ON_CLEAR() {
         @Override
         public void runStep(State state) {
-            OpStep.log("==> reading old value" + " (thread:" + Thread.currentThread().getName() + ")");
+            assertRunningOnPartitionThread();
+
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
             if (removedKeyCount > 0) {
@@ -113,7 +117,7 @@ public enum ClearOpStep implements OpStep {
     AFTER_RUN() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
             ((ClearOperation) state.getOperation()).afterRunInternal0(((int) state.getResult()));
         }
