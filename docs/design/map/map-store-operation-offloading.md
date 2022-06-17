@@ -12,6 +12,9 @@ next operations will not be blocked in a partition.
 - Having MapStore and MapLoader operations offloaded for IMap
 
 ## Non-Goals
+- No offloading for `MapLoaderLifecycleSupport#init`, since it
+  is a one time operation per node along the lifecycle of a map.  
+- Offloading tiered Store operations
 - Changes in cluster wide map bulk loading mechanism.
 - JCache CacheLoader and CacheWriter are out of scope.
 
@@ -66,6 +69,22 @@ executed in partition thread and no offloading is done.
 
 `State` is used to pass state between `Step`s.
 
+#### Improvement for Ordering of Operations
+In previous Hazelcast versions, all map operations wait end of
+blocking MapStore operation than they progress. This provides an
+order of execution between operations. Not to break this behavior,
+in this new implementation, there are offloaded operation queues,
+these queues are per map per partition queues(so a map has a separate
+queue inside a partition) and all map operations that require MapStore
+interaction waits in offloaded queue if there is an in-flight operation
+for that specific map partition. Upon finish of the in-flight
+operation, next operation is taken from the queue and starts to execute.
+
+This change is an improvement since only a specific map's
+operations will be waiting each other and partitions are
+free for other processing. In previous versions, all maps are
+waiting one single blocking map and partitions are blocked. 
+
 
 #### Flow in Partition Thread
 
@@ -87,14 +106,14 @@ executed in partition thread and no offloading is done.
                                   | 
                                   |
           -------------------------------------------------------
-          Start running Step chain of this operation and execute  <---
-          Steps which can be executed here without needing offload.   |
+          Start running Step chain of this operation and execute  <-----+
+          Steps which can be executed here without needing offload.     |
           --------------------------------------------------------      |
                                   |                                     | 
                                   |                                     |
                                   |                                     |
           ----------------------------------------------------    If No |
-                  Do we encounter offload needed Step?      ---------->
+                  Do we encounter offload needed Step?      ------------+
           ----------------------------------------------------
                                   | 
                                   | If Yes
@@ -111,12 +130,12 @@ executed in partition thread and no offloading is done.
 
 #### Flow in Offloaded Thread
           -------------------------------------------------------
-            Run offload needed Step of this operation here         <---
+            Run offload needed Step of this operation here         <----+
           --------------------------------------------------------      |
                                   |                                     | 
                                   |                                     |
           ----------------------------------------------------   If Yes |
-                  Do we encounter offload needed Step?      ---------->
+                  Do we encounter offload needed Step?      ------------+
           ----------------------------------------------------
                                   | 
                                   | If No
