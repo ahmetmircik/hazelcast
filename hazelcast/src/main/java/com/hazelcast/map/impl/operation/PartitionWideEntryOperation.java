@@ -114,6 +114,7 @@ public class PartitionWideEntryOperation extends MapOperation
     public void applyState(State state) {
         super.applyState(state);
         responses = (MapEntries) state.getResult();
+        keysFromIndex = state.getKeysFromIndex();
     }
 
     protected Predicate getPredicate() {

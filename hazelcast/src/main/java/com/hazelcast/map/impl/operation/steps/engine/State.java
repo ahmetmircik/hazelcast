@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -88,6 +89,7 @@ public class State {
     private volatile EntryEventType entryEventType;
     private volatile Record record;
     private volatile Queue<InternalIndex> notMarkedIndexes;
+    private volatile Set keysFromIndex;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -445,5 +447,13 @@ public class State {
 
     public Queue<InternalIndex> getNotMarkedIndexes() {
         return notMarkedIndexes;
+    }
+
+    public void setKeysFromIndex(Set keysFromIndex) {
+        this.keysFromIndex = keysFromIndex;
+    }
+
+    public Set getKeysFromIndex() {
+        return keysFromIndex;
     }
 }

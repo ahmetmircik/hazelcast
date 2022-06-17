@@ -88,12 +88,17 @@ public enum EPFullScanSteps implements Step {
             MapEntries responses = new MapEntries(recordStore.size());
             state.setResult(responses);
 
+            // when NATIVE we can pass null as predicate since it's all
+            // happening on partition thread so no data-changes may occur
+            state.setPredicate(null);
             final HashSet keysFromIndex = new HashSet<>();
             entries.forEach(entry -> {
                 keysFromIndex.add(entry.getKeyData());
                 Record record = recordStore.getRecord(entry.getKeyData());
                 processInternal(state, toStore, toRemove, responses, entry.getKeyData(), record);
             });
+
+            state.setKeysFromIndex(keysFromIndex);
 
             return true;
         }
