@@ -75,11 +75,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
 
     @Override
     public void afterRunInternal() {
-        afterRunInternal0(dataKey, dataValue, oldValue);
-        super.afterRunInternal();
-    }
-
-    public void afterRunInternal0(Data dataKey, Object dataValue, Object oldValue) {
         Object value = isPostProcessingOrHasInterceptor(recordStore)
                 ? recordStore.getRecord(dataKey).getValue() : dataValue;
         mapServiceContext.interceptAfterPut(mapContainer.getInterceptorRegistry(), dataValue);
@@ -89,6 +84,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         invalidateNearCache(dataKey);
         publishWanUpdate(dataKey, value);
         evict(dataKey);
+        super.afterRunInternal();
     }
 
     // overridden in extension classes

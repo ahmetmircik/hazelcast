@@ -16,11 +16,11 @@
 
 package com.hazelcast.map.impl.operation;
 
-import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.OperationService;
 
+import javax.annotation.Nullable;
 import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.config.EvictionPolicy.NONE;
@@ -59,10 +59,10 @@ public interface ForcedEviction {
     /**
      * Used for {@link com.hazelcast.map.impl.operation.steps.engine.Step}
      */
-    static void runStepWithForcedEvictionStrategies(State state, Runnable runnable) {
+    static void runStepWithForcedEvictionStrategies(MapOperation mapOperation, Runnable runnable) {
         for (double evictionPercentage : EVICTION_PERCENTAGES) {
             for (ForcedEviction evictionStrategy : EVICTION_STRATEGIES) {
-                if (evictionStrategy.forceEvictAndRun(state, runnable, evictionPercentage)) {
+                if (evictionStrategy.forceEvictAndRun(mapOperation, evictionPercentage, runnable)) {
                     return;
                 }
             }
@@ -82,8 +82,20 @@ public interface ForcedEviction {
     boolean forceEvictAndRun(MapOperation mapOperation,
                              double evictionPercentage);
 
-    boolean forceEvictAndRun(State state, Runnable runnable,
-                             double evictionPercentage);
+    /**
+     * First does forced eviction by deleting a percentage
+     * of entries then tries to run provided map operation.
+     *
+     * @param mapOperation       the map operation which got Native OOME during its run
+     * @param evictionPercentage percentage of the entries to evict from record store.
+     * @param runnable           runnable to re-run execution
+     * after forced eviction, when null mapOperation is run
+     * @return {@code true} if run is succeeded after forced eviction,
+     * otherwise return {@code false}
+     * @throws com.hazelcast.memory.NativeOutOfMemoryError
+     */
+    boolean forceEvictAndRun(MapOperation mapOperation,
+                             double evictionPercentage, @Nullable Runnable runnable);
 
     /**
      * @return {@code true} if supplied record store is valid

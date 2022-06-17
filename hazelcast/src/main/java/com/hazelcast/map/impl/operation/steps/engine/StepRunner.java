@@ -172,7 +172,7 @@ public class StepRunner implements PartitionSpecificRunnable {
 
     private void rerunWithForcedEviction(Runnable step) {
         try {
-            runStepWithForcedEvictionStrategies(state, step);
+            runStepWithForcedEvictionStrategies(state.getOperation(), step);
         } catch (NativeOutOfMemoryError e) {
             state.getOperation().disposeDeferredBlocks();
             throw e;
@@ -186,26 +186,6 @@ public class StepRunner implements PartitionSpecificRunnable {
             operationExecutor.execute(offload);
         } else {
             executor.execute(offload);
-        }
-    }
-
-    private boolean doRun(Runnable step) {
-        if (step instanceof PartitionSpecificRunnable) {
-            if (isRunningOnPartitionThread()) {
-                step.run();
-                return true;
-            } else {
-                operationExecutor.execute(this);
-                return false;
-            }
-        } else {
-            if (isRunningOnPartitionThread()) {
-                executor.execute(this);
-                return false;
-            } else {
-                step.run();
-                return true;
-            }
         }
     }
 

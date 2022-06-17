@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.eviction.Evictor;
-import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 
@@ -36,43 +35,17 @@ class SingleRecordStoreForcedEviction implements ForcedEviction {
 
     @Override
     public boolean forceEvictAndRun(MapOperation mapOperation, double evictionPercentage) {
-        assert evictionPercentage > 0 && evictionPercentage <= 1;
-
-        RecordStore recordStore = mapOperation.recordStore;
-        if (!ForcedEviction.isValid(recordStore)) {
-            return false;
-        }
-
-        ILogger logger = mapOperation.logger();
-
-        int retryCount = retryCount(evictionPercentage);
-        for (int i = 0; i < retryCount; i++) {
-            if (logger.isFineEnabled()) {
-                if (logger.isFineEnabled()) {
-                    String msg = "Single record store forced eviction [attemptNumber: %d, mapName: %s, "
-                            + "evictionPercentage:%.2f, partitionId: %d]";
-                    logger.fine(format(msg, (i + 1), mapOperation.getName(),
-                            evictionPercentage, mapOperation.getPartitionId()));
-                }
-            }
-
-            try {
-                Evictor evictor = recordStore.getMapContainer().getEvictor();
-                evictor.forceEvictByPercentage(recordStore, evictionPercentage);
-                mapOperation.runInternal();
-                return true;
-            } catch (NativeOutOfMemoryError e) {
-                ignore(e);
-            }
-        }
-        return false;
+        return forceEvictAndRun0(mapOperation, evictionPercentage, null);
     }
 
     @Override
-    public boolean forceEvictAndRun(State state, Runnable runnable, double evictionPercentage) {
+    public boolean forceEvictAndRun(MapOperation mapOperation, double evictionPercentage, Runnable runnable) {
+        return forceEvictAndRun0(mapOperation, evictionPercentage, runnable);
+    }
+
+    private boolean forceEvictAndRun0(MapOperation mapOperation, double evictionPercentage, Runnable runnable) {
         assert evictionPercentage > 0 && evictionPercentage <= 1;
 
-        MapOperation mapOperation = state.getOperation();
         RecordStore recordStore = mapOperation.recordStore;
         if (!ForcedEviction.isValid(recordStore)) {
             return false;
@@ -94,7 +67,11 @@ class SingleRecordStoreForcedEviction implements ForcedEviction {
             try {
                 Evictor evictor = recordStore.getMapContainer().getEvictor();
                 evictor.forceEvictByPercentage(recordStore, evictionPercentage);
-                runnable.run();
+                if (runnable != null) {
+                    runnable.run();
+                } else {
+                    mapOperation.runInternal();
+                }
                 return true;
             } catch (NativeOutOfMemoryError e) {
                 ignore(e);
