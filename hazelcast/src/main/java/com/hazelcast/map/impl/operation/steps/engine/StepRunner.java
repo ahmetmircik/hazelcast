@@ -22,15 +22,27 @@ import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class StepRunner implements PartitionSpecificRunnable {
 
+    private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
+            = TimeUnit.MILLISECONDS.toNanos(5);
+    private static final String PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
+            = "hazelcast.internal.map.mapstore.max.successive.offloaded.operation.run.nanos";
+    private static final HazelcastProperty MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
+            = new HazelcastProperty(PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS,
+            DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS, NANOSECONDS);
+
     private final int partitionId;
+    private final long maxRunNanos;
     private final Queue<StepSupplier> offloadQueue;
     private final OperationExecutor operationExecutor;
     private final ManagedExecutorService executor;
@@ -46,12 +58,15 @@ public class StepRunner implements PartitionSpecificRunnable {
                 .getOperationService()).getOperationExecutor();
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
+        this.maxRunNanos = nodeEngine.getProperties()
+                .getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
 
         initStepSupplier(offloadQueue.peek());
     }
 
     @Override
     public void run() {
+        long start = System.nanoTime();
         Runnable step;
         do {
             if (stepSupplier == null || (step = stepSupplier.get()) == null) {
@@ -71,6 +86,15 @@ public class StepRunner implements PartitionSpecificRunnable {
                 offloadRun(step, this);
                 return;
             }
+
+            // TODO
+            // free partition thread after a while
+//            if (isRunningOnPartitionThread()
+//                    && System.nanoTime() - start >= maxRunNanos) {
+//                offloadRun(step, this);
+//                return;
+//            }
+
         } while (true);
     }
 

@@ -67,16 +67,22 @@ public class StepSupplier implements Supplier<Runnable> {
     private void runStepWith(State state) {
         do {
             try {
-                currentStep.runStep(state);
-                currentStep = currentStep.nextStep(state);
-            } catch (NativeOutOfMemoryError e) {
-                assertRunningOnPartitionThread();
+                try {
+                    currentStep.runStep(state);
+                } catch (NativeOutOfMemoryError e) {
+                    assertRunningOnPartitionThread();
 
-                rerunWithForcedEviction(() -> currentStep.runStep(state));
-            } catch (Throwable throwable){
+                    rerunWithForcedEviction(() -> {
+                        currentStep.runStep(state);
+                    });
+                }
+            } catch (Throwable throwable) {
+                state.getOperation().disposeDeferredBlocks();
                 state.setThrowable(throwable);
-                currentStep = ResponseSteps.HANDLE_ERROR;
             }
+
+            currentStep = state.getThrowable() != null
+                    ? ResponseSteps.HANDLE_ERROR : currentStep.nextStep(state);
 
             if (currentStep == null
                     || (currentStep.isOffloadStep() && ThreadUtil.isRunningOnPartitionThread())
@@ -87,11 +93,6 @@ public class StepSupplier implements Supplier<Runnable> {
     }
 
     private void rerunWithForcedEviction(Runnable step) {
-        try {
-            runStepWithForcedEvictionStrategies(state.getOperation(), step);
-        } catch (NativeOutOfMemoryError e) {
-            state.getOperation().disposeDeferredBlocks();
-            throw e;
-        }
+        runStepWithForcedEvictionStrategies(state.getOperation(), step);
     }
 }

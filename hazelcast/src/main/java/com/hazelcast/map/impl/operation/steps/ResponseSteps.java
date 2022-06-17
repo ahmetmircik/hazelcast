@@ -67,7 +67,11 @@ public enum ResponseSteps implements Step {
         public void runStep(State state) {
             assertRunningOnPartitionThread();
 
-            handleOperationError(state);
+            try {
+                handleOperationError(state);
+            } finally {
+                state.setThrowable(null);
+            }
         }
 
         public void handleOperationError(State state) {
