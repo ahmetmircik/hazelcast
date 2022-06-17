@@ -74,8 +74,8 @@ public class MultipleEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new StepOffload(this, getName(),
-                    newState(), getStartingStep());
+            return new StepOffload(this,
+                    getStartingStep(), newState());
         }
 
         return super.call();

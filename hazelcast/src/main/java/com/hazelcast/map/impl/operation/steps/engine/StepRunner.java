@@ -16,78 +16,56 @@
 
 package com.hazelcast.map.impl.operation.steps.engine;
 
-import com.hazelcast.core.HazelcastInstanceNotActiveException;
-import com.hazelcast.instance.impl.Node;
-import com.hazelcast.instance.impl.NodeState;
-import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.memory.NativeOutOfMemoryError;
+import com.hazelcast.internal.util.executor.ManagedExecutorService;
 import com.hazelcast.spi.impl.NodeEngine;
-import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
-import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 import java.util.Queue;
-import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-import static com.hazelcast.map.impl.operation.ForcedEviction.runStepWithForcedEvictionStrategies;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 
 public class StepRunner implements PartitionSpecificRunnable {
 
     private final int partitionId;
-    private final Node node;
-    private final State state;
-    private final ILogger logger;
-    private final Executor executor;
-    private final Operation operation;
-    private final Queue<StepRunner> offloadQueue;
-    private final Supplier<Runnable> stepSupplier;
+    private final Queue<StepSupplier> offloadQueue;
     private final OperationExecutor operationExecutor;
+    private final ManagedExecutorService executor;
 
-    public StepRunner(MapOperation operation,
-                      State state,
-                      Step startingStep,
-                      String mapName) {
-        assertRunningOnPartitionThread();
-        this.state = state;
-        this.operation = operation;
-        NodeEngine nodeEngine = operation.getNodeEngine();
-        this.node = ((NodeEngineImpl) nodeEngine).getNode();
-        this.logger = nodeEngine.getLogger(getClass());
+    private volatile StepSupplier stepSupplier;
+
+    public StepRunner(NodeEngine nodeEngine,
+                      Queue<StepSupplier> offloadQueue, int partitionId) {
+        this.offloadQueue = offloadQueue;
+        this.partitionId = partitionId;
+
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
-        this.stepSupplier = new StepSupplier(startingStep, state);
         this.executor = nodeEngine.getExecutionService()
                 .getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
-        this.partitionId = state.getPartitionId();
-        this.offloadQueue = operation.getMapContainer().getMapServiceContext()
-                .getPartitionContainer(state.getPartitionId())
-                .getOffloadQueue(mapName);
+
+        initStepSupplier(offloadQueue.peek());
     }
 
-    @Override
-    public int getPartitionId() {
-        return partitionId;
-    }
-
-    // TODO: What happens in the event of exception?
     @Override
     public void run() {
         try {
             Runnable step;
             do {
-                step = stepSupplier.get();
-                if (step == null) {
-                    startNextStepRunner();
-                    return;
+                if (stepSupplier == null || (step = stepSupplier.get()) == null) {
+                    if (isRunningOnPartitionThread()) {
+                        pollCurrentAndPeekNextStepSupplier();
+                        if (stepSupplier == null) {
+                            return;
+                        }
+                        continue;
+                    } else {
+                        operationExecutor.execute(this);
+                        return;
+                    }
                 }
 
                 if (!runDirect(step)) {
@@ -96,69 +74,23 @@ public class StepRunner implements PartitionSpecificRunnable {
                 }
             } while (true);
         } catch (Throwable t) {
-            handleErrorAndStartNexStepRunner(t);
+            stepSupplier.handleOperationError(t);
         }
     }
 
-    private void handleErrorAndStartNexStepRunner(Throwable t) {
-        PartitionSpecificRunnable runnable = new PartitionSpecificRunnable() {
-            @Override
-            public void run() {
-                handleOperationError(operation, t);
-                nextRunner();
-            }
-
-            @Override
-            public int getPartitionId() {
-                return partitionId;
-            }
-        };
-
-        if (!runDirect(runnable)) {
-            offloadRun(runnable, runnable);
-        }
-    }
-
-    private void startNextStepRunner() {
-        PartitionSpecificRunnable runnable = new PartitionSpecificRunnable() {
-            @Override
-            public void run() {
-                assertRunningOnPartitionThread();
-
-                nextRunner();
-            }
-
-            @Override
-            public int getPartitionId() {
-                return partitionId;
-            }
-        };
-
-        if (!runDirect(runnable)) {
-            offloadRun(runnable, runnable);
-        }
-    }
-
-    private void nextRunner() {
+    private void pollCurrentAndPeekNextStepSupplier() {
         assert ThreadUtil.isRunningOnPartitionThread()
                 : Thread.currentThread().getName();
-        assert offloadQueue.peek() == this;
+        assert offloadQueue.peek() == stepSupplier;
 
         offloadQueue.poll();
-        StepRunner runner = offloadQueue.peek();
-        if (runner != null) {
-            runner.run();
-        }
+        initStepSupplier(offloadQueue.peek());
     }
 
     private boolean runDirect(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             if (isRunningOnPartitionThread()) {
-                try {
-                    step.run();
-                } catch (NativeOutOfMemoryError e) {
-                    rerunWithForcedEviction(step);
-                }
+                step.run();
                 return true;
             }
         } else {
@@ -170,16 +102,6 @@ public class StepRunner implements PartitionSpecificRunnable {
         return false;
     }
 
-    private void rerunWithForcedEviction(Runnable step) {
-        try {
-            runStepWithForcedEvictionStrategies(state.getOperation(), step);
-        } catch (NativeOutOfMemoryError e) {
-            state.getOperation().disposeDeferredBlocks();
-            throw e;
-        }
-    }
-
-    // TODO handle this better
     private void offloadRun(Runnable step,
                             PartitionSpecificRunnable offload) {
         if (step instanceof PartitionSpecificRunnable) {
@@ -189,38 +111,14 @@ public class StepRunner implements PartitionSpecificRunnable {
         }
     }
 
-    private void handleOperationError(Operation operation, Throwable e) {
-        assertRunningOnPartitionThread();
+    public StepRunner initStepSupplier(StepSupplier stepSupplier) {
+        this.stepSupplier = stepSupplier;
+        return this;
 
-        if (e instanceof OutOfMemoryError) {
-            OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
-        }
-        try {
-            operation.onExecutionFailure(e);
-        } catch (Throwable t) {
-            logger.warning("While calling 'operation.onFailure(e)'... op: "
-                    + operation + ", error: " + e, t);
-        }
-
-        operation.logError(e);
-
-        // A response is sent regardless of the
-        // Operation.returnsResponse method because some operations do
-        // want to send back a response, but they didn't want to send it
-        // yet but they ran into some kind of error. If on the receiving
-        // side no invocation is waiting, the response is ignored.
-        sendResponseAfterOperationError(operation, e);
     }
 
-    private void sendResponseAfterOperationError(Operation operation, Throwable e) {
-        try {
-            if (node.getState() != NodeState.SHUT_DOWN) {
-                operation.sendResponse(e);
-            } else if (operation.executedLocally()) {
-                operation.sendResponse(new HazelcastInstanceNotActiveException());
-            }
-        } catch (Throwable t) {
-            logger.warning("While sending op error... op: " + operation + ", error: " + e, t);
-        }
+    @Override
+    public int getPartitionId() {
+        return partitionId;
     }
 }

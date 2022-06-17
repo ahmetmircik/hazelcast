@@ -90,6 +90,7 @@ public class State {
     private volatile Record record;
     private volatile Queue<InternalIndex> notMarkedIndexes;
     private volatile Set keysFromIndex;
+    private String mapName;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -112,7 +113,8 @@ public class State {
                 .setCallerProvenance(state.getCallerProvenance())
                 .setEntryProcessor(state.getEntryProcessor())
                 .setCallerAddress(state.getCallerAddress())
-                .setPartitionId(state.getPartitionId());
+                .setPartitionId(state.getPartitionId())
+                .setMapName(state.getMapName());
     }
 
     public RecordStore getRecordStore() {
@@ -121,6 +123,15 @@ public class State {
 
     public MapOperation getOperation() {
         return operation;
+    }
+
+    public State setMapName(String mapName) {
+        this.mapName = mapName;
+        return this;
+    }
+
+    public String getMapName() {
+        return mapName;
     }
 
     public State setVersion(long version) {

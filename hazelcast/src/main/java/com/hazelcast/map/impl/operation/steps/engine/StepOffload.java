@@ -23,25 +23,35 @@ import java.util.Queue;
 
 public class StepOffload extends Offload {
 
-    private final StepRunner runner;
-    private final Queue<StepRunner> offloadQueue;
+    private final StepSupplier stepSupplier;
 
-    public StepOffload(MapOperation offloadedOperation,
-                       String mapName, State state, Step startingStep) {
-        super(offloadedOperation);
-        this.runner = new StepRunner(offloadedOperation, state,
-                startingStep, mapName);
-        this.offloadQueue = offloadedOperation.getMapContainer().getMapServiceContext()
-                .getPartitionContainer(state.getPartitionId())
-                .getOffloadQueue(mapName);
+    public StepOffload(MapOperation mapOperation, Step startingStep, State state) {
+        super(mapOperation);
+
+        this.stepSupplier = new StepSupplier(startingStep, state);
+        getOffloadQueue().add(stepSupplier);
     }
+
+//    public StepOffload(String mapName, int partitionId) {
+//        super(state.getOperation());
+//        this.runner = new StepRunner(state.getOperation(), state,
+//                startingStep, mapName);
+//    }
 
     @Override
     public void start() {
-        offloadQueue.offer(runner);
-
-        if (offloadQueue.peek() == runner) {
-            runner.run();
+        int partitionId = offloadedOperation().getPartitionId();
+        Queue<StepSupplier> offloadQueue = getOffloadQueue();
+        if (offloadQueue.peek() == stepSupplier) {
+            new StepRunner(offloadedOperation().getNodeEngine(), offloadQueue, partitionId).run();
         }
+
+    }
+
+    private Queue<StepSupplier> getOffloadQueue() {
+        MapOperation mapOperation = (MapOperation) offloadedOperation();
+        return mapOperation.getMapContainer().getMapServiceContext()
+                .getPartitionContainer(mapOperation.getPartitionId())
+                .getOffloadQueue(mapOperation.getName());
     }
 }

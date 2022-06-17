@@ -28,7 +28,7 @@ import com.hazelcast.internal.util.ConstructorFunction;
 import com.hazelcast.internal.util.ContextMutexFactory;
 import com.hazelcast.internal.util.MapUtil;
 import com.hazelcast.map.impl.operation.MapClearExpiredOperation;
-import com.hazelcast.map.impl.operation.steps.engine.StepRunner;
+import com.hazelcast.map.impl.operation.steps.engine.StepSupplier;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.spi.impl.NodeEngine;
@@ -85,7 +85,7 @@ public class PartitionContainer {
     private long lastCleanupTimeCopy;
 
     // TODO add metric for offload queues
-    private Map<String, Queue<StepRunner>> map = new HashMap<>();
+    private Map<String, Queue<StepSupplier>> map = new HashMap<>();
 
     public PartitionContainer(final MapService mapService, final int partitionId) {
         this.mapService = mapService;
@@ -95,7 +95,7 @@ public class PartitionContainer {
         this.maps = MapUtil.createConcurrentHashMap(approxMapCount);
     }
 
-    public Queue<StepRunner> getOffloadQueue(String mapName) {
+    public Queue<StepSupplier> getOffloadQueue(String mapName) {
         return map.computeIfAbsent(mapName, s -> new ArrayDeque<>());
     }
 

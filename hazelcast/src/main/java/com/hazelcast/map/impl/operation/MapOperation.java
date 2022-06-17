@@ -32,9 +32,9 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
-import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -152,8 +152,7 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (mapStoreOffloadEnabled) {
             // record-store can be null for some ops: see ClearOperation
-            return new StepOffload(this, getName(),
-                    newState(), getStartingStep());
+            return new StepOffload(this, getStartingStep(), newState());
         }
 
         run();
@@ -166,6 +165,7 @@ public abstract class MapOperation extends AbstractNamedOperation
 
     protected State newState() {
         return new State(recordStore, this)
+                .setMapName(name)
                 .setPartitionId(getPartitionId())
                 .setCallerAddress(getCallerAddress())
                 .setCallerProvenance(getCallerProvenance())
