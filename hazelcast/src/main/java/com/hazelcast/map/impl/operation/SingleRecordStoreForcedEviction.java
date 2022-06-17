@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.eviction.Evictor;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 
@@ -59,6 +60,41 @@ class SingleRecordStoreForcedEviction implements ForcedEviction {
                 Evictor evictor = recordStore.getMapContainer().getEvictor();
                 evictor.forceEvictByPercentage(recordStore, evictionPercentage);
                 mapOperation.runInternal();
+                return true;
+            } catch (NativeOutOfMemoryError e) {
+                ignore(e);
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean forceEvictAndRun(State state, Runnable runnable, double evictionPercentage) {
+        assert evictionPercentage > 0 && evictionPercentage <= 1;
+
+        MapOperation mapOperation = state.getOperation();
+        RecordStore recordStore = mapOperation.recordStore;
+        if (!ForcedEviction.isValid(recordStore)) {
+            return false;
+        }
+
+        ILogger logger = mapOperation.logger();
+
+        int retryCount = retryCount(evictionPercentage);
+        for (int i = 0; i < retryCount; i++) {
+            if (logger.isFineEnabled()) {
+                if (logger.isFineEnabled()) {
+                    String msg = "Single record store forced eviction [attemptNumber: %d, mapName: %s, "
+                            + "evictionPercentage:%.2f, partitionId: %d]";
+                    logger.fine(format(msg, (i + 1), mapOperation.getName(),
+                            evictionPercentage, mapOperation.getPartitionId()));
+                }
+            }
+
+            try {
+                Evictor evictor = recordStore.getMapContainer().getEvictor();
+                evictor.forceEvictByPercentage(recordStore, evictionPercentage);
+                runnable.run();
                 return true;
             } catch (NativeOutOfMemoryError e) {
                 ignore(e);

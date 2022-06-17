@@ -23,6 +23,7 @@ import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -36,12 +37,14 @@ import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+import static com.hazelcast.map.impl.operation.ForcedEviction.runStepWithForcedEvictionStrategies;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 
 public class StepRunner implements PartitionSpecificRunnable {
 
     private final int partitionId;
     private final Node node;
+    private final State state;
     private final ILogger logger;
     private final Executor executor;
     private final Operation operation;
@@ -54,6 +57,7 @@ public class StepRunner implements PartitionSpecificRunnable {
                       Step startingStep,
                       String mapName) {
         assertRunningOnPartitionThread();
+        this.state = state;
         this.operation = operation;
         NodeEngine nodeEngine = operation.getNodeEngine();
         this.node = ((NodeEngineImpl) nodeEngine).getNode();
@@ -150,7 +154,11 @@ public class StepRunner implements PartitionSpecificRunnable {
     private boolean runDirect(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             if (isRunningOnPartitionThread()) {
-                step.run();
+                try {
+                    step.run();
+                } catch (NativeOutOfMemoryError e) {
+                    rerunWithForcedEviction(step);
+                }
                 return true;
             }
         } else {
@@ -160,6 +168,15 @@ public class StepRunner implements PartitionSpecificRunnable {
             }
         }
         return false;
+    }
+
+    private void rerunWithForcedEviction(Runnable step) {
+        try {
+            runStepWithForcedEvictionStrategies(state, step);
+        } catch (NativeOutOfMemoryError e) {
+            state.getOperation().disposeDeferredBlocks();
+            throw e;
+        }
     }
 
     // TODO handle this better

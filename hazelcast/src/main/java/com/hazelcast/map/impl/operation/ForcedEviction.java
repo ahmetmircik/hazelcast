@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.operationservice.OperationService;
@@ -32,7 +33,7 @@ import static com.hazelcast.config.InMemoryFormat.NATIVE;
  * @see SingleRecordStoreForcedEviction
  * @see MultipleRecordStoreForcedEviction
  */
-interface ForcedEviction {
+public interface ForcedEviction {
 
     int EVICTION_RETRY_COUNT = 5;
 
@@ -56,6 +57,19 @@ interface ForcedEviction {
     }
 
     /**
+     * Used for {@link com.hazelcast.map.impl.operation.steps.engine.Step}
+     */
+    static void runStepWithForcedEvictionStrategies(State state, Runnable runnable) {
+        for (double evictionPercentage : EVICTION_PERCENTAGES) {
+            for (ForcedEviction evictionStrategy : EVICTION_STRATEGIES) {
+                if (evictionStrategy.forceEvictAndRun(state, runnable, evictionPercentage)) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
      * First does forced eviction by deleting a percentage
      * of entries then tries to run provided map operation.
      *
@@ -66,6 +80,9 @@ interface ForcedEviction {
      * @throws com.hazelcast.memory.NativeOutOfMemoryError
      */
     boolean forceEvictAndRun(MapOperation mapOperation,
+                             double evictionPercentage);
+
+    boolean forceEvictAndRun(State state, Runnable runnable,
                              double evictionPercentage);
 
     /**
