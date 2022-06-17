@@ -165,7 +165,6 @@ public abstract class MapOperation extends AbstractNamedOperation
 
     protected State newState() {
         return new State(recordStore, this)
-                .setMapName(name)
                 .setPartitionId(getPartitionId())
                 .setCallerAddress(getCallerAddress())
                 .setCallerProvenance(getCallerProvenance())

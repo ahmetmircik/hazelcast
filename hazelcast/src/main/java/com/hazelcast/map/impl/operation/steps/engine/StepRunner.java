@@ -52,30 +52,26 @@ public class StepRunner implements PartitionSpecificRunnable {
 
     @Override
     public void run() {
-        try {
-            Runnable step;
-            do {
-                if (stepSupplier == null || (step = stepSupplier.get()) == null) {
-                    if (isRunningOnPartitionThread()) {
-                        pollCurrentAndPeekNextStepSupplier();
-                        if (stepSupplier == null) {
-                            return;
-                        }
-                        continue;
-                    } else {
-                        operationExecutor.execute(this);
+        Runnable step;
+        do {
+            if (stepSupplier == null || (step = stepSupplier.get()) == null) {
+                if (isRunningOnPartitionThread()) {
+                    pollCurrentAndPeekNextStepSupplier();
+                    if (stepSupplier == null) {
                         return;
                     }
-                }
-
-                if (!runDirect(step)) {
-                    offloadRun(step, this);
+                    continue;
+                } else {
+                    operationExecutor.execute(this);
                     return;
                 }
-            } while (true);
-        } catch (Throwable t) {
-            stepSupplier.handleOperationError(t);
-        }
+            }
+
+            if (!runDirect(step)) {
+                offloadRun(step, this);
+                return;
+            }
+        } while (true);
     }
 
     private void pollCurrentAndPeekNextStepSupplier() {

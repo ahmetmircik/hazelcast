@@ -16,10 +16,17 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
+import com.hazelcast.instance.impl.Node;
+import com.hazelcast.instance.impl.NodeState;
+import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.StepResponseHandler;
+import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
@@ -53,5 +60,60 @@ public enum ResponseSteps implements Step {
         public Step nextStep(State state) {
             return null;
         }
-    };
+    },
+
+    HANDLE_ERROR() {
+        @Override
+        public void runStep(State state) {
+            assertRunningOnPartitionThread();
+
+            handleOperationError(state);
+        }
+
+        public void handleOperationError(State state) {
+            assertRunningOnPartitionThread();
+
+            MapOperation operation = state.getOperation();
+            Throwable e = state.getThrowable();
+
+            if (e instanceof OutOfMemoryError) {
+                OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
+            }
+            try {
+                operation.onExecutionFailure(e);
+            } catch (Throwable t) {
+                operation.getNodeEngine().getLogger(operation.getClass())
+                        .warning("While calling 'operation.onFailure(e)'... op: "
+                        + operation + ", error: " + e, t);
+            }
+
+            operation.logError(e);
+
+            // A response is sent regardless of the
+            // Operation.returnsResponse method because some operations do
+            // want to send back a response, but they didn't want to send it
+            // yet but they ran into some kind of error. If on the receiving
+            // side no invocation is waiting, the response is ignored.
+            sendResponseAfterOperationError(operation, e);
+        }
+
+        private void sendResponseAfterOperationError(Operation operation, Throwable e) {
+            try {
+                Node node = ((NodeEngineImpl) operation.getNodeEngine()).getNode();
+                if (node.getState() != NodeState.SHUT_DOWN) {
+                    operation.sendResponse(e);
+                } else if (operation.executedLocally()) {
+                    operation.sendResponse(new HazelcastInstanceNotActiveException());
+                }
+            } catch (Throwable t) {
+                ILogger logger = operation.getNodeEngine().getLogger(operation.getClass());
+                logger.warning("While sending op error... op: " + operation + ", error: " + e, t);
+            }
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return null;
+        }
+    }
 }
