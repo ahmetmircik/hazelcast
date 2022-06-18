@@ -37,7 +37,7 @@ public class StepRunner implements PartitionSpecificRunnable {
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
             = TimeUnit.MILLISECONDS.toNanos(5);
     private static final String PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
-            = "hazelcast.internal.map.mapstore.max.successive.offloaded.operation.run.nanos";
+            = "hazelcast.internal.map.mapstore.offloaded.max.successive.operation.run.nanos";
     private static final HazelcastProperty MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
             = new HazelcastProperty(PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS,
             DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS, NANOSECONDS);
@@ -68,12 +68,12 @@ public class StepRunner implements PartitionSpecificRunnable {
 
     @Override
     public void run() {
-//        long start = System.nanoTime();
+        long start = System.nanoTime();
         Runnable step;
         do {
             if (stepSupplier == null || (step = stepSupplier.get()) == null) {
                 if (isRunningOnPartitionThread()) {
-                    pollCurrentAndPeekNextStepSupplier();
+                    removeCurrentAndSetNextStepSupplier();
                     if (stepSupplier == null) {
                         return;
                     }
@@ -89,18 +89,17 @@ public class StepRunner implements PartitionSpecificRunnable {
                 return;
             }
 
-            // TODO
-            // free partition thread after a while
-//            if (isRunningOnPartitionThread()
-//                    && System.nanoTime() - start >= maxRunNanos) {
-//                offloadRun(step, this);
-//                return;
-//            }
+            // force free partition thread after a while
+            if (isRunningOnPartitionThread()
+                    && System.nanoTime() - start >= maxRunNanos) {
+                offloadRun(step, this);
+                return;
+            }
 
         } while (true);
     }
 
-    private void pollCurrentAndPeekNextStepSupplier() {
+    private void removeCurrentAndSetNextStepSupplier() {
         assert ThreadUtil.isRunningOnPartitionThread()
                 : Thread.currentThread().getName();
         assert offloadQueue.peek() == currentOperation;
@@ -137,8 +136,8 @@ public class StepRunner implements PartitionSpecificRunnable {
 
     public StepRunner initStepSupplier(MapOperation operation) {
         this.currentOperation = operation;
-        this.stepSupplier = operation == null
-                ? null : new StepSupplier(operation.getStartingStep(), operation.newState());
+        this.stepSupplier = operation != null
+                ? new StepSupplier(operation) : null;
         return this;
 
     }

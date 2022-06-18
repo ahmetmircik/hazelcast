@@ -27,7 +27,7 @@ public class StepOffload extends Offload {
     public StepOffload(MapOperation mapOperation) {
         super(mapOperation);
 
-        getOffloadQueue().add(mapOperation);
+        getOffloadQueue().offer(mapOperation);
     }
 
     @Override

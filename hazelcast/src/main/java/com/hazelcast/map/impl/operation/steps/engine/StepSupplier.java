@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.internal.util.ThreadUtil;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.ResponseSteps;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -32,9 +33,14 @@ public class StepSupplier implements Supplier<Runnable> {
 
     private volatile Step currentStep;
 
-    public StepSupplier(Step startingStep, State state) {
-        this.state = state;
-        this.currentStep = startingStep;
+    public StepSupplier(MapOperation operation) {
+        assert operation != null;
+
+        this.state = operation.newState();
+        this.currentStep = operation.getStartingStep();
+
+        assert state != null;
+        assert currentStep != null;
     }
 
     @Override

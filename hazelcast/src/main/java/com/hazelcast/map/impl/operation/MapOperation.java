@@ -165,7 +165,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     }
 
     public Step getStartingStep() {
-        throw new UnsupportedOperationException("You have to provide a starting step");
+        return null;
     }
 
     public State newState() {
