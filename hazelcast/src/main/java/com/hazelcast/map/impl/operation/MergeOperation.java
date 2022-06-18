@@ -101,7 +101,7 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setCallerProvenance(getCallerProvenance())
                 .setMergingEntries(mergingEntries)
@@ -109,7 +109,7 @@ public class MergeOperation extends MapOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return MergeSteps.READ;
     }
 

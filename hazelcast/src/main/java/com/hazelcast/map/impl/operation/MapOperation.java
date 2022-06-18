@@ -45,6 +45,7 @@ import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
 import com.hazelcast.spi.impl.operationservice.CallStatus;
+import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
@@ -152,18 +153,22 @@ public abstract class MapOperation extends AbstractNamedOperation
 
         if (mapStoreOffloadEnabled) {
             // record-store can be null for some ops: see ClearOperation
-            return new StepOffload(this, getStartingStep(), newState());
+            return newStepOffload();
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected Step getStartingStep() {
-        return null;
+    protected Offload newStepOffload() {
+        return new StepOffload(this);
     }
 
-    protected State newState() {
+    public Step getStartingStep() {
+        throw new UnsupportedOperationException("You have to provide a starting step");
+    }
+
+    public State newState() {
         return new State(recordStore, this)
                 .setPartitionId(getPartitionId())
                 .setCallerAddress(getCallerAddress())

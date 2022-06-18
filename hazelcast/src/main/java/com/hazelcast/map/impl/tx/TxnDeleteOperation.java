@@ -79,7 +79,7 @@ public class TxnDeleteOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setVersion(version)
                 .setThreadId(threadId)
@@ -88,7 +88,7 @@ public class TxnDeleteOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return TxnRemoveSteps.READ;
     }
 

@@ -24,9 +24,8 @@ import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.steps.EPMultiKeySteps;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -74,15 +73,14 @@ public class MultipleEntryOperation extends MapOperation
         if (mapStoreOffloadEnabled) {
             assert recordStore != null;
 
-            return new StepOffload(this,
-                    getStartingStep(), newState());
+            return newStepOffload();
         }
 
         return super.call();
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKeys(keys)
                 .setPredicate(getPredicate())
@@ -91,7 +89,7 @@ public class MultipleEntryOperation extends MapOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return EPMultiKeySteps.FIND_KEYS_TO_LOAD;
     }
 

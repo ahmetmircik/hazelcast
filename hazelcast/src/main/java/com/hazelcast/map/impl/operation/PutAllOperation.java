@@ -98,13 +98,13 @@ public class PutAllOperation extends MapOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setMapEntries(mapEntries);
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return PutAllSteps.READ;
     }
 

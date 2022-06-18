@@ -54,7 +54,7 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         super.afterRunInternal();
     }
 
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKey(dataKey)
                 .setExpect(getExpect());

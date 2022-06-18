@@ -64,13 +64,13 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKey(dataKey);
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return GetSteps.READ;
     }
 

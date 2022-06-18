@@ -63,7 +63,7 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return RemoveIfSameSteps.READ;
     }
 

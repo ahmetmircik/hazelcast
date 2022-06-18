@@ -144,7 +144,7 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
         }
 
         @Override
-        protected Step getStartingStep() {
+        public Step getStartingStep() {
             return RemoveSteps.READ;
         }
 

@@ -45,7 +45,7 @@ public class ContainsKeyOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKey(dataKey);
     }
@@ -57,7 +57,7 @@ public class ContainsKeyOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return ContainsKeySteps.READ;
     }
 

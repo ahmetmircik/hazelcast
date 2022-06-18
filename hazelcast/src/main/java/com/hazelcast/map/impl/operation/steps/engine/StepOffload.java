@@ -18,37 +18,31 @@ package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.operationservice.Offload;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.Queue;
 
 public class StepOffload extends Offload {
 
-    private final StepSupplier stepSupplier;
-
-    public StepOffload(MapOperation mapOperation, Step startingStep, State state) {
+    public StepOffload(MapOperation mapOperation) {
         super(mapOperation);
 
-        this.stepSupplier = new StepSupplier(startingStep, state);
-        getOffloadQueue().add(stepSupplier);
+        getOffloadQueue().add(mapOperation);
     }
-
-//    public StepOffload(String mapName, int partitionId) {
-//        super(state.getOperation());
-//        this.runner = new StepRunner(state.getOperation(), state,
-//                startingStep, mapName);
-//    }
 
     @Override
     public void start() {
-        int partitionId = offloadedOperation().getPartitionId();
-        Queue<StepSupplier> offloadQueue = getOffloadQueue();
-        if (offloadQueue.peek() == stepSupplier) {
-            new StepRunner(offloadedOperation().getNodeEngine(), offloadQueue, partitionId).run();
+        Operation operation = offloadedOperation();
+        int partitionId = operation.getPartitionId();
+        Queue<MapOperation> offloadQueue = getOffloadQueue();
+        if (offloadQueue.peek() == operation) {
+            new StepRunner(offloadedOperation().getNodeEngine(),
+                    offloadQueue, partitionId).run();
         }
 
     }
 
-    private Queue<StepSupplier> getOffloadQueue() {
+    private Queue<MapOperation> getOffloadQueue() {
         MapOperation mapOperation = (MapOperation) offloadedOperation();
         return mapOperation.getMapContainer().getMapServiceContext()
                 .getPartitionContainer(mapOperation.getPartitionId())

@@ -69,7 +69,7 @@ public class DeleteOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return DeleteSteps.READ;
     }
 

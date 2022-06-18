@@ -31,9 +31,8 @@ import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.ExecutorStats;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.EPSingleKeySteps;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
@@ -195,8 +194,7 @@ public class EntryOperation extends LockAwareOperation
             return new EntryOperationOffload(getCallerAddress());
         } else {
             if (mapStoreOffloadEnabled) {
-                return new StepOffload(this,
-                        getStartingStep(), newState());
+                return newStepOffload();
             }
             response = operator(this, entryProcessor)
                     .operateOnKey(dataKey)
@@ -207,7 +205,7 @@ public class EntryOperation extends LockAwareOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKey(dataKey)
                 .setCallerProvenance(CallerProvenance.NOT_WAN)
@@ -215,7 +213,7 @@ public class EntryOperation extends LockAwareOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return EPSingleKeySteps.EP_START;
     }
 

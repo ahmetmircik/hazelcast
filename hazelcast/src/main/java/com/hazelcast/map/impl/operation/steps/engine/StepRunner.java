@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
@@ -43,14 +44,15 @@ public class StepRunner implements PartitionSpecificRunnable {
 
     private final int partitionId;
     private final long maxRunNanos;
-    private final Queue<StepSupplier> offloadQueue;
+    private final Queue<MapOperation> offloadQueue;
     private final OperationExecutor operationExecutor;
     private final ManagedExecutorService executor;
 
     private volatile StepSupplier stepSupplier;
+    private volatile MapOperation currentOperation;
 
     public StepRunner(NodeEngine nodeEngine,
-                      Queue<StepSupplier> offloadQueue, int partitionId) {
+                      Queue<MapOperation> offloadQueue, int partitionId) {
         this.offloadQueue = offloadQueue;
         this.partitionId = partitionId;
 
@@ -61,12 +63,12 @@ public class StepRunner implements PartitionSpecificRunnable {
         this.maxRunNanos = nodeEngine.getProperties()
                 .getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
 
-        initStepSupplier(offloadQueue.peek());
+        this.currentOperation = offloadQueue.peek();
     }
 
     @Override
     public void run() {
-        long start = System.nanoTime();
+//        long start = System.nanoTime();
         Runnable step;
         do {
             if (stepSupplier == null || (step = stepSupplier.get()) == null) {
@@ -101,9 +103,11 @@ public class StepRunner implements PartitionSpecificRunnable {
     private void pollCurrentAndPeekNextStepSupplier() {
         assert ThreadUtil.isRunningOnPartitionThread()
                 : Thread.currentThread().getName();
-        assert offloadQueue.peek() == stepSupplier;
+        assert offloadQueue.peek() == currentOperation;
 
-        offloadQueue.poll();
+        if (stepSupplier != null) {
+            offloadQueue.poll();
+        }
         initStepSupplier(offloadQueue.peek());
     }
 
@@ -131,8 +135,10 @@ public class StepRunner implements PartitionSpecificRunnable {
         }
     }
 
-    public StepRunner initStepSupplier(StepSupplier stepSupplier) {
-        this.stepSupplier = stepSupplier;
+    public StepRunner initStepSupplier(MapOperation operation) {
+        this.currentOperation = operation;
+        this.stepSupplier = operation == null
+                ? null : new StepSupplier(operation.getStartingStep(), operation.newState());
         return this;
 
     }

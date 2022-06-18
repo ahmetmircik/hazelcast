@@ -47,7 +47,7 @@ public abstract class KeyBasedMapOperation extends MapOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKey(dataKey)
                 .setThreadId(threadId)

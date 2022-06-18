@@ -95,7 +95,7 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setStaticPutParams(getStaticParams())
                 .setTxnId(transactionId)
@@ -105,7 +105,7 @@ public class TxnSetOperation extends BasePutOperation
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return TxnPutSteps.READ;
     }
 

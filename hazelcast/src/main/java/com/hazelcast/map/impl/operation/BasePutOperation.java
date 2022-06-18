@@ -54,11 +54,11 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         throw new UnsupportedOperationException();
     }
 
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return PutSteps.READ;
     }
 
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setStaticPutParams(getStaticParams())
                 .setExpect(getExpect())

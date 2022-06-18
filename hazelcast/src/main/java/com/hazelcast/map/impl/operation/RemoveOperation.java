@@ -51,7 +51,7 @@ public class RemoveOperation extends BaseRemoveOperation {
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return RemoveSteps.READ;
     }
 

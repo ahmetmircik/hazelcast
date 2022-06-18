@@ -84,13 +84,13 @@ public class GetAllOperation extends MapOperation
     }
 
     @Override
-    protected State newState() {
+    public State newState() {
         return super.newState()
                 .setKeys(keys);
     }
 
     @Override
-    protected Step getStartingStep() {
+    public Step getStartingStep() {
         return GetAllSteps.READ;
     }
 
