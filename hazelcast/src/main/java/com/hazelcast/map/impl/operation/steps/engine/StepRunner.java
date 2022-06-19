@@ -54,6 +54,7 @@ public class StepRunner implements PartitionSpecificRunnable {
     public StepRunner(NodeEngine nodeEngine,
                       Queue<MapOperation> offloadQueue, int partitionId) {
         this.offloadQueue = offloadQueue;
+        this.currentOperation = offloadQueue.peek();
         this.partitionId = partitionId;
 
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
@@ -62,8 +63,6 @@ public class StepRunner implements PartitionSpecificRunnable {
                 .getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
         this.maxRunNanos = nodeEngine.getProperties()
                 .getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
-
-        this.currentOperation = offloadQueue.peek();
     }
 
     @Override
