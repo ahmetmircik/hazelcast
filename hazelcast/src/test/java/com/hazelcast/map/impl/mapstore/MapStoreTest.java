@@ -358,6 +358,30 @@ public class MapStoreTest extends AbstractMapStoreTest {
         assertEquals(0, localMapStats.getDirtyEntryCount());
     }
 
+    @Test
+    public void clear() {
+        final ConcurrentMap<Long, String> STORE = new ConcurrentHashMap<>();
+        STORE.put(1L, "Event1");
+        STORE.put(2L, "Event2");
+        STORE.put(3L, "Event3");
+        STORE.put(4L, "Event4");
+        STORE.put(5L, "Event5");
+        STORE.put(6L, "Event6");
+
+        Config config = getConfig();
+        config.getMapConfig("map")
+                .setMapStoreConfig(new MapStoreConfig()
+                        .setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER)
+                        .setImplementation(new SimpleMapStore<>(STORE)));
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(3);
+
+        HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
+        IMap map = instance.getMap("map");
+        map.clear();
+
+        assertEquals(0, map.size());
+    }
+
     @Test(timeout = 120000)
     public void testIssue583MapReplaceShouldTriggerMapStore() {
         final ConcurrentMap<String, Long> store = new ConcurrentHashMap<>();
@@ -1035,6 +1059,70 @@ public class MapStoreTest extends AbstractMapStoreTest {
 
         // expect oldValue is null
         assertTrueEventually(() -> assertNull(oldValue.get()));
+    }
+
+    @Test(timeout = 120000)
+    public void testMultipleKeysEntryProcessor() {
+        TestHazelcastInstanceFactory nodeFactory = createHazelcastInstanceFactory(2);
+        Config config = getConfig();
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            Map<Integer, Integer> store = new ConcurrentHashMap<>();
+
+            {
+                for (int i = 0; i < 1_000; i++) {
+                    store.put(i, i);
+                }
+            }
+
+            public Integer load(Integer key) {
+                return store.get(key);
+            }
+
+            @Override
+            public void store(Integer key, Integer value) {
+                store.put(key, value);
+            }
+
+            @Override
+            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
+                Map<Integer, Integer> map = new HashMap<>();
+                for (Integer key : keys) {
+                    map.put(key, store.get(key));
+                }
+                return map;
+            }
+
+            @Override
+            public void storeAll(Map<Integer, Integer> map) {
+                for (Map.Entry<Integer, Integer> entry : map.entrySet()) {
+                    store(entry.getKey(), entry.getValue());
+                }
+            }
+        });
+        String mapName = "default";
+        config.getMapConfig(mapName).setMapStoreConfig(mapStoreConfig);
+
+        HazelcastInstance instance = nodeFactory.newHazelcastInstance(config);
+        nodeFactory.newHazelcastInstance(config);
+
+        IMap<Integer, Integer> map = instance.getMap(mapName);
+
+        final HashSet<Integer> keys = new HashSet<>(3);
+        for (int i = 0; i < 1_500; i++) {
+            keys.add(i);
+        }
+
+        Map<Integer, Integer> result = map.executeOnKeys(keys,
+                (EntryProcessor<Integer, Integer, Integer>) entry -> entry.setValue(0));
+
+        for (Integer key : map.keySet()) {
+            assertEquals(result.toString(), 0, map.get(key).intValue());
+        }
+
+        assertEquals(1_500, map.size());
     }
 
     public Config newConfig(Object storeImpl) {

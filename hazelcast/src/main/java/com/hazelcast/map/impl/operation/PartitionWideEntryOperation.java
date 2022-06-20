@@ -24,6 +24,9 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
+import com.hazelcast.map.impl.operation.steps.EPFullScanSteps;
+import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
@@ -31,9 +34,11 @@ import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
+import com.hazelcast.wan.impl.CallerProvenance;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
@@ -77,6 +82,37 @@ public class PartitionWideEntryOperation extends MapOperation
 
         keysFromIndex = null;
         queryOptimizer = mapServiceContext.getQueryOptimizer();
+    }
+
+    @Override
+    public CallStatus call() throws Exception {
+        if (mapStoreOffloadEnabled) {
+            assert recordStore != null;
+
+            return newStepOffload();
+        }
+
+        return super.call();
+    }
+
+    @Override
+    public State newState() {
+        return super.newState()
+                .setPredicate(getPredicate())
+                .setCallerProvenance(CallerProvenance.NOT_WAN)
+                .setEntryProcessor(entryProcessor);
+    }
+
+    @Override
+    public Step getStartingStep() {
+        return EPFullScanSteps.PROCESS;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        responses = (MapEntries) state.getResult();
+        keysFromIndex = state.getKeysFromIndex();
     }
 
     protected Predicate getPredicate() {

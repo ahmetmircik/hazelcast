@@ -1,0 +1,124 @@
+/*
+ * Copyright (c) 2008-2022, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hazelcast.map.impl.operation.steps;
+
+import com.hazelcast.map.impl.MapContainer;
+import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.mapstore.MapDataStore;
+import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+
+public enum RemoveSteps implements Step {
+
+    READ() {
+        @Override
+        public void runStep(State state) {
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+
+            Record record = recordStore.getRecordOrNull(state.getKey());
+            state.setRecordNull(record == null);
+
+            if (record != null) {
+                Object oldValue = record.getValue();
+                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+                state.setOldValue(oldValue);
+            }
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
+            return state.isNullRecord() ? RemoveSteps.LOAD
+                    : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
+                    ? RemoveSteps.DELETE : ResponseSteps.SEND_RESPONSE);
+        }
+    },
+
+    LOAD() {
+        @Override
+        public boolean isOffloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            Object oldValue = recordStore.loadValueOf(state.getKey());
+
+            state.setOldValue(oldValue);
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return state.getOldValue() == null
+                    ? ResponseSteps.SEND_RESPONSE : RemoveSteps.DELETE;
+        }
+    },
+
+    DELETE() {
+        @Override
+        public boolean isOffloadStep() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            Object oldValue = state.getOldValue();
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            if (oldValue != null && recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
+                MapDataStore mapDataStore = state.getRecordStore().getMapDataStore();
+                mapDataStore.remove(state.getKey(), state.getNow(), state.getTxnId());
+
+                recordStore.updateStatsOnRemove(state.getNow());
+            }
+        }
+
+        @Override
+        public RemoveSteps nextStep(State state) {
+            return RemoveSteps.ON_DELETE;
+        }
+    },
+
+    ON_DELETE() {
+        @Override
+        public void runStep(State state) {
+            assertRunningOnPartitionThread();
+
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            Record record = recordStore.getRecord(state.getKey());
+            if (record == null) {
+                return;
+            }
+            recordStore.removeRecord0(state.getKey(), record);
+            recordStore.onStore(record);
+        }
+
+        @Override
+        public Step nextStep(State state) {
+            return ResponseSteps.SEND_RESPONSE;
+        }
+    };
+
+    RemoveSteps() {
+    }
+}
