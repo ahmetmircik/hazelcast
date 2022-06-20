@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.core.EntryEventType;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.mapstore.MapDataStores;
@@ -28,6 +27,7 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 // TODO: re-run upon NOOME
@@ -38,12 +38,7 @@ public enum PutSteps implements Step {
         public void runStep(State state) {
             assert isRunningOnPartitionThread();
 
-            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            Record record = recordStore.getRecordOrNull(state.getKey(), state.getNow(),
-                    state.getStaticParams().isBackup());
-            if (record != null) {
-                state.setOldValue(record.getValue());
-            }
+            GetSteps.READ.runStep(state);
         }
 
         @Override
@@ -85,7 +80,7 @@ public enum PutSteps implements Step {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
             StaticParams staticParams = state.getStaticParams();
             Object newValue = state.getNewValue();
@@ -176,7 +171,7 @@ public enum PutSteps implements Step {
     ON_STORE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
+            assertRunningOnPartitionThread();
 
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
 

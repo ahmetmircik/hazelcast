@@ -32,18 +32,7 @@ public enum RemoveIfSameSteps implements Step {
     READ() {
         @Override
         public void runStep(State state) {
-            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            MapContainer mapContainer = recordStore.getMapContainer();
-            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-
-            Record record = recordStore.getRecordOrNull(state.getKey());
-            state.setRecordNull(record == null);
-
-            if (record != null) {
-                Object oldValue = record.getValue();
-                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                state.setOldValue(oldValue);
-            }
+           RemoveSteps.READ.runStep(state);
         }
 
         @Override

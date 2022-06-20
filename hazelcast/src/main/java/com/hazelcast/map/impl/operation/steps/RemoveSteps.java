@@ -35,12 +35,14 @@ public enum RemoveSteps implements Step {
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-            Record record = recordStore.getRecordOrNull(state.getKey());
-            state.setRecordNull(record == null);
+            GetSteps.READ.runStep(state);
 
-            if (record != null) {
-                Object oldValue = record.getValue();
-                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+            Object oldValue = state.getOldValue();
+            state.setRecordNull(oldValue == null);
+
+            if (oldValue != null) {
+                oldValue = mapServiceContext
+                        .interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
                 state.setOldValue(oldValue);
             }
         }
