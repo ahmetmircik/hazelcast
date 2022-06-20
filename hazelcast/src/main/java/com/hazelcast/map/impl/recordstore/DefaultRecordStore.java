@@ -463,6 +463,9 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     public Record onLoadRecord(Data key, Object value, boolean backup, Address callerAddress) {
+        assert key != null;
+        assert value != null;
+
         long ttl = UNSET;
         if (mapDataStore.isWithExpirationTime()) {
             MetadataAwareValue loaderEntry = (MetadataAwareValue) value;

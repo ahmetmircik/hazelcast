@@ -101,10 +101,10 @@ public enum EPMultiKeySteps implements Step {
             Map<Object, Object> loadedKeyValuePairs = state.getLoadedKeyValuePairs();
             for (Map.Entry<Object, Object> entry : loadedKeyValuePairs.entrySet()) {
                 Object key = entry.getKey();
-                if (key == null) {
+                Object value = entry.getValue();
+                if (key == null || value == null) {
                     continue;
                 }
-                Object value = entry.getValue();
 
                 ((DefaultRecordStore) recordStore)
                         .onLoadRecord(mapServiceContext.toData(key), value, false, state.getCallerAddress());
