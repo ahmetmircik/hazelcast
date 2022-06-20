@@ -27,7 +27,6 @@ import java.util.UUID;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
-// TODO: re-run upon NOOME
 public enum TxnPutSteps implements Step {
 
     READ() {
