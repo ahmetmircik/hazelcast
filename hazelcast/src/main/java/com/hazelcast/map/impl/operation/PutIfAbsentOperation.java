@@ -18,13 +18,11 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
-import static com.hazelcast.map.impl.record.Record.UNSET;
-
 public class PutIfAbsentOperation extends BasePutOperation implements MutatingOperation {
-
-    protected transient boolean successful;
 
     public PutIfAbsentOperation(String name, Data dataKey, Data value) {
         super(name, dataKey, value);
@@ -38,20 +36,22 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
         Object oldValue = recordStore.putIfAbsent(dataKey, dataValue,
                 getTtl(), getMaxIdle(), getCallerAddress());
         this.oldValue = mapServiceContext.toData(oldValue);
-        successful = this.oldValue == null;
-    }
-
-    protected long getTtl() {
-        return UNSET;
-    }
-
-    protected long getMaxIdle() {
-        return UNSET;
     }
 
     @Override
-    protected void afterRunInternal() {
-        if (successful) {
+    protected StaticParams getStaticParams() {
+        return StaticParams.PUT_IF_ABSENT_PARAMS;
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        this.oldValue = mapServiceContext.toData(state.getOldValue());
+    }
+
+    @Override
+    public void afterRunInternal() {
+        if (oldValue == null) {
             super.afterRunInternal();
         }
     }
@@ -63,7 +63,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
 
     @Override
     public boolean shouldBackup() {
-        return successful && super.shouldBackup();
+        return oldValue == null && super.shouldBackup();
     }
 
     @Override

@@ -17,16 +17,19 @@
 package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.nio.IOUtil;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
+import com.hazelcast.map.impl.operation.steps.RemoveIfSameSteps;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
-import com.hazelcast.internal.serialization.Data;
 
 import java.io.IOException;
 
 public class RemoveIfSameOperation extends BaseRemoveOperation {
 
-    private Data testValue;
+    private Data expect;
     private boolean successful;
 
     public RemoveIfSameOperation() {
@@ -34,20 +37,39 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
 
     public RemoveIfSameOperation(String name, Data dataKey, Data value) {
         super(name, dataKey);
-        testValue = value;
+        expect = value;
     }
 
     @Override
     protected void runInternal() {
-        successful = recordStore.remove(dataKey, testValue);
+        successful = recordStore.remove(dataKey, expect);
     }
 
     @Override
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         if (successful) {
-            dataOldValue = testValue;
+            dataOldValue = expect;
             super.afterRunInternal();
         }
+    }
+
+    @Override
+    public void applyState(State state) {
+        super.applyState(state);
+        successful = ((Boolean) state.getResult());
+        if (successful) {
+            dataOldValue = mapServiceContext.toData(state.getOldValue());
+        }
+    }
+
+    @Override
+    public Step getStartingStep() {
+        return RemoveIfSameSteps.READ;
+    }
+
+    @Override
+    public Data getExpect() {
+        return expect;
     }
 
     @Override
@@ -68,13 +90,13 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     @Override
     protected void writeInternal(ObjectDataOutput out) throws IOException {
         super.writeInternal(out);
-        IOUtil.writeData(out, testValue);
+        IOUtil.writeData(out, expect);
     }
 
     @Override
     protected void readInternal(ObjectDataInput in) throws IOException {
         super.readInternal(in);
-        testValue = IOUtil.readData(in);
+        expect = IOUtil.readData(in);
     }
 
     @Override

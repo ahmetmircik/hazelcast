@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation;
 
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.internal.nearcache.impl.invalidation.Invalidator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.services.ObjectNamespace;
@@ -31,6 +32,9 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
+import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -39,6 +43,9 @@ import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.impl.operationservice.AbstractNamedOperation;
 import com.hazelcast.spi.impl.operationservice.BackupOperation;
+import com.hazelcast.spi.impl.operationservice.BlockingOperation;
+import com.hazelcast.spi.impl.operationservice.CallStatus;
+import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
@@ -51,7 +58,11 @@ import static com.hazelcast.internal.util.CollectionUtil.isEmpty;
 import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
+import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
+import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
 
 @SuppressWarnings("checkstyle:methodcount")
 public abstract class MapOperation extends AbstractNamedOperation
@@ -65,6 +76,8 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient MapServiceContext mapServiceContext;
     protected transient MapEventPublisher mapEventPublisher;
 
+    protected transient boolean hasMapStore;
+    protected transient boolean mapStoreOffloadEnabled;
     protected transient boolean createRecordStoreOnDemand = true;
     protected transient boolean disposeDeferredBlocks = true;
 
@@ -98,6 +111,15 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         canPublishWanEvent = canPublishWanEvent(mapContainer);
+        hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
+        // TODO: find a better way to catch offloadEnabled ops.
+        // TODO: no map-store offload for tiered storage
+//        mapStoreOffloadEnabled = hasMapStore
+        MapConfig mapConfig = mapContainer.getMapConfig();
+        mapStoreOffloadEnabled = getStartingStep() != null
+                && hasMapStore
+                && !mapConfig.getTieredStoreConfig().isEnabled()
+                && mapConfig.getMapStoreConfig().getWriteDelaySeconds() == 0;
 
         assertNativeMapOnPartitionThread();
 
@@ -120,6 +142,44 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
     }
 
+    @Override
+    public CallStatus call() throws Exception {
+        if (this instanceof BlockingOperation) {
+            BlockingOperation blockingOperation = (BlockingOperation) this;
+            if (blockingOperation.shouldWait()) {
+                return WAIT;
+            }
+        }
+
+        if (mapStoreOffloadEnabled) {
+            // record-store can be null for some ops: see ClearOperation
+            return newStepOffload();
+        }
+
+        run();
+        return returnsResponse() ? RESPONSE : VOID;
+    }
+
+    protected Offload newStepOffload() {
+        return new StepOffload(this);
+    }
+
+    public Step getStartingStep() {
+        return null;
+    }
+
+    public State newState() {
+        return new State(recordStore, this)
+                .setPartitionId(getPartitionId())
+                .setCallerAddress(getCallerAddress())
+                .setCallerProvenance(getCallerProvenance())
+                .setDisableWanReplicationEvent(disableWanReplicationEvent());
+    }
+
+    public void applyState(State state) {
+        //
+    }
+
     protected void runInternal() {
         // Intentionally empty method body.
         // Concrete classes can override this method.
@@ -136,12 +196,15 @@ public abstract class MapOperation extends AbstractNamedOperation
 
     @Override
     public final void afterRun() throws Exception {
+        if (mapStoreOffloadEnabled) {
+            return;
+        }
         afterRunInternal();
         disposeDeferredBlocks();
         super.afterRun();
     }
 
-    protected void afterRunInternal() {
+    public void afterRunInternal() {
         // Intentionally empty method body.
         // Concrete classes can override this method.
     }
@@ -204,7 +267,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
     }
 
-    void disposeDeferredBlocks() {
+    public void disposeDeferredBlocks() {
         if (!disposeDeferredBlocks
                 || recordStore == null
                 || recordStore.getInMemoryFormat() != NATIVE) {
@@ -229,7 +292,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return MapService.SERVICE_NAME;
     }
 
-    public boolean isPostProcessing(RecordStore recordStore) {
+    public boolean isPostProcessingOrHasInterceptor(RecordStore recordStore) {
         MapDataStore mapDataStore = recordStore.getMapDataStore();
         return mapDataStore.isPostProcessingMapStore()
                 || !mapContainer.getInterceptorRegistry().getInterceptors().isEmpty();
@@ -243,7 +306,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         throw new UnsupportedOperationException();
     }
 
-    protected final void invalidateNearCache(List<Data> keys) {
+    public final void invalidateNearCache(List<Data> keys) {
         if (!mapContainer.hasInvalidationListener() || isEmpty(keys)) {
             return;
         }
@@ -288,7 +351,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         return mapNearCacheManager.getInvalidator();
     }
 
-    protected final void evict(Data justAddedKey) {
+    public final void evict(Data justAddedKey) {
         if (mapContainer.getEvictor() == Evictor.NULL_EVICTOR) {
             return;
         }
@@ -321,7 +384,7 @@ public abstract class MapOperation extends AbstractNamedOperation
         this.mapContainer = mapContainer;
     }
 
-    protected final void publishWanUpdate(Data dataKey, Object value) {
+    public final void publishWanUpdate(Data dataKey, Object value) {
         publishWanUpdateInternal(dataKey, value, false);
     }
 
@@ -360,12 +423,12 @@ public abstract class MapOperation extends AbstractNamedOperation
         return false;
     }
 
-    protected final TxnReservedCapacityCounter wbqCapacityCounter() {
+    public final TxnReservedCapacityCounter wbqCapacityCounter() {
         return recordStore.getMapDataStore().getTxnReservedCapacityCounter();
     }
 
-    protected final Data getValueOrPostProcessedValue(Record record, Data dataValue) {
-        if (!isPostProcessing(recordStore)) {
+    public final Data getValueOrPostProcessedValue(Record record, Data dataValue) {
+        if (!isPostProcessingOrHasInterceptor(recordStore)) {
             return dataValue;
         }
         return mapServiceContext.toData(record.getValue());
@@ -380,5 +443,9 @@ public abstract class MapOperation extends AbstractNamedOperation
     @Override
     public boolean requiresTenantContext() {
         return true;
+    }
+
+    public MapContainer getMapContainer() {
+        return mapContainer;
     }
 }
