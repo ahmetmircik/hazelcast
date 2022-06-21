@@ -30,21 +30,20 @@ import com.hazelcast.map.impl.recordstore.StaticParams;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-// TODO: re-run upon NOOME
-public enum PutSteps implements Step {
+public enum PutOpSteps implements Step {
 
     READ() {
         @Override
         public void runStep(State state) {
             assert isRunningOnPartitionThread();
 
-            GetSteps.READ.runStep(state);
+            GetOpSteps.READ.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? PutSteps.LOAD : PutSteps.PROCESS;
+                    ? PutOpSteps.LOAD : PutOpSteps.PROCESS;
         }
     },
 
@@ -67,13 +66,13 @@ public enum PutSteps implements Step {
                 state.setOldValue(((DefaultRecordStore) state.getRecordStore())
                         .loadValueOf(state.getKey()));
             } else if (staticParams.isPutIfAbsent() || staticParams.isPutIfExists()) {
-                GetSteps.LOAD.runStep(state);
+                GetOpSteps.LOAD.runStep(state);
             }
         }
 
         @Override
         public Step nextStep(State state) {
-            return PutSteps.PROCESS;
+            return PutOpSteps.PROCESS;
         }
     },
 
@@ -199,6 +198,6 @@ public enum PutSteps implements Step {
         }
     };
 
-    PutSteps() {
+    PutOpSteps() {
     }
 }

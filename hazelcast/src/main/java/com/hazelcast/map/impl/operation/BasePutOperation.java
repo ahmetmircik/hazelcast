@@ -19,7 +19,7 @@ package com.hazelcast.map.impl.operation;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.PutSteps;
+import com.hazelcast.map.impl.operation.steps.PutOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.StaticParams;
@@ -55,7 +55,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     }
 
     public Step getStartingStep() {
-        return PutSteps.READ;
+        return PutOpSteps.READ;
     }
 
     public State newState() {

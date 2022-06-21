@@ -24,7 +24,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.EPFullScanSteps;
+import com.hazelcast.map.impl.operation.steps.PartitionWideOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
@@ -105,7 +105,7 @@ public class PartitionWideEntryOperation extends MapOperation
 
     @Override
     public Step getStartingStep() {
-        return EPFullScanSteps.PROCESS;
+        return PartitionWideOpSteps.PROCESS;
     }
 
     @Override

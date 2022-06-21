@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.DeleteSteps;
+import com.hazelcast.map.impl.operation.steps.DeleteOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.nio.ObjectDataInput;
@@ -70,7 +70,7 @@ public class DeleteOperation extends BaseRemoveOperation {
 
     @Override
     public Step getStartingStep() {
-        return DeleteSteps.READ;
+        return DeleteOpSteps.READ;
     }
 
     @Override

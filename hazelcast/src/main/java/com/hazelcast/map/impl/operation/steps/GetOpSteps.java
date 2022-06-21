@@ -26,8 +26,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
-// TODO: what happens if partition is migrating and we offload map load.
-public enum GetSteps implements Step {
+public enum GetOpSteps implements Step {
 
     // TODO add touch record test?
     READ() {
@@ -42,7 +41,7 @@ public enum GetSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? GetSteps.LOAD : GetSteps.RESPONSE;
+            return state.getOldValue() == null ? GetOpSteps.LOAD : GetOpSteps.RESPONSE;
         }
     },
 
@@ -64,7 +63,7 @@ public enum GetSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return state.getOldValue() == null ? GetSteps.RESPONSE : GetSteps.ON_LOAD;
+            return state.getOldValue() == null ? GetOpSteps.RESPONSE : GetOpSteps.ON_LOAD;
         }
     },
 
@@ -81,7 +80,7 @@ public enum GetSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return GetSteps.RESPONSE;
+            return GetOpSteps.RESPONSE;
         }
     },
 
@@ -109,6 +108,6 @@ public enum GetSteps implements Step {
         }
     };
 
-    GetSteps() {
+    GetOpSteps() {
     }
 }

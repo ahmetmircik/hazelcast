@@ -30,7 +30,7 @@ import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.ExecutorStats;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.EPSingleKeySteps;
+import com.hazelcast.map.impl.operation.steps.EntryOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
@@ -214,7 +214,7 @@ public class EntryOperation extends LockAwareOperation
 
     @Override
     public Step getStartingStep() {
-        return EPSingleKeySteps.EP_START;
+        return EntryOpSteps.EP_START;
     }
 
     @Override

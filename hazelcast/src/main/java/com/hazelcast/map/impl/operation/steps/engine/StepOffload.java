@@ -21,6 +21,7 @@ import com.hazelcast.spi.impl.operationservice.Offload;
 
 import java.util.Queue;
 
+// TODO: what happens if partition is migrating and we offload map load.
 public class StepOffload extends Offload {
 
     private final StepRunner stepRunner;

@@ -27,7 +27,7 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-public enum DeleteSteps implements Step {
+public enum DeleteOpSteps implements Step {
 
     READ() {
         @Override
@@ -53,7 +53,7 @@ public enum DeleteSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return DeleteSteps.DELETE;
+            return DeleteOpSteps.DELETE;
         }
     },
 
@@ -77,7 +77,7 @@ public enum DeleteSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.isNullRecord()
-                    ? UtilSteps.SEND_RESPONSE : DeleteSteps.ON_DELETE;
+                    ? UtilSteps.SEND_RESPONSE : DeleteOpSteps.ON_DELETE;
         }
     },
 
@@ -97,6 +97,6 @@ public enum DeleteSteps implements Step {
             return UtilSteps.SEND_RESPONSE;
         }
     };
-    DeleteSteps() {
+    DeleteOpSteps() {
     }
 }

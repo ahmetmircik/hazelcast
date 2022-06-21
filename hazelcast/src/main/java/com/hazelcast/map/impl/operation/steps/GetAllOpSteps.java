@@ -30,9 +30,7 @@ import java.util.Set;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-// FIXME: map-store load all should be called
-// TODO: re-run upon NOOME
-public enum GetAllSteps implements Step {
+public enum GetAllOpSteps implements Step {
 
     READ() {
         @Override
@@ -50,7 +48,7 @@ public enum GetAllSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return !state.getKeysToLoad().isEmpty()
-                    ? GetAllSteps.LOAD_ALL : GetAllSteps.PROCESS;
+                    ? GetAllOpSteps.LOAD_ALL : GetAllOpSteps.PROCESS;
         }
     },
 
@@ -64,12 +62,12 @@ public enum GetAllSteps implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            EPMultiKeySteps.LOAD_ALL.runStep(state);
+            MultipleEntryOpSteps.LOAD_ALL.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
-            return GetAllSteps.PROCESS;
+            return GetAllOpSteps.PROCESS;
         }
     },
 
@@ -95,6 +93,6 @@ public enum GetAllSteps implements Step {
         }
     };
 
-    GetAllSteps() {
+    GetAllOpSteps() {
     }
 }

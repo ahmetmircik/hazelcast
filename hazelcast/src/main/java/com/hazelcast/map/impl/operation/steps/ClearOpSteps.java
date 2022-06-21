@@ -31,8 +31,7 @@ import java.util.function.BiConsumer;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-// TODO: what happens if partition is migrating and we offload map load.
-public enum ClearSteps implements Step {
+public enum ClearOpSteps implements Step {
 
     CLEAR_MEMORY() {
         @Override
@@ -69,7 +68,7 @@ public enum ClearSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getRecordStore() == null
-                    ? UtilSteps.SEND_RESPONSE : ClearSteps.CLEAR_MAP_STORE;
+                    ? UtilSteps.SEND_RESPONSE : ClearOpSteps.CLEAR_MAP_STORE;
         }
     },
 
@@ -89,8 +88,8 @@ public enum ClearSteps implements Step {
         }
 
         @Override
-        public ClearSteps nextStep(State state) {
-            return ClearSteps.ON_CLEAR;
+        public ClearOpSteps nextStep(State state) {
+            return ClearOpSteps.ON_CLEAR;
         }
     },
 
@@ -113,6 +112,6 @@ public enum ClearSteps implements Step {
         }
     };
 
-    ClearSteps() {
+    ClearOpSteps() {
     }
 }
