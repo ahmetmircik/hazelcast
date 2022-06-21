@@ -141,7 +141,7 @@ public enum PutSteps implements Step {
         public Step nextStep(State state) {
             // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
-                return ResponseSteps.SEND_RESPONSE;
+                return UtilSteps.SEND_RESPONSE;
             }
             return STORE;
         }
@@ -195,7 +195,7 @@ public enum PutSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 

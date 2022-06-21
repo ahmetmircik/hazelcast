@@ -54,7 +54,7 @@ public enum PutAllSteps implements Step {
 
             MapEntries mapEntries = state.getMapEntries();
 
-            boolean triggerMapLoader = ((PutAllOperation) state.getOperation()).isTriggerMapLoader();
+            boolean triggerMapLoader = state.isTriggerMapLoader();
             boolean loadOldValue = triggerMapLoader
                     && ((PutAllOperation) state.getOperation()).isHasMapListener();
             List<Data> keysToLoadOldValue = loadOldValue ? new ArrayList<>() : Collections.emptyList();
@@ -126,7 +126,7 @@ public enum PutAllSteps implements Step {
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
-            boolean triggerMapLoader = ((PutAllOperation) state.getOperation()).isTriggerMapLoader();
+            boolean triggerMapLoader = state.isTriggerMapLoader();
 
             MapEntries mapEntries = state.getMapEntries();
             List<Map.Entry<Data, Data>> entries = mapEntries.entries();
@@ -220,7 +220,7 @@ public enum PutAllSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 

@@ -61,7 +61,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
     public State newState() {
         return super.newState()
                 .setStaticPutParams(getStaticParams())
-                .setExpect(getExpect())
                 .setTtl(getTtl())
                 .setMaxIdle(getMaxIdle());
     }
@@ -85,11 +84,6 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         publishWanUpdate(dataKey, value);
         evict(dataKey);
         super.afterRunInternal();
-    }
-
-    // overridden in extension classes
-    protected Data getExpect() {
-        return null;
     }
 
     // overridden in extension classes

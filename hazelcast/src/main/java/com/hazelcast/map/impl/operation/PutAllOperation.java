@@ -100,16 +100,13 @@ public class PutAllOperation extends MapOperation
     @Override
     public State newState() {
         return super.newState()
-                .setMapEntries(mapEntries);
+                .setMapEntries(mapEntries)
+                .setTriggerMapLoader(triggerMapLoader);
     }
 
     @Override
     public Step getStartingStep() {
         return PutAllSteps.READ;
-    }
-
-    public boolean isTriggerMapLoader() {
-        return triggerMapLoader;
     }
 
     @Override

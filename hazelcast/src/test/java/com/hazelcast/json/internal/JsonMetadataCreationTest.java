@@ -73,7 +73,7 @@ import static org.junit.runners.Parameterized.UseParametersRunnerFactory;
 @Category({QuickTest.class, ParallelJVMTest.class})
 public class JsonMetadataCreationTest extends HazelcastTestSupport {
 
-    private static final int ENTRY_COUNT = 1;
+    private static final int ENTRY_COUNT = 1000;
     private static final int NODE_COUNT = 3;
     private static final int PARTITION_COUNT = 10;
 

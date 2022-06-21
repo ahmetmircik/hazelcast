@@ -841,8 +841,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
         PartitionAwareTestEntryProcessor entryProcessor = new PartitionAwareTestEntryProcessor(mapName2);
         assertNull(map.executeOnKey(1, entryProcessor));
-        assertTrueEventually(() -> assertEquals(1, instance2.getMap(mapName2).get(1)));
-
+        assertEquals(1, instance2.getMap(mapName2).get(1));
     }
 
     @Test

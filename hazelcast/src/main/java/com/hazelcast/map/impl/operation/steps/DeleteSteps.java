@@ -77,7 +77,7 @@ public enum DeleteSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.isNullRecord()
-                    ? ResponseSteps.SEND_RESPONSE : DeleteSteps.ON_DELETE;
+                    ? UtilSteps.SEND_RESPONSE : DeleteSteps.ON_DELETE;
         }
     },
 
@@ -94,7 +94,7 @@ public enum DeleteSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
     DeleteSteps() {

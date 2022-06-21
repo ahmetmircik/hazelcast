@@ -30,7 +30,7 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
-public enum ResponseSteps implements Step {
+public enum UtilSteps implements Step {
 
     SEND_RESPONSE() {
         @Override

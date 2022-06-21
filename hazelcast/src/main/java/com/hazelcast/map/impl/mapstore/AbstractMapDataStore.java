@@ -16,14 +16,12 @@
 
 package com.hazelcast.map.impl.mapstore;
 
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.DataType;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.Clock;
-import com.hazelcast.internal.util.MapUtil;
-import com.hazelcast.map.EntryLoader;
 import com.hazelcast.map.impl.MapStoreWrapper;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.spi.impl.NodeEngine;
 
 import java.util.ArrayList;
@@ -31,7 +29,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Abstract map data store contains common functionality of map data stores.
@@ -50,15 +47,6 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
         this.store = mapStoreContext.getMapStoreWrapper();
         this.nodeEngine = mapStoreContext.getMapServiceContext().getNodeEngine();
         this.serializationService = (InternalSerializationService) nodeEngine.getSerializationService();
-    }
-
-    @Override
-    public void storeAll(Map map, long expirationTime) {
-        if (MapUtil.isNullOrEmpty(map)) {
-            return;
-        }
-
-        getStore().storeAll(convertKVPairsToObject(map, expirationTime));
     }
 
     @Override
@@ -134,20 +122,6 @@ public abstract class AbstractMapDataStore<K, V> implements MapDataStore<K, V> {
             objectKeys.add(toObject(key));
         }
         return objectKeys;
-    }
-
-    private Map convertKVPairsToObject(Map map, long expirationTime) {
-        Map objectMap = MapUtil.createHashMap(map.size());
-        Set<Map.Entry> entrySet = map.entrySet();
-        for (Map.Entry entry : entrySet) {
-            Object value = getStore().isWithExpirationTime()
-                    ? new EntryLoader.MetadataAwareValue(toObject(entry.getValue()),
-                    getUserExpirationTime(expirationTime))
-                    : toObject(entry.getValue());
-
-            objectMap.put(toObject(entry.getKey()), value);
-        }
-        return objectMap;
     }
 
     @Override

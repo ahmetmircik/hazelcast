@@ -22,7 +22,10 @@ import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 
-public class PutIfAbsentOperation extends BasePutOperation implements MutatingOperation {
+public class PutIfAbsentOperation
+        extends BasePutOperation implements MutatingOperation {
+
+    protected transient boolean successful;
 
     public PutIfAbsentOperation(String name, Data dataKey, Data value) {
         super(name, dataKey, value);
@@ -36,6 +39,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
         Object oldValue = recordStore.putIfAbsent(dataKey, dataValue,
                 getTtl(), getMaxIdle(), getCallerAddress());
         this.oldValue = mapServiceContext.toData(oldValue);
+        this.successful = this.oldValue == null;
     }
 
     @Override
@@ -47,11 +51,12 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
     public void applyState(State state) {
         super.applyState(state);
         this.oldValue = mapServiceContext.toData(state.getOldValue());
+        this.successful = this.oldValue == null;
     }
 
     @Override
     public void afterRunInternal() {
-        if (oldValue == null) {
+        if (successful) {
             super.afterRunInternal();
         }
     }
@@ -63,7 +68,7 @@ public class PutIfAbsentOperation extends BasePutOperation implements MutatingOp
 
     @Override
     public boolean shouldBackup() {
-        return oldValue == null && super.shouldBackup();
+        return successful && super.shouldBackup();
     }
 
     @Override
