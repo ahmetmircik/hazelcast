@@ -138,11 +138,10 @@ public enum PutOpSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            // TODO: when isStopExecution what should be next state?
             if (state.isStopExecution()) {
                 return UtilSteps.SEND_RESPONSE;
             }
-            return STORE;
+            return state.getStaticParams().isTransient() ? ON_STORE : STORE;
         }
     },
 
@@ -190,6 +189,10 @@ public enum PutOpSteps implements Step {
             }
 
             state.setRecord(record);
+
+            if (state.getStaticParams().isTransient()) {
+                recordStore.getMapDataStore().addTransient(state.getKey(), state.getNow());
+            }
         }
 
         @Override

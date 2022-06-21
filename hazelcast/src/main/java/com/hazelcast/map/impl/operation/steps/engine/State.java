@@ -51,7 +51,6 @@ public class State {
     private final MapOperation operation;
 
     // fields coming from operation
-    private boolean putTransient;
     private int partitionId = UNSET;
     private long threadId;
     private long ttl = UNSET;
@@ -104,7 +103,6 @@ public class State {
         this.operation = state.getOperation();
 
         setTtl(state.getTtl())
-                .setPutTransient(state.isPutTransient())
                 .setMaxIdle(state.getMaxIdle())
                 .setVersion(state.getVersion())
                 .setExpiryTime(state.getExpiryTime())
@@ -186,11 +184,6 @@ public class State {
         return this;
     }
 
-    public State setPutTransient(boolean putTransient) {
-        this.putTransient = putTransient;
-        return this;
-    }
-
     public State setStaticPutParams(StaticParams staticStaticParams) {
         this.staticParams = staticStaticParams;
         return this;
@@ -234,10 +227,6 @@ public class State {
 
     public Object getNewValue() {
         return newValue;
-    }
-
-    public boolean isPutTransient() {
-        return putTransient;
     }
 
     public long getTtl() {
