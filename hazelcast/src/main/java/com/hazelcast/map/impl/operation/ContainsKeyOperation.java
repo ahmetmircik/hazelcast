@@ -20,7 +20,7 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.internal.locksupport.LockWaitNotifyKey;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapDataSerializerHook;
-import com.hazelcast.map.impl.operation.steps.ContainsKeySteps;
+import com.hazelcast.map.impl.operation.steps.ContainsKeyOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.spi.impl.operationservice.BlockingOperation;
@@ -58,7 +58,7 @@ public class ContainsKeyOperation
 
     @Override
     public Step getStartingStep() {
-        return ContainsKeySteps.READ;
+        return ContainsKeyOpSteps.READ;
     }
 
     @Override

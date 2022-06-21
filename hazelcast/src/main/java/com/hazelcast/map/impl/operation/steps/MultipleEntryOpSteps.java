@@ -37,8 +37,7 @@ import java.util.Map;
 
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
-// TODO: what happens if partition is migrating and we offload map load.
-public enum EPMultiKeySteps implements Step {
+public enum MultipleEntryOpSteps implements Step {
 
     FIND_KEYS_TO_LOAD() {
         @Override
@@ -64,10 +63,9 @@ public enum EPMultiKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             if (!state.getKeysToLoad().isEmpty()) {
-                return EPMultiKeySteps.LOAD_ALL;
+                return MultipleEntryOpSteps.LOAD_ALL;
             }
-            // FIXME
-            return EPMultiKeySteps.PROCESS;
+            return MultipleEntryOpSteps.PROCESS;
         }
     },
 
@@ -86,7 +84,7 @@ public enum EPMultiKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getLoadedKeyValuePairs().isEmpty()
-                    ? EPMultiKeySteps.PROCESS : EPMultiKeySteps.ON_LOAD_ALL;
+                    ? MultipleEntryOpSteps.PROCESS : MultipleEntryOpSteps.ON_LOAD_ALL;
         }
     },
 
@@ -113,7 +111,7 @@ public enum EPMultiKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return EPMultiKeySteps.PROCESS;
+            return MultipleEntryOpSteps.PROCESS;
         }
     },
 
@@ -143,7 +141,7 @@ public enum EPMultiKeySteps implements Step {
                         .setEntryOperator(operator(state.getOperation(),
                                 state.getEntryProcessor(), state.getPredicate()));
 
-                EPSingleKeySteps.PROCESS.runStep(singleKeyState);
+                EntryOpSteps.PROCESS.runStep(singleKeyState);
 
                 EntryEventType eventType = singleKeyState.getOperator().getEventType();
                 if (eventType == null) {
@@ -184,12 +182,12 @@ public enum EPMultiKeySteps implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutSteps.STORE.runStep(s);
+                PutOpSteps.STORE.runStep(s);
             }
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteSteps.DELETE.runStep(s);
+                DeleteOpSteps.DELETE.runStep(s);
             }
         }
 
@@ -204,7 +202,7 @@ public enum EPMultiKeySteps implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutSteps.ON_STORE.runStep(s);
+                PutOpSteps.ON_STORE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onAddedOrUpdated0(s.getNewValue());
@@ -218,7 +216,7 @@ public enum EPMultiKeySteps implements Step {
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteSteps.ON_DELETE.runStep(s);
+                DeleteOpSteps.ON_DELETE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onRemove0();
@@ -237,6 +235,6 @@ public enum EPMultiKeySteps implements Step {
         }
     };
 
-    EPMultiKeySteps() {
+    MultipleEntryOpSteps() {
     }
 }

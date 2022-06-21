@@ -43,9 +43,7 @@ import static com.hazelcast.internal.util.MapUtil.createHashMap;
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
-// FIXME: map-store load all should be called
-// TODO: re-run upon NOOME
-public enum PutAllSteps implements Step {
+public enum PutAllOpSteps implements Step {
 
     READ() {
         @Override
@@ -75,7 +73,7 @@ public enum PutAllSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return PutAllSteps.LOAD_ALL_STORE_ALL;
+            return PutAllOpSteps.LOAD_ALL_STORE_ALL;
         }
     },
 
@@ -90,13 +88,12 @@ public enum PutAllSteps implements Step {
             assert !isRunningOnPartitionThread();
 
             if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
-                EPMultiKeySteps.LOAD_ALL.runStep(state);
+                MultipleEntryOpSteps.LOAD_ALL.runStep(state);
             }
 
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             long expirationTime = recordStore.getExpirySystem().calculateExpirationTime(state.getTtl(),
                     state.getMaxIdle(), state.getNow(), state.getNow());
-            // TODO what about expiry aware entry-store?
             // TODO storeAll can be more appropriate?
             Map result = (Map) state.getResult();
             Map newResult = new HashMap();
@@ -114,7 +111,7 @@ public enum PutAllSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return PutAllSteps.PROCESS;
+            return PutAllOpSteps.PROCESS;
         }
     },
 
@@ -156,7 +153,7 @@ public enum PutAllSteps implements Step {
                         .setStaticPutParams(loadOldValue
                                 ? StaticParams.PUT_PARAMS : StaticParams.SET_PARAMS);
 
-                PutSteps.ON_STORE.runStep(perKeyState);
+                PutOpSteps.ON_STORE.runStep(perKeyState);
 
                 if (loadOldValue && oldValue != null) {
                     // TODO why do we need to convert to heap data here?
@@ -224,6 +221,6 @@ public enum PutAllSteps implements Step {
         }
     };
 
-    PutAllSteps() {
+    PutAllOpSteps() {
     }
 }

@@ -30,9 +30,7 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-// TODO: UPDATE BACKUP!!!
-// TODO: what happens if partition is migrating and we offload map load.
-public enum EPSingleKeySteps implements Step {
+public enum EntryOpSteps implements Step {
 
     EP_START() {
         @Override
@@ -47,16 +45,16 @@ public enum EPSingleKeySteps implements Step {
                 return;
             }
 
-            GetSteps.READ.runStep(state);
+            GetOpSteps.READ.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
             if (state.isStopExecution()) {
-                return EPSingleKeySteps.AFTER_RUN;
+                return EntryOpSteps.AFTER_RUN;
             }
             return state.getOldValue() == null
-                    ? EPSingleKeySteps.LOAD : EPSingleKeySteps.PROCESS;
+                    ? EntryOpSteps.LOAD : EntryOpSteps.PROCESS;
         }
     },
 
@@ -70,25 +68,25 @@ public enum EPSingleKeySteps implements Step {
         public void runStep(State state) {
             assert !isRunningOnPartitionThread();
 
-            GetSteps.LOAD.runStep(state);
+            GetOpSteps.LOAD.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? EPSingleKeySteps.PROCESS : EPSingleKeySteps.ON_LOAD;
+                    ? EntryOpSteps.PROCESS : EntryOpSteps.ON_LOAD;
         }
     },
 
     ON_LOAD() {
         @Override
         public void runStep(State state) {
-            GetSteps.ON_LOAD.runStep(state);
+            GetOpSteps.ON_LOAD.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
-            return EPSingleKeySteps.PROCESS;
+            return EntryOpSteps.PROCESS;
         }
     },
 
@@ -103,7 +101,6 @@ public enum EPSingleKeySteps implements Step {
             entryOperator.init(state.getKey(), state.getOldValue(),
                     null, null, null, recordStore.isLocked(state.getKey()), state.getTtl());
 
-            // TODO better handle clonedOrRawOldValue
             Object clonedOldValue = entryOperator.clonedOrRawOldValue();
 
             entryOperator.init(state.getKey(), clonedOldValue,
@@ -139,7 +136,7 @@ public enum EPSingleKeySteps implements Step {
                         state.setTtl(entryOperator.getEntry().getNewTtl());
                         break;
                     case REMOVED:
-                        DeleteSteps.READ.runStep(state);
+                        DeleteOpSteps.READ.runStep(state);
                         break;
                     default:
                         throw new IllegalArgumentException("Unexpected event found:" + eventType);
@@ -174,7 +171,7 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public void runStep(State state) {
-            PutSteps.STORE.runStep(state);
+            PutOpSteps.STORE.runStep(state);
         }
 
         @Override
@@ -186,7 +183,7 @@ public enum EPSingleKeySteps implements Step {
     ON_STORE() {
         @Override
         public void runStep(State state) {
-            PutSteps.ON_STORE.runStep(state);
+            PutOpSteps.ON_STORE.runStep(state);
         }
 
         @Override
@@ -203,7 +200,7 @@ public enum EPSingleKeySteps implements Step {
 
         @Override
         public void runStep(State state) {
-            DeleteSteps.DELETE.runStep(state);
+            DeleteOpSteps.DELETE.runStep(state);
         }
 
         @Override
@@ -215,7 +212,7 @@ public enum EPSingleKeySteps implements Step {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            DeleteSteps.ON_DELETE.runStep(state);
+            DeleteOpSteps.ON_DELETE.runStep(state);
         }
 
         @Override
@@ -254,6 +251,6 @@ public enum EPSingleKeySteps implements Step {
         }
     };
 
-    EPSingleKeySteps() {
+    EntryOpSteps() {
     }
 }

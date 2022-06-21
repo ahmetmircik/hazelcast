@@ -22,7 +22,7 @@ import com.hazelcast.internal.util.UUIDSerializationUtil;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.operation.BasePutOperation;
-import com.hazelcast.map.impl.operation.steps.TxnPutSteps;
+import com.hazelcast.map.impl.operation.steps.TxnSetOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
@@ -106,7 +106,7 @@ public class TxnSetOperation extends BasePutOperation
 
     @Override
     public Step getStartingStep() {
-        return TxnPutSteps.READ;
+        return TxnSetOpSteps.READ;
     }
 
     @Override

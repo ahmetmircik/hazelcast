@@ -16,24 +16,20 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.core.EntryEventType;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import java.util.UUID;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-
-public enum TxnPutSteps implements Step {
+public enum TxnDeleteOpSteps implements Step {
 
     READ() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();
@@ -41,24 +37,27 @@ public enum TxnPutSteps implements Step {
             long version = state.getVersion();
             UUID ownerUuid = state.getOwnerUuid();
             long callId = state.getOperation().getCallId();
+            UUID transactionId = state.getTxnId();
+            MapOperation operation = state.getOperation();
 
             recordStore.unlock(dataKey, ownerUuid, threadId, callId);
 
-            Record record = recordStore.getRecordOrNull(dataKey);
+            Record record = recordStore.getRecord(dataKey);
             if (record == null || version == record.getVersion()) {
-                PutSteps.READ.runStep(state);
+                RemoveOpSteps.READ.runStep(state);
+            }
 
-                state.setEntryEventType(record == null
-                        ? EntryEventType.ADDED : EntryEventType.UPDATED);
+            if (record == null) {
+                operation.wbqCapacityCounter().decrement(transactionId);
             }
         }
 
         @Override
         public Step nextStep(State state) {
-            return PutSteps.READ.nextStep(state);
+            return RemoveOpSteps.READ.nextStep(state);
         }
     };
 
-    TxnPutSteps() {
+    TxnDeleteOpSteps() {
     }
 }

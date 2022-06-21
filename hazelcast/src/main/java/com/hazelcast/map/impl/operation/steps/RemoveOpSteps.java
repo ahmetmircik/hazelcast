@@ -26,7 +26,7 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
-public enum RemoveSteps implements Step {
+public enum RemoveOpSteps implements Step {
 
     READ() {
         @Override
@@ -35,7 +35,7 @@ public enum RemoveSteps implements Step {
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
-            GetSteps.READ.runStep(state);
+            GetOpSteps.READ.runStep(state);
 
             Object oldValue = state.getOldValue();
             state.setRecordNull(oldValue == null);
@@ -50,9 +50,9 @@ public enum RemoveSteps implements Step {
         @Override
         public Step nextStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            return state.isNullRecord() ? RemoveSteps.LOAD
+            return state.isNullRecord() ? RemoveOpSteps.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveSteps.DELETE : UtilSteps.SEND_RESPONSE);
+                    ? RemoveOpSteps.DELETE : UtilSteps.SEND_RESPONSE);
         }
     },
 
@@ -73,7 +73,7 @@ public enum RemoveSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? UtilSteps.SEND_RESPONSE : RemoveSteps.DELETE;
+                    ? UtilSteps.SEND_RESPONSE : RemoveOpSteps.DELETE;
         }
     },
 
@@ -96,8 +96,8 @@ public enum RemoveSteps implements Step {
         }
 
         @Override
-        public RemoveSteps nextStep(State state) {
-            return RemoveSteps.ON_DELETE;
+        public RemoveOpSteps nextStep(State state) {
+            return RemoveOpSteps.ON_DELETE;
         }
     },
 
@@ -121,6 +121,6 @@ public enum RemoveSteps implements Step {
         }
     };
 
-    RemoveSteps() {
+    RemoveOpSteps() {
     }
 }

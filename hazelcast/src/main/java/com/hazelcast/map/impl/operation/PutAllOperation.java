@@ -23,7 +23,7 @@ import com.hazelcast.map.IMap;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.PutAllSteps;
+import com.hazelcast.map.impl.operation.steps.PutAllOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
@@ -106,7 +106,7 @@ public class PutAllOperation extends MapOperation
 
     @Override
     public Step getStartingStep() {
-        return PutAllSteps.READ;
+        return PutAllOpSteps.READ;
     }
 
     @Override

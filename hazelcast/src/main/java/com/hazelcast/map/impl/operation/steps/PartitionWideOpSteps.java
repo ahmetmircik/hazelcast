@@ -39,9 +39,7 @@ import java.util.List;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 
-// TODO: Handle backup operations for this step since backup handling a bit different here.
-// TODO: what happens if partition is migrating and we offload map load.
-public enum EPFullScanSteps implements Step {
+public enum PartitionWideOpSteps implements Step {
 
     PROCESS() {
         @Override
@@ -130,7 +128,7 @@ public enum EPFullScanSteps implements Step {
                     .setEntryOperator(operator(state.getOperation(),
                             state.getEntryProcessor(), state.getPredicate()));
 
-            EPSingleKeySteps.PROCESS.runStep(singleKeyState);
+            EntryOpSteps.PROCESS.runStep(singleKeyState);
 
             EntryEventType eventType = singleKeyState.getOperator().getEventType();
             if (eventType == null) {
@@ -170,12 +168,12 @@ public enum EPFullScanSteps implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutSteps.STORE.runStep(s);
+                PutOpSteps.STORE.runStep(s);
             }
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteSteps.DELETE.runStep(s);
+                DeleteOpSteps.DELETE.runStep(s);
             }
         }
 
@@ -190,7 +188,7 @@ public enum EPFullScanSteps implements Step {
         public void runStep(State state) {
             List<State> toStore = state.getToStore();
             for (State s : toStore) {
-                PutSteps.ON_STORE.runStep(s);
+                PutOpSteps.ON_STORE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onAddedOrUpdated0(s.getNewValue());
@@ -204,7 +202,7 @@ public enum EPFullScanSteps implements Step {
 
             List<State> toRemove = state.getToRemove();
             for (State s : toRemove) {
-                DeleteSteps.ON_DELETE.runStep(s);
+                DeleteOpSteps.ON_DELETE.runStep(s);
 
                 EntryOperator operator = s.getOperator();
                 operator.onRemove0();
@@ -223,6 +221,6 @@ public enum EPFullScanSteps implements Step {
         }
     };
 
-    EPFullScanSteps() {
+    PartitionWideOpSteps() {
     }
 }

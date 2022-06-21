@@ -22,7 +22,7 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.BaseRemoveOperation;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
-import com.hazelcast.map.impl.operation.steps.TxnRemoveSteps;
+import com.hazelcast.map.impl.operation.steps.TxnDeleteOpSteps;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
@@ -89,7 +89,7 @@ public class TxnDeleteOperation
 
     @Override
     public Step getStartingStep() {
-        return TxnRemoveSteps.READ;
+        return TxnDeleteOpSteps.READ;
     }
 
     @Override

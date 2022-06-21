@@ -23,7 +23,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.MapEntries;
-import com.hazelcast.map.impl.operation.steps.EPMultiKeySteps;
+import com.hazelcast.map.impl.operation.steps.MultipleEntryOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.nio.ObjectDataInput;
@@ -90,7 +90,7 @@ public class MultipleEntryOperation extends MapOperation
 
     @Override
     public Step getStartingStep() {
-        return EPMultiKeySteps.FIND_KEYS_TO_LOAD;
+        return MultipleEntryOpSteps.FIND_KEYS_TO_LOAD;
     }
 
     @Override

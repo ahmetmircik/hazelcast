@@ -25,8 +25,7 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
-// TODO: what happens if partition is migrating and we offload map load.
-public enum ContainsKeySteps implements Step {
+public enum ContainsKeyOpSteps implements Step {
 
     // TODO add touch record test?
     READ() {
@@ -45,7 +44,7 @@ public enum ContainsKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ContainsKeySteps.LOAD : UtilSteps.SEND_RESPONSE;
+                    ? ContainsKeyOpSteps.LOAD : UtilSteps.SEND_RESPONSE;
         }
     },
 
@@ -59,13 +58,13 @@ public enum ContainsKeySteps implements Step {
         public void runStep(State state) {
             assert !ThreadUtil.isRunningOnPartitionThread();
 
-            GetSteps.LOAD.runStep(state);
+            GetOpSteps.LOAD.runStep(state);
         }
 
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? UtilSteps.SEND_RESPONSE : ContainsKeySteps.ON_LOAD;
+                    ? UtilSteps.SEND_RESPONSE : ContainsKeyOpSteps.ON_LOAD;
         }
     },
 
@@ -85,6 +84,6 @@ public enum ContainsKeySteps implements Step {
         }
     };
 
-    ContainsKeySteps() {
+    ContainsKeyOpSteps() {
     }
 }

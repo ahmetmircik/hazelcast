@@ -27,18 +27,18 @@ import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
-public enum RemoveIfSameSteps implements Step {
+public enum RemoveIfSameOpSteps implements Step {
 
     READ() {
         @Override
         public void runStep(State state) {
-           RemoveSteps.READ.runStep(state);
+           RemoveOpSteps.READ.runStep(state);
         }
 
         @Override
-        public RemoveIfSameSteps nextStep(State state) {
+        public RemoveIfSameOpSteps nextStep(State state) {
             return state.isNullRecord()
-                    ? RemoveIfSameSteps.LOAD : RemoveIfSameSteps.ON_LOAD;
+                    ? RemoveIfSameOpSteps.LOAD : RemoveIfSameOpSteps.ON_LOAD;
         }
     },
 
@@ -63,7 +63,7 @@ public enum RemoveIfSameSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameSteps.ON_LOAD;
+                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameOpSteps.ON_LOAD;
         }
     },
 
@@ -89,7 +89,7 @@ public enum RemoveIfSameSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.isStopExecution()
-                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameSteps.DELETE;
+                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameOpSteps.DELETE;
         }
     },
 
@@ -106,8 +106,8 @@ public enum RemoveIfSameSteps implements Step {
         }
 
         @Override
-        public RemoveIfSameSteps nextStep(State state) {
-            return RemoveIfSameSteps.ON_DELETE;
+        public RemoveIfSameOpSteps nextStep(State state) {
+            return RemoveIfSameOpSteps.ON_DELETE;
         }
     },
 
@@ -133,6 +133,6 @@ public enum RemoveIfSameSteps implements Step {
         }
     };
 
-    RemoveIfSameSteps() {
+    RemoveIfSameOpSteps() {
     }
 }

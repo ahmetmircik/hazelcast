@@ -41,8 +41,7 @@ import static com.hazelcast.core.EntryEventType.MERGED;
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
 
-// TODO: re-run upon NOOME
-public enum MergeSteps implements Step {
+public enum MergeOpSteps implements Step {
 
     READ() {
         @Override
@@ -99,7 +98,7 @@ public enum MergeSteps implements Step {
 
             List outcomes = (List) state.getResult();
             return !outcomes.isEmpty() && persistenceEnabled
-                    ? MergeSteps.STORE_OR_DELETE : MergeSteps.PROCESS;
+                    ? MergeOpSteps.STORE_OR_DELETE : MergeOpSteps.PROCESS;
         }
     },
 
@@ -133,12 +132,12 @@ public enum MergeSteps implements Step {
                 if (oldValue == null && newValue != null
                         || oldValue != null && newValue != null) {
                     // put or update
-                    PutSteps.STORE.runStep(perKeyState);
+                    PutOpSteps.STORE.runStep(perKeyState);
                     //set new value returned from map-store
                     outcomes.set(i + 2, perKeyState.getNewValue());
                 } else if (oldValue != null && newValue == null) {
                     // remove
-                    DeleteSteps.DELETE.runStep(perKeyState);
+                    DeleteOpSteps.DELETE.runStep(perKeyState);
                 }
             }
 
@@ -147,7 +146,7 @@ public enum MergeSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return MergeSteps.PROCESS;
+            return MergeOpSteps.PROCESS;
         }
     },
 
@@ -193,10 +192,10 @@ public enum MergeSteps implements Step {
                     }
 
                     // put or update
-                    PutSteps.ON_STORE.runStep(perKeyState);
+                    PutOpSteps.ON_STORE.runStep(perKeyState);
                 } else if (oldValue != null && newValue == null) {
                     // remove
-                    DeleteSteps.ON_DELETE.runStep(perKeyState);
+                    DeleteOpSteps.ON_DELETE.runStep(perKeyState);
                 }
             }
         }
@@ -288,6 +287,6 @@ public enum MergeSteps implements Step {
 
     private static final int NUMBER_OF_ITEMS = 4;
 
-    MergeSteps() {
+    MergeOpSteps() {
     }
 }
