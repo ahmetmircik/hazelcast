@@ -71,11 +71,11 @@ public class ClearOperation extends MapOperation
     @Override
     public void afterRunInternal() {
         invalidateAllKeysInNearCaches();
-        hintMapEvent(numberOfClearedEntries);
+        hintMapEvent();
         super.afterRunInternal();
     }
 
-    private void hintMapEvent(int numberOfClearedEntries) {
+    private void hintMapEvent() {
         mapEventPublisher.hintMapEvent(getCallerAddress(), name, EntryEventType.CLEAR_ALL,
                 numberOfClearedEntries, getPartitionId());
     }

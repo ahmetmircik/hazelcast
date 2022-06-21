@@ -52,7 +52,7 @@ public enum RemoveSteps implements Step {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             return state.isNullRecord() ? RemoveSteps.LOAD
                     : (recordStore.persistenceEnabledFor(state.getCallerProvenance())
-                    ? RemoveSteps.DELETE : ResponseSteps.SEND_RESPONSE);
+                    ? RemoveSteps.DELETE : UtilSteps.SEND_RESPONSE);
         }
     },
 
@@ -73,7 +73,7 @@ public enum RemoveSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ResponseSteps.SEND_RESPONSE : RemoveSteps.DELETE;
+                    ? UtilSteps.SEND_RESPONSE : RemoveSteps.DELETE;
         }
     },
 
@@ -117,7 +117,7 @@ public enum RemoveSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 

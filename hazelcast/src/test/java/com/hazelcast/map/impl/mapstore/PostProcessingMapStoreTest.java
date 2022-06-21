@@ -114,7 +114,7 @@ public class PostProcessingMapStoreTest extends HazelcastTestSupport {
     @Test
     public void testEntryListenerIncludesTheProcessedValue_onPut() {
         IMap<Integer, SampleObject> map = createInstanceAndGetMap();
-        int count = 1;
+        int count = 10;
         final CountDownLatch latch = new CountDownLatch(count);
         map.addEntryListener((EntryAddedListener<Integer, SampleObject>) event -> {
             assertEquals(event.getKey() + 1, event.getValue().version);
@@ -123,7 +123,7 @@ public class PostProcessingMapStoreTest extends HazelcastTestSupport {
         for (int i = 0; i < count; i++) {
             map.put(i, new SampleObject(i));
         }
-        assertOpenEventually(latch, 5);
+        assertOpenEventually(latch);
     }
 
     @Test

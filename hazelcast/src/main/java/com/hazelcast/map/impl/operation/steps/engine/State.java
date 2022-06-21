@@ -92,6 +92,7 @@ public class State {
     private volatile Queue<InternalIndex> notMarkedIndexes;
     private volatile Set keysFromIndex;
     private volatile Throwable throwable;
+    private boolean triggerMapLoader;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -465,5 +466,14 @@ public class State {
 
     public Throwable getThrowable() {
         return throwable;
+    }
+
+    public State setTriggerMapLoader(boolean triggerMapLoader) {
+        this.triggerMapLoader = triggerMapLoader;
+        return this;
+    }
+
+    public boolean isTriggerMapLoader() {
+        return triggerMapLoader;
     }
 }

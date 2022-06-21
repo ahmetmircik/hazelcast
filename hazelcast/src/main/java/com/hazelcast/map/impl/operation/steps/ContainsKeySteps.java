@@ -45,7 +45,7 @@ public enum ContainsKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ContainsKeySteps.LOAD : ResponseSteps.SEND_RESPONSE;
+                    ? ContainsKeySteps.LOAD : UtilSteps.SEND_RESPONSE;
         }
     },
 
@@ -65,7 +65,7 @@ public enum ContainsKeySteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ResponseSteps.SEND_RESPONSE : ContainsKeySteps.ON_LOAD;
+                    ? UtilSteps.SEND_RESPONSE : ContainsKeySteps.ON_LOAD;
         }
     },
 
@@ -81,7 +81,7 @@ public enum ContainsKeySteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 

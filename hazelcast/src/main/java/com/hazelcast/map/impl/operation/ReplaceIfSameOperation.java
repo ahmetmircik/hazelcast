@@ -49,14 +49,15 @@ public class ReplaceIfSameOperation extends BasePutOperation implements Mutating
     }
 
     @Override
-    public void applyState(State state) {
-        super.applyState(state);
-        successful = state.getOldValue() != null;
+    public State newState() {
+        return super.newState()
+                .setExpect(expect);
     }
 
     @Override
-    protected Data getExpect() {
-        return expect;
+    public void applyState(State state) {
+        super.applyState(state);
+        successful = state.getOldValue() != null;
     }
 
     @Override

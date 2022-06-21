@@ -71,11 +71,6 @@ class EmptyMapDataStore implements MapDataStore {
     }
 
     @Override
-    public void storeAll(Map map, long expirationTime) {
-
-    }
-
-    @Override
     public void removeAll(Collection keys) {
     }
 

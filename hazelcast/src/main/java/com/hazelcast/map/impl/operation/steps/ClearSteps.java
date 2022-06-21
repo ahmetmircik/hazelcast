@@ -69,7 +69,7 @@ public enum ClearSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getRecordStore() == null
-                    ? ResponseSteps.SEND_RESPONSE : ClearSteps.CLEAR_MAP_STORE;
+                    ? UtilSteps.SEND_RESPONSE : ClearSteps.CLEAR_MAP_STORE;
         }
     },
 
@@ -109,7 +109,7 @@ public enum ClearSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 

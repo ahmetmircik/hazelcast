@@ -18,7 +18,7 @@ package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.map.impl.operation.steps.ResponseSteps;
+import com.hazelcast.map.impl.operation.steps.UtilSteps;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 
@@ -88,7 +88,7 @@ public class StepSupplier implements Supplier<Runnable> {
             }
 
             currentStep = state.getThrowable() != null
-                    ? ResponseSteps.HANDLE_ERROR : currentStep.nextStep(state);
+                    ? UtilSteps.HANDLE_ERROR : currentStep.nextStep(state);
 
             if (currentStep == null
                     || (currentStep.isOffloadStep() && ThreadUtil.isRunningOnPartitionThread())

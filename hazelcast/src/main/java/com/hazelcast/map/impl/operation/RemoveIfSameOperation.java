@@ -54,6 +54,12 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     }
 
     @Override
+    public State newState() {
+        return super.newState()
+                .setExpect(expect);
+    }
+
+    @Override
     public void applyState(State state) {
         super.applyState(state);
         successful = ((Boolean) state.getResult());
@@ -65,11 +71,6 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     @Override
     public Step getStartingStep() {
         return RemoveIfSameSteps.READ;
-    }
-
-    @Override
-    public Data getExpect() {
-        return expect;
     }
 
     @Override

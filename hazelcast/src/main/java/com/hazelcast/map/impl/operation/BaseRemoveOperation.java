@@ -56,8 +56,7 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
 
     public State newState() {
         return super.newState()
-                .setKey(dataKey)
-                .setExpect(getExpect());
+                .setKey(dataKey);
     }
 
     @Override
@@ -66,10 +65,6 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
 
         this.dataKey = state.getKey();
         this.dataOldValue = mapServiceContext.toData(state.getOldValue());
-    }
-
-    protected Object getExpect() {
-        return null;
     }
 
     @Override

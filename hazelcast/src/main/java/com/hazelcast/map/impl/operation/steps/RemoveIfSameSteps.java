@@ -63,7 +63,7 @@ public enum RemoveIfSameSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.getOldValue() == null
-                    ? ResponseSteps.SEND_RESPONSE : RemoveIfSameSteps.ON_LOAD;
+                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameSteps.ON_LOAD;
         }
     },
 
@@ -89,7 +89,7 @@ public enum RemoveIfSameSteps implements Step {
         @Override
         public Step nextStep(State state) {
             return state.isStopExecution()
-                    ? ResponseSteps.SEND_RESPONSE : RemoveIfSameSteps.DELETE;
+                    ? UtilSteps.SEND_RESPONSE : RemoveIfSameSteps.DELETE;
         }
     },
 
@@ -129,7 +129,7 @@ public enum RemoveIfSameSteps implements Step {
 
         @Override
         public Step nextStep(State state) {
-            return ResponseSteps.SEND_RESPONSE;
+            return UtilSteps.SEND_RESPONSE;
         }
     };
 
