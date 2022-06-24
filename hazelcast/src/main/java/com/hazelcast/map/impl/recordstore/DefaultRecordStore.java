@@ -43,6 +43,7 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.MapPublisherRegistry;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
@@ -59,12 +60,14 @@ import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -120,6 +123,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
      * key loading.
      */
     private boolean loadedOnPreMigration;
+    private Queue<MapOperation> offloadQueue = new ArrayDeque<>();
 
     private final IPartitionService partitionService;
     private final InterceptorRegistry interceptorRegistry;
@@ -1502,5 +1506,10 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             ObjectNamespace namespace = MapService.getObjectNamespace(name);
             lockService.clearLockStore(partitionId, namespace);
         }
+    }
+
+    @Override
+    public Queue<MapOperation> getOffloadQueue() {
+        return offloadQueue;
     }
 }

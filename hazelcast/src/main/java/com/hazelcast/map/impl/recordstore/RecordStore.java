@@ -33,6 +33,7 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.iterator.MapEntriesWithCursor;
 import com.hazelcast.map.impl.iterator.MapKeysWithCursor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -48,6 +49,7 @@ import javax.annotation.Nullable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -666,4 +668,6 @@ public interface RecordStore<R extends Record> {
     default void afterOperation() {
         // no-op
     }
+
+    Queue<MapOperation> getOffloadQueue();
 }

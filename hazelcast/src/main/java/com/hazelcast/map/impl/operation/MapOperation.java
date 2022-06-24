@@ -34,7 +34,7 @@ import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.engine.StepOffload;
+import com.hazelcast.map.impl.operation.steps.engine.OpStepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -50,6 +50,7 @@ import com.hazelcast.spi.tenantcontrol.TenantControl;
 import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -122,6 +123,11 @@ public abstract class MapOperation extends AbstractNamedOperation
         innerBeforeRun();
     }
 
+    @Nullable
+    public RecordStore<Record> getRecordStore() {
+        return recordStore;
+    }
+
     protected void innerBeforeRun() throws Exception {
         if (recordStore != null) {
             recordStore.beforeOperation();
@@ -148,16 +154,16 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         if (mapStoreOffloadEnabled) {
-            // record-store can be null for some ops: see ClearOperation
-            return newStepOffload();
+            assert recordStore != null;
+            return offloadOperation();
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
     }
 
-    protected Offload newStepOffload() {
-        return new StepOffload(this);
+    protected Offload offloadOperation() {
+        return new OpStepRunner(this);
     }
 
     public Step getStartingStep() {
