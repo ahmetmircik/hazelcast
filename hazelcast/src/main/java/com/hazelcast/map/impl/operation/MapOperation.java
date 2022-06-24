@@ -32,9 +32,9 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
+import com.hazelcast.map.impl.operation.steps.engine.OpStepRunner;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.expiry.ExpiryMetadata;
@@ -59,7 +59,6 @@ import static com.hazelcast.internal.util.CollectionUtil.isEmpty;
 import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
-import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
@@ -112,7 +111,8 @@ public abstract class MapOperation extends AbstractNamedOperation
         }
 
         canPublishWanEvent = canPublishWanEvent(mapContainer);
-        hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
+//        hasMapStore = recordStore != null && recordStore.getMapDataStore() != EMPTY_MAP_DATA_STORE;
+        hasMapStore = recordStore != null;
         MapConfig mapConfig = mapContainer.getMapConfig();
         mapStoreOffloadEnabled = getStartingStep() != null
                 && hasMapStore
