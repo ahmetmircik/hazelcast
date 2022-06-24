@@ -30,7 +30,8 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-public class OpStepRunner extends Offload implements PartitionSpecificRunnable {
+public class OpStepRunner extends Offload
+        implements PartitionSpecificRunnable {
 
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
             = TimeUnit.MILLISECONDS.toNanos(5);

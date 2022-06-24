@@ -217,6 +217,13 @@ public class OperationRunnerImpl extends OperationRunner implements StaticMetric
         return run(op, System.nanoTime());
     }
 
+
+    public void checkOp(Operation op){
+        checkNodeState(op);
+        ensureNoPartitionProblems(op);
+        ensureNoSplitBrain(op);
+    }
+
     /**
      * Runs the provided operation.
      *

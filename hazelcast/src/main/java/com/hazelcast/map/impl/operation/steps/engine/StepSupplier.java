@@ -21,15 +21,19 @@ import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.UtilSteps;
 import com.hazelcast.memory.NativeOutOfMemoryError;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 
 import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runStepWithForcedEvictionStrategies;
 
 public class StepSupplier implements Supplier<Runnable> {
 
     private final State state;
+    private final OperationRunnerImpl operationRunner;
 
     private volatile Step currentStep;
 
@@ -38,9 +42,15 @@ public class StepSupplier implements Supplier<Runnable> {
 
         this.state = operation.newState();
         this.currentStep = operation.getStartingStep();
+        this.operationRunner = getPartitionOperationRunner(operation);
 
         assert state != null;
         assert currentStep != null;
+    }
+
+    private OperationRunnerImpl getPartitionOperationRunner(MapOperation operation) {
+        return (OperationRunnerImpl) ((OperationServiceImpl) operation.getNodeEngine()
+                .getOperationService()).getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
     }
 
     @Override
@@ -74,6 +84,9 @@ public class StepSupplier implements Supplier<Runnable> {
         do {
             try {
                 try {
+                    if (isRunningOnPartitionThread()) {
+                        operationRunner.checkOp(state.getOperation());
+                    }
                     currentStep.runStep(state);
                 } catch (NativeOutOfMemoryError e) {
                     assertRunningOnPartitionThread();
