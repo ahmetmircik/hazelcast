@@ -194,7 +194,7 @@ public class EntryOperation extends LockAwareOperation
             return new EntryOperationOffload(getCallerAddress());
         } else {
             if (mapStoreOffloadEnabled) {
-                return newStepOffload();
+                return offloadOperation();
             }
             response = operator(this, entryProcessor)
                     .operateOnKey(dataKey)

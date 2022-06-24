@@ -30,7 +30,6 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
-import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
@@ -66,17 +65,6 @@ public class MultipleEntryOperation extends MapOperation
         final SerializationService serializationService = getNodeEngine().getSerializationService();
         final ManagedContext managedContext = serializationService.getManagedContext();
         entryProcessor = (EntryProcessor) managedContext.initialize(entryProcessor);
-    }
-
-    @Override
-    public CallStatus call() throws Exception {
-        if (mapStoreOffloadEnabled) {
-            assert recordStore != null;
-
-            return newStepOffload();
-        }
-
-        return super.call();
     }
 
     @Override

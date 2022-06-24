@@ -16,13 +16,11 @@
 
 package com.hazelcast.map.impl.operation.steps.engine;
 
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
-import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+import com.hazelcast.spi.impl.operationservice.Offload;
 import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.util.Queue;
@@ -32,12 +30,12 @@ import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-public class StepRunner implements PartitionSpecificRunnable {
+public class OpStepRunner extends Offload implements PartitionSpecificRunnable {
 
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
-            = TimeUnit.MILLISECONDS.toNanos(10);
+            = TimeUnit.MILLISECONDS.toNanos(5);
     private static final String PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
-            = "hazelcast.internal.map.mapstore.offloaded.max.successive.operation.run.nanos";
+            = "hazelcast.internal.map.mapstore.max.successive.offloaded.operation.run.nanos";
     private static final HazelcastProperty MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
             = new HazelcastProperty(PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS,
             DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS, NANOSECONDS);
@@ -51,20 +49,31 @@ public class StepRunner implements PartitionSpecificRunnable {
     private volatile StepSupplier stepSupplier;
     private volatile MapOperation currentOperation;
 
-    public StepRunner(NodeEngine nodeEngine,
-                      Queue<MapOperation> offloadQueue, int partitionId) {
-        this.offloadQueue = offloadQueue;
+    public OpStepRunner(MapOperation mapOperation) {
+        super(mapOperation);
+        this.offloadQueue = getOffloadQueue();
         this.currentOperation = offloadQueue.peek();
-        this.partitionId = partitionId;
-
-        this.operationExecutor = ((OperationServiceImpl) nodeEngine
-                .getOperationService()).getOperationExecutor();
-        this.executor = nodeEngine.getExecutionService()
-                .getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
-        this.maxRunNanos = nodeEngine.getProperties()
-                .getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
+        this.partitionId = mapOperation.getPartitionId();
+        this.operationExecutor = operationService.getOperationExecutor();
+        this.executor = executionService.getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
+        this.maxRunNanos = nodeEngine.getProperties().getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
     }
 
+    @Override
+    public void start() throws Exception {
+        offloadQueue.offer(currentOperation);
+
+        if (offloadQueue.peek() == currentOperation) {
+            run();
+        }
+    }
+
+    /**
+     * Runs all queued operations one by one.
+     * <p>
+     * For fair usage of partition thread, it
+     * has a {@link #maxRunNanos} upper limit.
+     */
     @SuppressWarnings("checkstyle:innerassignment")
     @Override
     public void run() {
@@ -101,8 +110,7 @@ public class StepRunner implements PartitionSpecificRunnable {
     }
 
     private void removeCurrentAndSetNextStepSupplier() {
-        assert ThreadUtil.isRunningOnPartitionThread()
-                : Thread.currentThread().getName();
+        assert isRunningOnPartitionThread();
         assert offloadQueue.peek() == currentOperation;
 
         if (stepSupplier != null) {
@@ -135,12 +143,16 @@ public class StepRunner implements PartitionSpecificRunnable {
         }
     }
 
-    public StepRunner initStepSupplier(MapOperation operation) {
+    public OpStepRunner initStepSupplier(MapOperation operation) {
         this.currentOperation = operation;
         this.stepSupplier = operation != null
                 ? new StepSupplier(operation) : null;
         return this;
+    }
 
+    private Queue<MapOperation> getOffloadQueue() {
+        return ((MapOperation) offloadedOperation())
+                .getRecordStore().getOffloadQueue();
     }
 
     @Override

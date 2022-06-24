@@ -34,7 +34,6 @@ import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.QueryableEntry;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
-import com.hazelcast.spi.impl.operationservice.CallStatus;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionAwareOperation;
@@ -82,17 +81,6 @@ public class PartitionWideEntryOperation extends MapOperation
 
         keysFromIndex = null;
         queryOptimizer = mapServiceContext.getQueryOptimizer();
-    }
-
-    @Override
-    public CallStatus call() throws Exception {
-        if (mapStoreOffloadEnabled) {
-            assert recordStore != null;
-
-            return newStepOffload();
-        }
-
-        return super.call();
     }
 
     @Override
