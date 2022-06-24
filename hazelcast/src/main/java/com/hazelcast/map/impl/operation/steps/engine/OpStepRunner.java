@@ -18,9 +18,11 @@ package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
 import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationservice.Offload;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.util.Queue;
@@ -52,11 +54,12 @@ public class OpStepRunner extends Offload
 
     public OpStepRunner(MapOperation mapOperation) {
         super(mapOperation);
-        this.offloadQueue = getOffloadQueue();
-        this.currentOperation = offloadQueue.peek();
+        this.offloadQueue = getOffloadQueue(mapOperation);
+        this.currentOperation = mapOperation;
         this.partitionId = mapOperation.getPartitionId();
-        this.operationExecutor = operationService.getOperationExecutor();
-        this.executor = executionService.getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
+        NodeEngine nodeEngine = mapOperation.getNodeEngine();
+        this.operationExecutor = ((OperationServiceImpl) nodeEngine.getOperationService()).getOperationExecutor();
+        this.executor = nodeEngine.getExecutionService().getExecutor(MAP_STORE_OFFLOADABLE_EXECUTOR);
         this.maxRunNanos = nodeEngine.getProperties().getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
     }
 
@@ -151,9 +154,8 @@ public class OpStepRunner extends Offload
         return this;
     }
 
-    private Queue<MapOperation> getOffloadQueue() {
-        return ((MapOperation) offloadedOperation())
-                .getRecordStore().getOffloadQueue();
+    private Queue<MapOperation> getOffloadQueue(MapOperation mapOperation) {
+        return mapOperation.getRecordStore().getOffloadQueue();
     }
 
     @Override

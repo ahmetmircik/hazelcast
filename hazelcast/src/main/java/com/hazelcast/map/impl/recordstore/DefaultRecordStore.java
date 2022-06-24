@@ -123,7 +123,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
      * key loading.
      */
     private boolean loadedOnPreMigration;
-    private Queue<MapOperation> offloadQueue = new ArrayDeque<>();
+    private final Queue<MapOperation> offloadQueue = new ArrayDeque<>();
 
     private final IPartitionService partitionService;
     private final InterceptorRegistry interceptorRegistry;
