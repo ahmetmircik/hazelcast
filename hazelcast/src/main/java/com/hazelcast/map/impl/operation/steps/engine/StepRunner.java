@@ -16,23 +16,26 @@
 
 package com.hazelcast.map.impl.operation.steps.engine;
 
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationservice.Offload;
+import com.hazelcast.spi.impl.operationservice.Operation;
+import com.hazelcast.spi.impl.operationservice.OperationResponseHandler;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.properties.HazelcastProperty;
 
-import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.executionservice.ExecutionService.MAP_STORE_OFFLOADABLE_EXECUTOR;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-public class OpStepRunner extends Offload
+public class StepRunner extends Offload
         implements PartitionSpecificRunnable {
 
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
@@ -45,17 +48,15 @@ public class OpStepRunner extends Offload
 
     private final int partitionId;
     private final long maxRunNanos;
-    private final Queue<MapOperation> offloadQueue;
+    private final Set<MapOperation> offloadedOperations;
     private final OperationExecutor operationExecutor;
     private final ManagedExecutorService executor;
 
     private volatile StepSupplier stepSupplier;
-    private volatile MapOperation currentOperation;
 
-    public OpStepRunner(MapOperation mapOperation) {
+    public StepRunner(MapOperation mapOperation) {
         super(mapOperation);
-        this.offloadQueue = getOffloadQueue(mapOperation);
-        this.currentOperation = mapOperation;
+        this.offloadedOperations = getOffloadedOperations(mapOperation);
         this.partitionId = mapOperation.getPartitionId();
         NodeEngine nodeEngine = mapOperation.getNodeEngine();
         this.operationExecutor = ((OperationServiceImpl) nodeEngine.getOperationService()).getOperationExecutor();
@@ -63,11 +64,18 @@ public class OpStepRunner extends Offload
         this.maxRunNanos = nodeEngine.getProperties().getNanos(MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS);
     }
 
+    private void addOp(Operation op) {
+        SOPRH soprh = new SOPRH(op.getOperationResponseHandler());
+        op.setOperationResponseHandler(soprh);
+        offloadedOperations.add(((MapOperation) op));
+    }
+
     @Override
     public void start() throws Exception {
-        offloadQueue.offer(currentOperation);
+        addOp(offloadedOperation());
 
-        if (offloadQueue.peek() == currentOperation) {
+        if (offloadedOperations.size() == 1) {
+            stepSupplier = new StepSupplier((MapOperation) offloadedOperation());
             run();
         }
     }
@@ -81,46 +89,51 @@ public class OpStepRunner extends Offload
     @SuppressWarnings("checkstyle:innerassignment")
     @Override
     public void run() {
-        long start = System.nanoTime();
-        Runnable step;
-        do {
-            if (stepSupplier == null || (step = stepSupplier.get()) == null) {
-                if (isRunningOnPartitionThread()) {
-                    removeCurrentAndSetNextStepSupplier();
-                    if (stepSupplier == null) {
+        try {
+            long start = System.nanoTime();
+            Runnable step;
+            do {
+                if (stepSupplier == null || (step = stepSupplier.get()) == null) {
+                    log("stepSupplier " + stepSupplier);
+                    if (isRunningOnPartitionThread()) {
+                        stepSupplier = null;
+                        for (MapOperation offloadedOperation : offloadedOperations) {
+                            stepSupplier = new StepSupplier(offloadedOperation);
+                            break;
+                        }
+                        if (stepSupplier == null) {
+                            return;
+                        }
+                        continue;
+                    } else {
+                        log("stepSupplier is offloaded");
+                        operationExecutor.execute(this);
                         return;
                     }
-                    continue;
-                } else {
-                    operationExecutor.execute(this);
+                }
+
+                if (!runDirect(step)) {
+                    offloadRun(step, this);
                     return;
                 }
-            }
 
-            if (!runDirect(step)) {
-                offloadRun(step, this);
-                return;
-            }
+                // force free partition thread after a while
+                // maxRunNanos=0 disables this.
+                if (maxRunNanos > 0 && isRunningOnPartitionThread()
+                        && System.nanoTime() - start >= maxRunNanos) {
+                    offloadRun(step, this);
+                    return;
+                }
 
-            // force free partition thread after a while
-            // maxRunNanos=0 disables this.
-            if (maxRunNanos > 0 && isRunningOnPartitionThread()
-                    && System.nanoTime() - start >= maxRunNanos) {
-                offloadRun(step, this);
-                return;
-            }
-
-        } while (true);
+            } while (true);
+        } catch (Throwable e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 
-    private void removeCurrentAndSetNextStepSupplier() {
-        assert isRunningOnPartitionThread();
-        assert offloadQueue.peek() == currentOperation;
-
-        if (stepSupplier != null) {
-            offloadQueue.poll();
-        }
-        initStepSupplier(offloadQueue.peek());
+    private void log(String msg) {
+        //System.out.println(msg);
     }
 
     private boolean runDirect(Runnable step) {
@@ -147,19 +160,30 @@ public class OpStepRunner extends Offload
         }
     }
 
-    public OpStepRunner initStepSupplier(MapOperation operation) {
-        this.currentOperation = operation;
-        this.stepSupplier = operation != null
-                ? new StepSupplier(operation) : null;
-        return this;
-    }
-
-    private Queue<MapOperation> getOffloadQueue(MapOperation mapOperation) {
-        return mapOperation.getRecordStore().getOffloadQueue();
+    private Set<MapOperation> getOffloadedOperations(MapOperation mapOperation) {
+        return mapOperation.getRecordStore().getOffloadedOperations();
     }
 
     @Override
     public int getPartitionId() {
         return partitionId;
+    }
+
+    private class SOPRH implements OperationResponseHandler {
+
+        private OperationResponseHandler delegate;
+
+        public SOPRH(OperationResponseHandler delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void sendResponse(Operation op, Object response) {
+            ThreadUtil.assertRunningOnPartitionThread();
+
+            if (offloadedOperations.remove(op)) {
+                delegate.sendResponse(op, response);
+            }
+        }
     }
 }

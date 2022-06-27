@@ -32,7 +32,7 @@ import com.hazelcast.map.impl.eviction.Evictor;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.steps.engine.OpStepRunner;
+import com.hazelcast.map.impl.operation.steps.engine.StepRunner;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
@@ -163,7 +163,7 @@ public abstract class MapOperation extends AbstractNamedOperation
     }
 
     protected Offload offloadOperation() {
-        return new OpStepRunner(this);
+        return new StepRunner(this);
     }
 
     public Step getStartingStep() {

@@ -60,14 +60,13 @@ import com.hazelcast.wan.impl.CallerProvenance;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -123,7 +122,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
      * key loading.
      */
     private boolean loadedOnPreMigration;
-    private final Queue<MapOperation> offloadQueue = new ArrayDeque<>();
+    private final Set<MapOperation> offloadedOperations = new LinkedHashSet<>();
 
     private final IPartitionService partitionService;
     private final InterceptorRegistry interceptorRegistry;
@@ -1509,7 +1508,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     }
 
     @Override
-    public Queue<MapOperation> getOffloadQueue() {
-        return offloadQueue;
+    public Set<MapOperation> getOffloadedOperations() {
+        return offloadedOperations;
     }
 }

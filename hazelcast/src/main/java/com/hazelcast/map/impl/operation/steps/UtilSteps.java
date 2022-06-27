@@ -88,7 +88,7 @@ public enum UtilSteps implements Step {
             } catch (Throwable t) {
                 operation.getNodeEngine().getLogger(operation.getClass())
                         .warning("While calling 'operation.onFailure(e)'... op: "
-                        + operation + ", error: " + e, t);
+                                + operation + ", error: " + e, t);
             }
 
             operation.logError(e);

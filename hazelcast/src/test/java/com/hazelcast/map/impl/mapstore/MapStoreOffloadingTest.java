@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.mapstore;
 
+import com.hazelcast.client.test.TestHazelcastFactory;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapStoreConfig;
 import com.hazelcast.core.HazelcastInstance;
@@ -28,11 +29,52 @@ import org.junit.Test;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.Assert.assertEquals;
 
 @Ignore
 // TODO
 public class MapStoreOffloadingTest extends HazelcastTestSupport {
+
+    @Test
+    public void smoke_migration() throws ExecutionException, InterruptedException, TimeoutException {
+        // configure map
+        Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "2");
+        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            @Override
+            public Integer load(Integer key) {
+                sleepSeconds(5);
+                return -1;
+            }
+        });
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
+
+        // create cluster
+        TestHazelcastFactory factory = new TestHazelcastFactory(2);
+        HazelcastInstance node1 = factory.newHazelcastInstance(config);
+        HazelcastInstance client = factory.newHazelcastClient();
+        IMap map = client.getMap(slowMapName);
+        CompletionStage future = map.getAsync(1);
+        CompletionStage future2 = map.getAsync(2);
+
+        HazelcastInstance node2 = factory.newHazelcastInstance(config);
+//        node1.shutdown();
+
+        assertEquals(-1, future.toCompletableFuture().get(150, TimeUnit.SECONDS));
+        assertEquals(-1, future2.toCompletableFuture().get(150, TimeUnit.SECONDS));
+    }
 
     @Test
     public void name2() {
@@ -159,7 +201,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
             }
         });
 
-        sleepSeconds(100);
+        sleepSeconds(15);
     }
 
 
@@ -201,7 +243,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         System.out.println("==> get = " + get);
 
 
-        sleepSeconds(100);
+        sleepSeconds(15);
     }
 
 

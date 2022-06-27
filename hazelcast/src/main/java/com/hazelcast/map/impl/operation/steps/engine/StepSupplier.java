@@ -16,7 +16,6 @@
 
 package com.hazelcast.map.impl.operation.steps.engine;
 
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.UtilSteps;
 import com.hazelcast.memory.NativeOutOfMemoryError;
@@ -84,7 +83,8 @@ public class StepSupplier implements Supplier<Runnable> {
         do {
             try {
                 try {
-                    if (isRunningOnPartitionThread()) {
+                    Step.log(state.getOperation().getClass().toString(), state, currentStep.toString());
+                    if (isRunningOnPartitionThread() && state.getThrowable() == null) {
                         operationRunner.checkOp(state.getOperation());
                     }
                     currentStep.runStep(state);
@@ -104,8 +104,8 @@ public class StepSupplier implements Supplier<Runnable> {
                     ? UtilSteps.HANDLE_ERROR : currentStep.nextStep(state);
 
             if (currentStep == null
-                    || (currentStep.isOffloadStep() && ThreadUtil.isRunningOnPartitionThread())
-                    || (!currentStep.isOffloadStep() && !ThreadUtil.isRunningOnPartitionThread())) {
+                    || (currentStep.isOffloadStep() && isRunningOnPartitionThread())
+                    || (!currentStep.isOffloadStep() && !isRunningOnPartitionThread())) {
                 break;
             }
         } while (true);

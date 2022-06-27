@@ -28,7 +28,6 @@ import com.hazelcast.internal.util.ConstructorFunction;
 import com.hazelcast.internal.util.ContextMutexFactory;
 import com.hazelcast.internal.util.MapUtil;
 import com.hazelcast.map.impl.operation.MapClearExpiredOperation;
-import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.spi.impl.NodeEngine;
@@ -38,12 +37,8 @@ import com.hazelcast.spi.properties.ClusterProperty;
 import com.hazelcast.spi.properties.HazelcastProperties;
 
 import javax.annotation.Nullable;
-import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
@@ -84,19 +79,12 @@ public class PartitionContainer {
      */
     private long lastCleanupTimeCopy;
 
-    // TODO add metric for offload queues
-    private Map<String, Queue<MapOperation>> map = new HashMap<>();
-
     public PartitionContainer(final MapService mapService, final int partitionId) {
         this.mapService = mapService;
         this.partitionId = partitionId;
         int approxMapCount = mapService.mapServiceContext.getNodeEngine()
                 .getConfig().getMapConfigs().size();
         this.maps = MapUtil.createConcurrentHashMap(approxMapCount);
-    }
-
-    public Queue<MapOperation> getOffloadQueue(String mapName) {
-        return map.computeIfAbsent(mapName, s -> new ArrayDeque<>());
     }
 
     private RecordStore createRecordStore(String name) {

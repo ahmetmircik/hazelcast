@@ -51,4 +51,9 @@ public interface Step {
     default boolean isOffloadStep() {
         return false;
     }
+
+    static void log(String logger, State state, String msg) {
+//        MapOperation operation = state.getOperation();
+//        operation.getNodeEngine().getLogger(logger).severe(msg + " ==> " + operation.hashCode());
+    }
 }

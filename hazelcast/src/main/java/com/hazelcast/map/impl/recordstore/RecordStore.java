@@ -49,7 +49,6 @@ import javax.annotation.Nullable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -669,5 +668,5 @@ public interface RecordStore<R extends Record> {
         // no-op
     }
 
-    Queue<MapOperation> getOffloadQueue();
+    Set<MapOperation> getOffloadedOperations();
 }
