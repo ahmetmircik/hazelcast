@@ -112,19 +112,16 @@ public class StepRunner extends Offload
                     }
                 }
 
-                if (!runDirect(step)) {
-                    offloadRun(step, this);
-                    return;
-                }
-
-                // force free partition thread after a while
-                // maxRunNanos=0 disables this.
                 if (maxRunNanos > 0 && isRunningOnPartitionThread()
                         && System.nanoTime() - start >= maxRunNanos) {
                     offloadRun(step, this);
                     return;
                 }
 
+                if (!runDirect(step)) {
+                    offloadRun(step, this);
+                    return;
+                }
             } while (true);
         } catch (Throwable e) {
             e.printStackTrace();
