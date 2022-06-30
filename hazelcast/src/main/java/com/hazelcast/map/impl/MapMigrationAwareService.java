@@ -30,6 +30,7 @@ import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespace;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapReplicationOperation;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
@@ -41,11 +42,13 @@ import com.hazelcast.query.impl.Index;
 import com.hazelcast.query.impl.Indexes;
 import com.hazelcast.query.impl.InternalIndex;
 import com.hazelcast.query.impl.QueryableEntry;
+import com.hazelcast.spi.exception.PartitionMigratingException;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import static com.hazelcast.config.CacheDeserializedValues.NEVER;
@@ -182,6 +185,20 @@ class MapMigrationAwareService
                     event.getNewReplicaIndex());
         }
 
+        if (SOURCE == event.getMigrationEndpoint()) {
+            PartitionContainer partitionContainer
+                    = mapServiceContext.getPartitionContainer(event.getPartitionId());
+            for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
+                Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
+                List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
+                opList.addAll(offloadedOperations);
+                for (MapOperation op : opList) {
+                    PartitionMigratingException pme = createPME(event, op);
+                    op.getOperationResponseHandler().sendResponse(op, pme);
+                }
+            }
+        }
+
         PartitionContainer partitionContainer
                 = mapServiceContext.getPartitionContainer(event.getPartitionId());
         for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
@@ -193,6 +210,11 @@ class MapMigrationAwareService
         mapServiceContext.nullifyOwnedPartitions();
 
         removeOrRegenerateNearCacheUuid(event);
+    }
+
+    private PartitionMigratingException createPME(PartitionMigrationEvent event, MapOperation op) {
+        return new PartitionMigratingException(mapServiceContext.getNodeEngine().getThisAddress(),
+                event.getPartitionId(), op.getClass().getName(), op.getServiceName());
     }
 
     private void removeOrRegenerateNearCacheUuid(PartitionMigrationEvent event) {

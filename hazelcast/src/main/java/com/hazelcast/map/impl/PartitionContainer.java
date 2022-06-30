@@ -82,7 +82,8 @@ public class PartitionContainer {
     public PartitionContainer(final MapService mapService, final int partitionId) {
         this.mapService = mapService;
         this.partitionId = partitionId;
-        int approxMapCount = mapService.mapServiceContext.getNodeEngine().getConfig().getMapConfigs().size();
+        int approxMapCount = mapService.mapServiceContext.getNodeEngine()
+                .getConfig().getMapConfigs().size();
         this.maps = MapUtil.createConcurrentHashMap(approxMapCount);
     }
 

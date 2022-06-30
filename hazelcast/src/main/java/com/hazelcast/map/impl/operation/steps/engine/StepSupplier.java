@@ -1,0 +1,152 @@
+/*
+ * Copyright (c) 2008-2022, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hazelcast.map.impl.operation.steps.engine;
+
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.operation.steps.UtilSteps;
+import com.hazelcast.memory.NativeOutOfMemoryError;
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
+import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+
+import java.util.function.Supplier;
+
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
+import static com.hazelcast.map.impl.operation.ForcedEviction.runStepWithForcedEvictionStrategies;
+
+/**
+ * <lu>
+ * <li>Supplies steps and decides next step after executed one.</li>
+ * <li>Must be thread safe</li>
+ * </lu>
+ */
+public class StepSupplier implements Supplier<Runnable> {
+
+    private final State state;
+    private final OperationRunnerImpl operationRunner;
+
+    private volatile Runnable currentRunnable;
+    private volatile Step currentStep;
+
+    public StepSupplier(MapOperation operation) {
+        assert operation != null;
+
+        this.state = operation.createState();
+        this.currentStep = operation.getStartingStep();
+        this.operationRunner = getPartitionOperationRunner(operation);
+
+        assert state != null;
+        assert currentStep != null;
+    }
+
+    private OperationRunnerImpl getPartitionOperationRunner(MapOperation operation) {
+        return (OperationRunnerImpl) ((OperationServiceImpl) operation.getNodeEngine()
+                .getOperationService()).getOperationExecutor().getPartitionOperationRunners()[state.getPartitionId()];
+    }
+
+    @Override
+    public Runnable get() {
+        if (currentRunnable == null && currentStep != null) {
+            currentRunnable = createRunnable(currentStep, state);
+        }
+        return currentRunnable;
+    }
+
+    private Step nextStep(Step step) {
+        if (state.getThrowable() != null
+                && currentStep != UtilSteps.HANDLE_ERROR) {
+            return UtilSteps.HANDLE_ERROR;
+        }
+        return step.nextStep(state);
+    }
+
+    private Runnable createRunnable(Step step, State state) {
+        if (step == null) {
+            return null;
+        }
+
+        if (step.isOffloadStep()) {
+            return new Runnable() {
+                @Override
+                public void run() {
+                    runStepWith(step, state);
+                }
+
+                @Override
+                public String toString() {
+                    return step.toString();
+                }
+            };
+        }
+
+        return new PartitionSpecificRunnable() {
+            @Override
+            public void run() {
+                runStepWith(step, state);
+            }
+
+            @Override
+            public int getPartitionId() {
+                return state.getPartitionId();
+            }
+
+            @Override
+            public String toString() {
+                return step.toString();
+            }
+        };
+    }
+
+    private void runStepWith(Step step, State state) {
+        try {
+            try {
+                log(step, state);
+
+                if (isRunningOnPartitionThread() && state.getThrowable() == null) {
+                    operationRunner.checkOp(state.getOperation());
+                }
+                step.runStep(state);
+            } catch (NativeOutOfMemoryError e) {
+                assertRunningOnPartitionThread();
+
+                rerunWithForcedEviction(() -> {
+                    step.runStep(state);
+                });
+            }
+        } catch (Throwable throwable) {
+            state.getOperation().disposeDeferredBlocks();
+            state.setThrowable(throwable);
+        } finally {
+            currentStep = nextStep(step);
+            currentRunnable = createRunnable(currentStep, state);
+        }
+    }
+
+    private void rerunWithForcedEviction(Runnable step) {
+        runStepWithForcedEvictionStrategies(state.getOperation(), step);
+    }
+
+    private static void log(Step currentStep, State state) {
+        MapOperation operation = state.getOperation();
+        ILogger logger = operation.getNodeEngine().getLogger(operation.getClass());
+        if (logger.isFinestEnabled()) {
+            logger.finest(currentStep.toString() + " ==> " + operation.hashCode());
+        }
+    }
+}

@@ -277,7 +277,7 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         sleepSeconds(30);
         stop.set(true);
         executorService.shutdown();
-        if (!executorService.awaitTermination(30, SECONDS)) {
+        if (!executorService.awaitTermination(120, SECONDS)) {
             throw new IllegalStateException("Not terminated yet...");
         }
 
@@ -412,6 +412,8 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                 context.commitTransaction();
             } catch (TransactionException e) {
                 context.rollbackTransaction();
+            } catch (Throwable t) {
+                // ignore other commit time exceptions.
             }
         }
 

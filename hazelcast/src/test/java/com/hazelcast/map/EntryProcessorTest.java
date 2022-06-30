@@ -1671,8 +1671,8 @@ public class EntryProcessorTest extends HazelcastTestSupport {
         }
     }
 
-    private static class PartitionAwareTestEntryProcessor implements EntryProcessor<Integer, Integer, Object>,
-            HazelcastInstanceAware {
+    private static class PartitionAwareTestEntryProcessor
+            implements EntryProcessor<Integer, Integer, Object>, HazelcastInstanceAware {
 
         private final String name;
         private transient HazelcastInstance hz;
@@ -1683,7 +1683,8 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
         @Override
         public Object process(Entry<Integer, Integer> entry) {
-            hz.getMap(name).put(entry.getKey(), entry.getValue());
+            // FIXME: No inter partition-thread call be here.
+            hz.getMap(name).setAsync(entry.getKey(), entry.getValue());
             return null;
         }
 
@@ -1698,7 +1699,8 @@ public class EntryProcessorTest extends HazelcastTestSupport {
         }
     }
 
-    private static final class ExecutionCountingEP<K, V, O> implements EntryProcessor<K, V, O>, ReadOnly, HazelcastInstanceAware {
+    private static final class ExecutionCountingEP<K, V, O>
+            implements EntryProcessor<K, V, O>, ReadOnly, HazelcastInstanceAware {
         private AtomicLong executionCounter;
 
         @Override
