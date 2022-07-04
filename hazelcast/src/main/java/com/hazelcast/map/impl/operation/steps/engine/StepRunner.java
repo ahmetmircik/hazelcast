@@ -86,6 +86,7 @@ public class StepRunner extends Offload
     private void addToOffloadedOperations(MapOperation op) {
         op.setOperationResponseHandler(new StepResponseHandler(op.getOperationResponseHandler()));
         offloadedOperations.add(op);
+        op.getRecordStore().incMapStoreOffloadedOperationsCount();
     }
 
     private boolean isFirstOffloadedOperation() {
@@ -212,6 +213,7 @@ public class StepRunner extends Offload
             assertRunningOnPartitionThread();
 
             if (offloadedOperations.remove(op)) {
+                ((MapOperation) op).getRecordStore().decMapStoreOffloadedOperationsCount();
                 delegate.sendResponse(op, response);
             }
         }

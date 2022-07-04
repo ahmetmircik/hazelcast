@@ -29,6 +29,7 @@ import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.internal.util.FutureUtil;
+import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.EntryLoader.MetadataAwareValue;
 import com.hazelcast.map.impl.InterceptorRegistry;
@@ -79,6 +80,7 @@ import static com.hazelcast.core.EntryEventType.LOADED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
 import static com.hazelcast.internal.util.MapUtil.isNullOrEmpty;
+import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 import static com.hazelcast.map.impl.recordstore.StaticParams.PUT_BACKUP_PARAMS;
@@ -122,10 +124,11 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
      * key loading.
      */
     private boolean loadedOnPreMigration;
-    private final Set<MapOperation> offloadedOperations = new LinkedHashSet<>();
 
     private final IPartitionService partitionService;
     private final InterceptorRegistry interceptorRegistry;
+    private final Set<MapOperation> offloadedOperations = new LinkedHashSet<>();
+    private final SwCounter mapStoreOffloadedOperationsCount = newSwCounter();
 
     public DefaultRecordStore(MapContainer mapContainer, int partitionId,
                               MapKeyLoader keyLoader, ILogger logger) {
@@ -137,6 +140,22 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         this.partitionService = mapServiceContext.getNodeEngine().getPartitionService();
         this.interceptorRegistry = mapContainer.getInterceptorRegistry();
         initJsonMetadataStore();
+    }
+
+    @Override
+    public void incMapStoreOffloadedOperationsCount() {
+        mapStoreOffloadedOperationsCount.inc();
+    }
+
+    @Override
+    public void decMapStoreOffloadedOperationsCount() {
+        mapStoreOffloadedOperationsCount.inc(-1);
+    }
+
+    @Override
+    public long getMapStoreOffloadedOperationsCount() {
+
+        return mapStoreOffloadedOperationsCount.get();
     }
 
     // Overridden in EE

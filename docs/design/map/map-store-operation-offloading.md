@@ -194,6 +194,11 @@ compare it with the current situation(which is all operations
 of all maps in a partition waiting head-operation), it can
 also be deemed as a limitation to preserve current behavior.
 
+### Metrics
+With metric
+`map.store.offloaded.operations.waitingToBeProcessedCount`,
+number of queued offloaded operations can be monitored.
+
 ### Performance Test Results
 Comparison of 5.1 and 5.2-with-the-implementation-here.
 #### Test

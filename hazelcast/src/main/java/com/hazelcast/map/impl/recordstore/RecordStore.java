@@ -669,4 +669,10 @@ public interface RecordStore<R extends Record> {
     }
 
     Set<MapOperation> getOffloadedOperations();
+
+    void incMapStoreOffloadedOperationsCount();
+
+    void decMapStoreOffloadedOperationsCount();
+
+    long getMapStoreOffloadedOperationsCount();
 }
