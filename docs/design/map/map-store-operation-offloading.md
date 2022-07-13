@@ -200,16 +200,29 @@ With metric
 number of queued offloaded operations can be monitored.
 
 ### Performance Test Results
-Comparison of 5.1 and 5.2-with-the-implementation-here.
-#### Test
+
+#### Test-1
+- Comparison of 5.1 and 5.2-with-the-implementation-here.
 - Goal is to see the behavior of unblocked partition threads
 - 2 maps, do get and put
 - One map has slow MapStore(variant latency between 1-100 millis) and only does put
 - Second map is default map without a MapStore
+- **Result: Slow map store does not block partitions hence we see more throughput**
 
-|            Throughput             |                          Latency                          |
-|:---------------------------------:|:---------------------------------------------------------:|
-| ![Plot](resources/throughput.png) |              ![Plot](resources/latency.png)               ||
+|               Throughput                |               Latency                |
+|:---------------------------------------:|:------------------------------------:|
+| ![Plot](resources/test1/throughput.png) | ![Plot](resources/test1/latency.png) ||
+
+#### Test-2
+- Comparison of 5.2.master and 5.2.new(which is the implementation here).
+- Goal is to see map#get performance when all entries in memory
+- Do get on no-map-store-configured map vs do get on map-store-configured map
+- no-map-store-configured map uses existing operation run mechanism other map uses new step approach
+- **Result: When all entries in memory latency is identical.**
+
+|               Throughput                |               Latency                |
+|:---------------------------------------:|:------------------------------------:|
+| ![Plot](resources/test2/throughput.png) | ![Plot](resources/test2/latency.png) ||
 
  
 
