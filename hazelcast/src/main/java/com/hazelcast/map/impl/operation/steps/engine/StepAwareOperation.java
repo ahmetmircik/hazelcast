@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
-package com.hazelcast.map.impl.operation;
-
-import com.hazelcast.map.impl.operation.steps.engine.Step;
+package com.hazelcast.map.impl.operation.steps.engine;
 
 /**
  * Contract to create a chain of steps from an operation
  *
  * @see Step
  */
-public interface OperationStepAware<S> {
+public interface StepAwareOperation<S> {
 
     /**
      * @return create initial state of this operation

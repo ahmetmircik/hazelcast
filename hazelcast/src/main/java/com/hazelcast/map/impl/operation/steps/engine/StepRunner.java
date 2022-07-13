@@ -46,6 +46,20 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 public class StepRunner extends Offload
         implements PartitionSpecificRunnable {
 
+    /**
+     * Specific to partition threads.
+     * <p>
+     * This thread local flag is used to by-pass map-store
+     * offloading mechanism in case of a remote call from
+     * a running HazelcastInstanceAware entry processor.
+     * <p>
+     * Although it is not good practice, calling a
+     * remote operation can result with deadlocks for
+     * writes but for read-only cases it can be used.
+     */
+    public static final ThreadLocal<Boolean> STEP_RUNNER_IS_IN_PROGRESS
+            = ThreadLocal.withInitial(() -> false);
+
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
             = TimeUnit.MILLISECONDS.toNanos(5);
     private static final String PROP_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
@@ -83,6 +97,13 @@ public class StepRunner extends Offload
         }
     }
 
+    /**
+     * @return true if current partition thread is running, false otherwise.
+     */
+    public static boolean isRequestFromInProgressStepRunner() {
+        return STEP_RUNNER_IS_IN_PROGRESS.get();
+    }
+
     private void addToOffloadedOperations(MapOperation op) {
         op.setOperationResponseHandler(new StepResponseHandler(op.getOperationResponseHandler()));
         offloadedOperations.add(op);
@@ -99,10 +120,23 @@ public class StepRunner extends Offload
      * For fair usage of partition thread, it
      * has a {@link #maxRunNanos} upper limit.
      */
-    @SuppressWarnings("checkstyle:innerassignment")
     @Override
     public void run() {
         boolean runningOnPartitionThread = isRunningOnPartitionThread();
+        try {
+            if (runningOnPartitionThread) {
+                STEP_RUNNER_IS_IN_PROGRESS.set(true);
+            }
+            run0(runningOnPartitionThread);
+        } finally {
+            if (runningOnPartitionThread) {
+                STEP_RUNNER_IS_IN_PROGRESS.set(false);
+            }
+        }
+    }
+
+    @SuppressWarnings("checkstyle:innerassignment")
+    private void run0(boolean runningOnPartitionThread) {
         long start = System.nanoTime();
         Runnable step;
         do {

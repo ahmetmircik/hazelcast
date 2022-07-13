@@ -1683,8 +1683,7 @@ public class EntryProcessorTest extends HazelcastTestSupport {
 
         @Override
         public Object process(Entry<Integer, Integer> entry) {
-            // FIXME: No inter partition-thread call be here.
-            hz.getMap(name).setAsync(entry.getKey(), entry.getValue());
+            hz.getMap(name).put(entry.getKey(), entry.getValue());
             return null;
         }
 

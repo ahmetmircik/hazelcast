@@ -33,6 +33,7 @@ import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.StepAwareOperation;
 import com.hazelcast.map.impl.operation.steps.engine.StepRunner;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -59,6 +60,7 @@ import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
+import static com.hazelcast.map.impl.operation.steps.engine.StepRunner.isRequestFromInProgressStepRunner;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
@@ -66,7 +68,7 @@ import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
 @SuppressWarnings("checkstyle:methodcount")
 public abstract class MapOperation extends AbstractNamedOperation
         implements IdentifiedDataSerializable, ServiceNamespaceAware,
-        OperationStepAware<State> {
+        StepAwareOperation<State> {
 
     private static final boolean ASSERTION_ENABLED = MapOperation.class.desiredAssertionStatus();
 
@@ -153,7 +155,7 @@ public abstract class MapOperation extends AbstractNamedOperation
             }
         }
 
-        if (mapStoreOffloadEnabled) {
+        if (mapStoreOffloadEnabled && !isRequestFromInProgressStepRunner()) {
             assert recordStore != null;
             return offloadOperation();
         }
