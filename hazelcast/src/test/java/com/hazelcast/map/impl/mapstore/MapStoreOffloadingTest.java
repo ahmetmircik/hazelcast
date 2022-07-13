@@ -23,26 +23,34 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.map.IMap;
 import com.hazelcast.map.MapStoreAdapter;
 import com.hazelcast.spi.properties.ClusterProperty;
+import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
-import org.junit.Ignore;
+import com.hazelcast.test.annotation.ParallelJVMTest;
+import com.hazelcast.test.annotation.QuickTest;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.concurrent.CompletionStage;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Future;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
-@Ignore
-// TODO
+@RunWith(HazelcastParallelClassRunner.class)
+@Category({QuickTest.class, ParallelJVMTest.class})
 public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
+    @Override
+    protected Config getConfig() {
+        return smallInstanceConfig();
+    }
+
     @Test
-    public void smoke_migration() throws ExecutionException, InterruptedException, TimeoutException {
+    public void offloaded_operations_are_retried_and_finish_when_partition_migrated() {
         // configure map
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "2");
@@ -54,7 +62,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public Integer load(Integer key) {
-                sleepSeconds(5);
+                sleepSeconds(3);
                 return -1;
             }
         });
@@ -63,32 +71,33 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         // create cluster
         TestHazelcastFactory factory = new TestHazelcastFactory(2);
-        HazelcastInstance node1 = factory.newHazelcastInstance(config);
+        factory.newHazelcastInstance(config);
+
+        // create client
         HazelcastInstance client = factory.newHazelcastClient();
         IMap map = client.getMap(slowMapName);
-        CompletionStage future = map.getAsync(1);
-        CompletionStage future2 = map.getAsync(2);
 
-        HazelcastInstance node2 = factory.newHazelcastInstance(config);
-//        node1.shutdown();
-
-        assertEquals(-1, future.toCompletableFuture().get(150, TimeUnit.SECONDS));
-        assertEquals(-1, future2.toCompletableFuture().get(150, TimeUnit.SECONDS));
-    }
-
-    @Test
-    public void name2() {
-        HazelcastInstance node = createHazelcastInstance();
-        IMap<Object, Object> test1 = node.getMap("test1");
-        for (int i = 0; i < 1; i++) {
-            test1.set(i, i);
+        List<Future> futures = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            futures.add(map.getAsync(i).toCompletableFuture());
         }
 
-        sleepSeconds(10);
+        // start new member to trigger migration
+        factory.newHazelcastInstance(config);
+
+        try {
+            assertTrueEventually(() -> {
+                for (Future future : futures) {
+                    assertEquals(-1, future.get());
+                }
+            });
+        } finally {
+            factory.terminateAll();
+        }
     }
 
     @Test
-    public void smokePut() {
+    public void store_waits_running_store() {
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
         config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
@@ -101,7 +110,6 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public Integer load(Integer key) {
-                sleepSeconds(5);
                 return (Integer) store.get(key);
             }
 
@@ -111,15 +119,6 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
                 store.put(key, value);
             }
 
-            @Override
-            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
-                return null;
-            }
-
-            @Override
-            public Iterable<Integer> loadAllKeys() {
-                return null;
-            }
         });
         String slowMapName = "slowMap";
         config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
@@ -127,24 +126,19 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         HazelcastInstance node = createHazelcastInstance(config);
         IMap<Object, Object> slowMap = node.getMap(slowMapName);
 
-        Object old = slowMap.put(1, 1);
-        System.out.println("old = " + old);
+        Future oldNull = slowMap.putAsync(1, 1).toCompletableFuture();
+        Future oldOne = slowMap.putAsync(1, 2).toCompletableFuture();
+        Future oldTwo = slowMap.putAsync(1, 3).toCompletableFuture();
 
-        Object old2 = slowMap.put(1, 2);
-        System.out.println("old2 = " + old2);
-
-        Object get1 = slowMap.get(1);
-        System.out.println("get1 = " + get1);
-
-        Object get2 = slowMap.get(2);
-        System.out.println("get2 = " + get2);
-
-
-        sleepSeconds(100);
+        assertTrueEventually(() -> {
+            assertNull(oldNull.get());
+            assertEquals(1, oldOne.get());
+            assertEquals(2, oldTwo.get());
+        });
     }
 
     @Test
-    public void smokePut_concurrent() {
+    public void load_waits_running_store() {
         Config config = getConfig();
         config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
         config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
@@ -153,12 +147,11 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         mapStoreConfig.setEnabled(true);
         mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
 
-            ConcurrentHashMap store = new ConcurrentHashMap<>();
+            ConcurrentMap<Integer, Integer> store = new ConcurrentHashMap<>();
 
             @Override
             public Integer load(Integer key) {
-                sleepSeconds(5);
-                return 12;
+                return store.get(key);
             }
 
             @Override
@@ -166,16 +159,6 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
                 sleepSeconds(5);
                 store.put(key, value);
             }
-
-            @Override
-            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
-                return null;
-            }
-
-            @Override
-            public Iterable<Integer> loadAllKeys() {
-                return null;
-            }
         });
         String slowMapName = "slowMap";
         config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
@@ -183,33 +166,14 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         HazelcastInstance node = createHazelcastInstance(config);
         IMap<Object, Object> slowMap = node.getMap(slowMapName);
 
-
-        spawn(new Runnable() {
-            @Override
-            public void run() {
-                sleepSeconds(2);
-                Object old = slowMap.put(1, 1);
-                System.out.println("old = " + old);
-            }
-        });
-
-        spawn(new Runnable() {
-            @Override
-            public void run() {
-                Object old = slowMap.get(1);
-                System.out.println("old = " + old);
-            }
-        });
-
-        sleepSeconds(15);
+        slowMap.setAsync(1, 1);
+        assertEquals(1, slowMap.get(1));
     }
 
 
     @Test
-    public void smokeGet() {
+    public void slow_map_does_not_block_fast_map() {
         Config config = getConfig();
-        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
-        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
 
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
@@ -217,7 +181,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public Integer load(Integer key) {
-                sleepSeconds(20);
+                sleepSeconds(1000);
                 return 11;
             }
         });
@@ -226,142 +190,18 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         HazelcastInstance node = createHazelcastInstance(config);
         IMap<Object, Object> slowMap = node.getMap(slowMapName);
+        IMap<Object, Object> fastMap = node.getMap("fastMap");
 
-        spawn(new Runnable() {
-            @Override
-            public void run() {
-                IMap<Object, Object> fast = node.getMap("fast");
-                for (int i = 0; i < 10; i++) {
-                    fast.set(i, i);
-                }
+        int keySetSize = 10_000;
 
-                System.out.println("===> fast size = " + fast.size());
-            }
-        });
+        for (int i = 0; i < keySetSize; i++) {
+            slowMap.getAsync(1);
+        }
 
-        Object get = slowMap.get(1);
-        System.out.println("==> get = " + get);
-
-
-        sleepSeconds(15);
-    }
-
-
-    @Test
-    public void name() {
-        Config config = getConfig();
-        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
-        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
-
-        MapStoreConfig mapStoreConfig = new MapStoreConfig();
-        mapStoreConfig.setEnabled(true);
-        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
-
-            ConcurrentHashMap store = new ConcurrentHashMap<>();
-
-            @Override
-            public Integer load(Integer key) {
-                sleepSeconds(10);
-                return (Integer) store.get(key);
-            }
-
-            @Override
-            public void store(Integer key, Integer value) {
-                sleepSeconds(10);
-                store.put(key, value);
-            }
-
-            @Override
-            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
-                return null;
-            }
-
-            @Override
-            public Iterable<Integer> loadAllKeys() {
-                return null;
-            }
-        });
-        String slowMapName = "slowMap";
-        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
-
-        HazelcastInstance node = createHazelcastInstance(config);
-        IMap<Object, Object> fastMap = node.getMap("fast");
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < keySetSize; i++) {
             fastMap.set(i, i);
         }
 
-        spawn(() -> {
-            while (true) {
-                sleepSeconds(3);
-                for (int i = 0; i < 10; i++) {
-                    Object res = fastMap.get(i);
-                    System.out.println("fast map res = " + res);
-
-                }
-            }
-        });
-
-        IMap<Object, Object> slowMap = node.getMap(slowMapName);
-        Object old = slowMap.put(11, 1);
-        System.out.println("slow map old value is=" + old);
-        Object old2 = slowMap.put(11, 2);
-        System.out.println("slow map old2 value is=" + old2);
-
-        sleepSeconds(100);
-    }
-
-
-    @Test
-    public void name3() {
-        Config config = getConfig();
-        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "1");
-        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
-
-        MapStoreConfig mapStoreConfig = new MapStoreConfig();
-        mapStoreConfig.setEnabled(true);
-        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
-
-            ConcurrentHashMap store = new ConcurrentHashMap<>();
-
-            @Override
-            public Integer load(Integer key) {
-                sleepSeconds(2);
-                return (Integer) store.get(key);
-            }
-
-            @Override
-            public void store(Integer key, Integer value) {
-                sleepSeconds(2);
-                store.put(key, value);
-            }
-
-            @Override
-            public Map<Integer, Integer> loadAll(Collection<Integer> keys) {
-                return null;
-            }
-
-            @Override
-            public Iterable<Integer> loadAllKeys() {
-                return null;
-            }
-        });
-        String slowMapName = "slowMap";
-        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
-
-        HazelcastInstance node = createHazelcastInstance(config);
-        IMap<Object, Object> slowMap = node.getMap(slowMapName);
-
-        spawn(() -> {
-            slowMap.set(1, 1);
-            System.out.println("slow set i = " + 1);
-        });
-
-        spawn(() -> {
-            slowMap.set(2, 1);
-            System.out.println("slow set i = " + 2);
-        });
-
-
-        sleepSeconds(100);
+        assertTrueEventually(() -> assertEquals(keySetSize, fastMap.size()));
     }
 }
