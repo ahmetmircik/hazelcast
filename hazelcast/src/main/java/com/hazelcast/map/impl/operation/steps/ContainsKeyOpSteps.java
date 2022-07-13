@@ -16,22 +16,17 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.util.ThreadUtil;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
-
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 
 public enum ContainsKeyOpSteps implements Step<State> {
 
     READ() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
             Record record = recordStore.getRecordOrNull(state.getKey());
             if (record != null) {
@@ -55,8 +50,6 @@ public enum ContainsKeyOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !ThreadUtil.isRunningOnPartitionThread();
-
             GetOpSteps.LOAD.runStep(state);
         }
 

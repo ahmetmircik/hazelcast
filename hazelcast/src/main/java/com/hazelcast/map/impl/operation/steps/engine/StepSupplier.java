@@ -44,12 +44,22 @@ public class StepSupplier implements Supplier<Runnable> {
     private volatile Runnable currentRunnable;
     private volatile Step currentStep;
 
+    /**
+     * Only here to disable check for testing purposes.
+     */
+    private final boolean doRunningThreadChecks;
+
     public StepSupplier(MapOperation operation) {
+        this(operation, true);
+    }
+
+    public StepSupplier(MapOperation operation, boolean doRunningThreadChecks) {
         assert operation != null;
 
         this.state = operation.createState();
         this.currentStep = operation.getStartingStep();
         this.operationRunner = getPartitionOperationRunner(operation);
+        this.doRunningThreadChecks = doRunningThreadChecks;
 
         assert state != null;
         assert currentStep != null;
@@ -77,14 +87,21 @@ public class StepSupplier implements Supplier<Runnable> {
     }
 
     private Runnable createRunnable(Step step, State state) {
+        // 0. If null step return null
         if (step == null) {
             return null;
         }
 
+        // 1. If step needs to be offloaded,
+        // return step wrapped as a runnable.
         if (step.isOffloadStep()) {
             return new Runnable() {
                 @Override
                 public void run() {
+                    if (doRunningThreadChecks) {
+                        assert !isRunningOnPartitionThread();
+                    }
+
                     runStepWith(step, state);
                 }
 
@@ -95,9 +112,14 @@ public class StepSupplier implements Supplier<Runnable> {
             };
         }
 
+        // 2. If step needs to be run on partition thread,
+        // return step wrapped as a partition specific runnable.
         return new PartitionSpecificRunnable() {
             @Override
             public void run() {
+                if (doRunningThreadChecks) {
+                    assert isRunningOnPartitionThread();
+                }
                 runStepWith(step, state);
             }
 

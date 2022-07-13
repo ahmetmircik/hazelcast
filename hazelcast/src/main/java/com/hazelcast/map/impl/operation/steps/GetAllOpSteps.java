@@ -17,18 +17,15 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.operation.GetAllOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 public enum GetAllOpSteps implements Step<State> {
 
@@ -60,8 +57,6 @@ public enum GetAllOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             MultipleEntryOpSteps.LOAD_ALL.runStep(state);
         }
 
@@ -74,8 +69,6 @@ public enum GetAllOpSteps implements Step<State> {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
 
             MapEntries mapEntries = state.getMapEntries();

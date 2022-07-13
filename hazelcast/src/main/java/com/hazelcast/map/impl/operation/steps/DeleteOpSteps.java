@@ -24,16 +24,11 @@ import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-
 public enum DeleteOpSteps implements Step<State> {
 
     READ() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -65,8 +60,6 @@ public enum DeleteOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore.persistenceEnabledFor(state.getCallerProvenance())) {
                 MapDataStore mapDataStore = recordStore.getMapDataStore();
@@ -84,8 +77,6 @@ public enum DeleteOpSteps implements Step<State> {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             recordStore.removeRecord0(state.getKey(), record);

@@ -28,15 +28,11 @@ import com.hazelcast.map.impl.operation.steps.engine.StepResponseHandler;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-
 public enum UtilSteps implements Step<State> {
 
     SEND_RESPONSE() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             StepResponseHandler.sendResponse(state);
 
             MapOperation operation = state.getOperation();
@@ -53,8 +49,6 @@ public enum UtilSteps implements Step<State> {
     HANDLE_ERROR() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             try {
                 handleOperationError(state);
             } finally {
@@ -63,8 +57,6 @@ public enum UtilSteps implements Step<State> {
         }
 
         public void handleOperationError(State state) {
-            assertRunningOnPartitionThread();
-
             MapOperation operation = state.getOperation();
             Throwable e = state.getThrowable();
 

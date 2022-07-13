@@ -70,7 +70,7 @@ public class State {
     private UUID ownerUuid;
     private CallerProvenance callerProvenance;
 
-    // fields used in inter thread communication
+    // fields used for inter thread communication
     private volatile Object oldValue;
     private volatile Object newValue;
     private volatile boolean stopExecution;
@@ -95,7 +95,7 @@ public class State {
     private volatile Queue<InternalIndex> notMarkedIndexes;
     private volatile Set keysFromIndex;
     private volatile Throwable throwable;
-    private boolean triggerMapLoader;
+    private volatile boolean triggerMapLoader;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;

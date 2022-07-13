@@ -24,8 +24,8 @@ import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
 import com.hazelcast.map.impl.operation.PutAllOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
@@ -40,8 +40,6 @@ import java.util.Map;
 import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 
 public enum PutAllOpSteps implements Step<State> {
 
@@ -85,8 +83,6 @@ public enum PutAllOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
                 MultipleEntryOpSteps.LOAD_ALL.runStep(state);
             }
@@ -118,8 +114,6 @@ public enum PutAllOpSteps implements Step<State> {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -173,8 +167,6 @@ public enum PutAllOpSteps implements Step<State> {
     AFTER_RUN() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

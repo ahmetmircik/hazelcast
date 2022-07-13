@@ -127,7 +127,9 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
 
     private final IPartitionService partitionService;
     private final InterceptorRegistry interceptorRegistry;
+    // offloadedOperations is only accessed by single thread
     private final Set<MapOperation> offloadedOperations = new LinkedHashSet<>();
+    // mapStoreOffloadedOperationsCount is for accessed by single thread
     private final SwCounter mapStoreOffloadedOperationsCount = newSwCounter();
 
     public DefaultRecordStore(MapContainer mapContainer, int partitionId,

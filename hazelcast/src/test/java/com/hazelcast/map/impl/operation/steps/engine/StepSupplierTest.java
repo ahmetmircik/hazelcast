@@ -45,7 +45,7 @@ public class StepSupplierTest extends HazelcastTestSupport {
         operation.beforeRun();
 
         try {
-            StepSupplier stepSupplier = new StepSupplier(operation);
+            StepSupplier stepSupplier = new StepSupplier(operation, false);
             Runnable step;
             while ((step = stepSupplier.get()) != null) {
                 step.run();

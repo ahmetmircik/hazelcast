@@ -98,7 +98,6 @@ public class MapIndexJsonTest extends HazelcastTestSupport {
     @Override
     protected Config getConfig() {
         Config config = super.getConfig();
-        config.getMetricsConfig().setEnabled(false);
         MapConfig mapConfig = new MapConfig("default")
                 .setInMemoryFormat(inMemoryFormat)
                 .setMetadataPolicy(metadataPolicy)

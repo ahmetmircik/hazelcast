@@ -25,15 +25,11 @@ import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import java.util.UUID;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-
 public enum TxnSetOpSteps implements Step<State> {
 
     READ() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
 
             Data dataKey = state.getKey();

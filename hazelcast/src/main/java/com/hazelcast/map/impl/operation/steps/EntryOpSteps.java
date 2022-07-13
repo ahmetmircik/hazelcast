@@ -25,8 +25,6 @@ import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
@@ -66,8 +64,6 @@ public enum EntryOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             GetOpSteps.LOAD.runStep(state);
         }
 
@@ -224,8 +220,6 @@ public enum EntryOpSteps implements Step<State> {
     AFTER_RUN() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             EntryOperator operator = state.getOperator();
             EntryEventType eventType = operator.getEventType();
             if (eventType != null) {

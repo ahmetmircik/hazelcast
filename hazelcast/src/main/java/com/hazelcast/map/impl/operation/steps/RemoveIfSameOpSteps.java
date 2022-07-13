@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.SerializationService;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
@@ -114,8 +113,6 @@ public enum RemoveIfSameOpSteps implements Step<State> {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
             if (state.isRecordExistsInMemory()) {
                 DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
                 Record record = recordStore.getRecord(state.getKey());

@@ -24,8 +24,6 @@ import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-
 public enum RemoveOpSteps implements Step<State> {
 
     READ() {
@@ -103,8 +101,6 @@ public enum RemoveOpSteps implements Step<State> {
     ON_DELETE() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             Record record = recordStore.getRecord(state.getKey());
             if (record == null) {

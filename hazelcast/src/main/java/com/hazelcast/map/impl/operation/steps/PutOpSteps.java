@@ -27,16 +27,11 @@ import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-
 public enum PutOpSteps implements Step<State> {
 
     READ() {
         @Override
         public void runStep(State state) {
-            assert isRunningOnPartitionThread();
-
             GetOpSteps.READ.runStep(state);
         }
 
@@ -55,8 +50,6 @@ public enum PutOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             if (state.getRecordStore().getMapDataStore() == MapDataStores.EMPTY_MAP_DATA_STORE) {
                 return;
             }
@@ -79,8 +72,6 @@ public enum PutOpSteps implements Step<State> {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             StaticParams staticParams = state.getStaticParams();
             Object newValue = state.getNewValue();
 
@@ -153,8 +144,6 @@ public enum PutOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             Object newValue = ((DefaultRecordStore) state.getRecordStore()).putIntoMapStore0(state.getKey(),
                     state.getNewValue(), state.getTtl(), state.getMaxIdle(), state.getNow(), state.getTxnId());
             state.setNewValue(newValue);
@@ -169,8 +158,6 @@ public enum PutOpSteps implements Step<State> {
     ON_STORE() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
 
             Record record = recordStore.getRecord(state.getKey());

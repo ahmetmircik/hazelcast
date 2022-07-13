@@ -94,15 +94,18 @@ public final class StaticParams {
     private boolean backup;
     private boolean load;
     private boolean store;
+    // putVanilla: is for regular puts like IMap#set.
     private boolean putVanilla;
     private boolean putIfAbsent;
     private boolean putIfExists;
     private boolean putIfEqual;
     private boolean putFromLoad;
+    // isTransient: is for IMap#putTransient.
     private boolean isTransient;
     private boolean setTtl;
     private boolean checkIfLoaded;
     private boolean countAsAccess;
+    // tryPut: is for IMap#tryPut.
     private boolean tryPut;
 
     private StaticParams() {

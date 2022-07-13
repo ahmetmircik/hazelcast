@@ -18,7 +18,6 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.SerializationService;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
@@ -38,7 +37,6 @@ import java.util.List;
 import java.util.Queue;
 
 import static com.hazelcast.core.EntryEventType.MERGED;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
 
 public enum MergeOpSteps implements Step<State> {
@@ -110,8 +108,6 @@ public enum MergeOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             // key + oldValue + newValue + mergingEntry
             List outcomes = (List) state.getResult();
 
@@ -153,8 +149,6 @@ public enum MergeOpSteps implements Step<State> {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
@@ -209,8 +203,6 @@ public enum MergeOpSteps implements Step<State> {
     RESPONSE() {
         @Override
         public void runStep(State state) {
-            ThreadUtil.assertRunningOnPartitionThread();
-
             RecordStore recordStore = state.getRecordStore();
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();

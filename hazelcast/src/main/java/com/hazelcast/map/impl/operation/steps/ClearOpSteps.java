@@ -28,16 +28,11 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
-import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
-
 public enum ClearOpSteps implements Step<State> {
 
     CLEAR_MEMORY() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             if (recordStore == null) {
                 state.setResult(0);
@@ -80,8 +75,6 @@ public enum ClearOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            assert !isRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             Collection<Data> keys = state.getKeys();
             recordStore.getMapDataStore().removeAll(keys);
@@ -96,8 +89,6 @@ public enum ClearOpSteps implements Step<State> {
     ON_CLEAR() {
         @Override
         public void runStep(State state) {
-            assertRunningOnPartitionThread();
-
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords());
             if (removedKeyCount > 0) {
