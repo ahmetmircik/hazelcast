@@ -219,6 +219,9 @@ public class OperationRunnerImpl extends OperationRunner implements StaticMetric
 
     public void checkOp(Operation op) {
         checkNodeState(op);
+        if (timeout(op)) {
+            return;
+        }
         ensureNoPartitionProblems(op);
         ensureNoSplitBrain(op);
     }

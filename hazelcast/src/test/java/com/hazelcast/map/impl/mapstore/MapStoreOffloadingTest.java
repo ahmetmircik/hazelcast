@@ -58,6 +58,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER);
         mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
 
             @Override
@@ -104,6 +105,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER);
         mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
 
             ConcurrentHashMap store = new ConcurrentHashMap<>();
@@ -115,7 +117,6 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public void store(Integer key, Integer value) {
-                sleepSeconds(2);
                 store.put(key, value);
             }
 
@@ -126,14 +127,18 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         HazelcastInstance node = createHazelcastInstance(config);
         IMap<Object, Object> slowMap = node.getMap(slowMapName);
 
-        Future oldNull = slowMap.putAsync(1, 1).toCompletableFuture();
-        Future oldOne = slowMap.putAsync(1, 2).toCompletableFuture();
-        Future oldTwo = slowMap.putAsync(1, 3).toCompletableFuture();
+        Future oldIsNull = slowMap.putAsync(1, 1).toCompletableFuture();
+        Future oldIs1 = slowMap.putAsync(1, 2).toCompletableFuture();
+        Future oldIs2 = slowMap.putAsync(1, 3).toCompletableFuture();
+        Future oldIs3 = slowMap.putAsync(1, 4).toCompletableFuture();
+        Future oldIs4 = slowMap.putAsync(1, 5).toCompletableFuture();
 
         assertTrueEventually(() -> {
-            assertNull(oldNull.get());
-            assertEquals(1, oldOne.get());
-            assertEquals(2, oldTwo.get());
+            assertEquals(4, oldIs4.get());
+            assertEquals(3, oldIs3.get());
+            assertEquals(2, oldIs2.get());
+            assertEquals(1, oldIs1.get());
+            assertNull(oldIsNull.get());
         });
     }
 
@@ -145,6 +150,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER);
         mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
 
             ConcurrentMap<Integer, Integer> store = new ConcurrentHashMap<>();
@@ -156,7 +162,7 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
 
             @Override
             public void store(Integer key, Integer value) {
-                sleepSeconds(5);
+                sleepMillis(500);
                 store.put(key, value);
             }
         });
@@ -170,13 +176,13 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         assertEquals(1, slowMap.get(1));
     }
 
-
     @Test
     public void slow_map_does_not_block_fast_map() {
         Config config = getConfig();
 
         MapStoreConfig mapStoreConfig = new MapStoreConfig();
         mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER);
         mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
 
             @Override

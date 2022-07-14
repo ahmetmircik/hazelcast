@@ -53,11 +53,11 @@ public class StepRunner extends Offload
      * offloading mechanism in case of a remote call from
      * a running HazelcastInstanceAware entry processor.
      * <p>
-     * Although it is not good practice, calling a
-     * remote operation can result with deadlocks for
-     * writes but for read-only cases it can be used.
+     * Although it is not good practice and calling a
+     * remote operation can result with deadlock for
+     * writes, it is ok to call it for local reads.
      */
-    public static final ThreadLocal<Boolean> STEP_RUNNER_IS_IN_PROGRESS
+    public static final ThreadLocal<Boolean> CURRENTLY_EXECUTING_ON_PARTITION_THREAD
             = ThreadLocal.withInitial(() -> false);
 
     private static final long DEFAULT_MAX_SUCCESSIVE_OFFLOADED_OP_RUN_NANOS
@@ -98,10 +98,11 @@ public class StepRunner extends Offload
     }
 
     /**
-     * @return true if current partition thread is running, false otherwise.
+     * @return true if current partition thread is
+     * executing this step runner now, false otherwise.
      */
-    public static boolean isRequestFromInProgressStepRunner() {
-        return STEP_RUNNER_IS_IN_PROGRESS.get();
+    public static boolean isStepRunnerCurrentlyExecutingOnPartitionThread() {
+        return CURRENTLY_EXECUTING_ON_PARTITION_THREAD.get();
     }
 
     private void addToOffloadedOperations(MapOperation op) {
@@ -117,32 +118,7 @@ public class StepRunner extends Offload
     @Override
     public void run() {
         boolean runningOnPartitionThread = isRunningOnPartitionThread();
-        try {
-            markAsRunning(runningOnPartitionThread);
-            run0(runningOnPartitionThread);
-        } finally {
-            markAsFinished(runningOnPartitionThread);
-        }
-    }
-
-    /**
-     * Marks current partition thread if step runner is currently NOT running.
-     */
-    private static void markAsFinished(boolean runningOnPartitionThread) {
-        markThread(runningOnPartitionThread, false);
-    }
-
-    /**
-     * Marks current partition thread if step runner is currently running.
-     */
-    private static void markAsRunning(boolean runningOnPartitionThread) {
-        markThread(runningOnPartitionThread, true);
-    }
-
-    private static void markThread(boolean runningOnPartitionThread, boolean value) {
-        if (runningOnPartitionThread) {
-            STEP_RUNNER_IS_IN_PROGRESS.set(value);
-        }
+        run0(runningOnPartitionThread);
     }
 
     /**
@@ -217,7 +193,12 @@ public class StepRunner extends Offload
     private boolean runDirect(Runnable step) {
         if (step instanceof PartitionSpecificRunnable) {
             if (isRunningOnPartitionThread()) {
-                step.run();
+                try {
+                    CURRENTLY_EXECUTING_ON_PARTITION_THREAD.set(true);
+                    step.run();
+                } finally {
+                    CURRENTLY_EXECUTING_ON_PARTITION_THREAD.set(false);
+                }
                 return true;
             }
         } else {

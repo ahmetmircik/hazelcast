@@ -17,7 +17,6 @@
 package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher;
-import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.operation.MapOperation;
@@ -30,6 +29,7 @@ import com.hazelcast.spi.impl.operationservice.impl.OperationRunnerImpl;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 
+import static com.hazelcast.internal.util.ThreadUtil.isRunningOnPartitionThread;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
 // TODO opLatencyDistributions?
@@ -39,7 +39,7 @@ public final class StepResponseHandler {
     }
 
     public static void sendResponse(State state) {
-        assert ThreadUtil.isRunningOnPartitionThread();
+        assert isRunningOnPartitionThread();
 
         MapOperation operation = state.getOperation();
         operation.applyState(state);

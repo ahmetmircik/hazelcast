@@ -99,7 +99,6 @@ public enum GetOpSteps implements Step<State> {
             if (record != null) {
                 recordStore.accessRecord(state.getKey(), record, state.getNow());
             }
-
         }
 
         @Override

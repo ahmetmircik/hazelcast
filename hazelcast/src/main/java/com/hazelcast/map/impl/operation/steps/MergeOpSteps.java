@@ -264,6 +264,8 @@ public enum MergeOpSteps implements Step<State> {
                 operation.evict(dataKey);
             }
 
+            state.setBackupPairs(backupPairs);
+
             state.setResult(hasMergedValues);
 
             operation.invalidateNearCache(invalidationKeys);

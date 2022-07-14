@@ -103,7 +103,6 @@ public class MergeOperation extends MapOperation
     @Override
     public State createState() {
         return super.createState()
-                .setCallerProvenance(getCallerProvenance())
                 .setMergingEntries(mergingEntries)
                 .setMergePolicy(mergePolicy);
     }
@@ -115,8 +114,9 @@ public class MergeOperation extends MapOperation
 
     @Override
     public void applyState(State state) {
-        super.applyState(state);
         hasMergedValues = (boolean) state.getResult();
+        backupPairs = state.getBackupPairs();
+        hasBackups = mapContainer.getTotalBackupCount() > 0;
     }
 
     @Override

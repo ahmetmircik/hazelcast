@@ -180,6 +180,7 @@ public class EntryOperation extends LockAwareOperation
         entryProcessor = (EntryProcessor) managedContext.initialize(entryProcessor);
     }
 
+    // FIXME: EntryOperationOffload loads with get from map-store
     // TODO: EP no forced eviction for EP?
     @Override
     public CallStatus call() {
@@ -193,7 +194,7 @@ public class EntryOperation extends LockAwareOperation
         if (offload) {
             return new EntryOperationOffload(getCallerAddress());
         } else {
-            if (mapStoreOffloadEnabled) {
+            if (isMapStoreOffloadEnabled()) {
                 assert this != null;
                 return offloadOperation();
             }

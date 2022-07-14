@@ -71,11 +71,15 @@ public class State {
     private CallerProvenance callerProvenance;
 
     // fields used for inter thread communication
+    private volatile boolean blockReads;
+    private volatile boolean stopExecution;
+    private volatile boolean recordExistsInMemory;
+    private volatile boolean disableWanReplicationEvent;
+    private volatile boolean triggerMapLoader;
+    private volatile boolean shouldLoad;
     private volatile Object oldValue;
     private volatile Object newValue;
-    private volatile boolean stopExecution;
     private volatile Object result;
-    private volatile boolean recordExistsInMemory;
     private volatile Collection<Data> keysToLoad = Collections.emptyList();
     private volatile Map loadedKeyValuePairs = Collections.emptyMap();
     private volatile Collection<Data> keys;
@@ -84,18 +88,17 @@ public class State {
     private volatile EntryOperator operator;
     private volatile List<State> toStore;
     private volatile List<State> toRemove;
+    private volatile List backupPairs;
     private volatile Predicate predicate;
     private volatile List<SplitBrainMergeTypes.MapMergeTypes<Object, Object>> mergingEntries;
     private volatile SplitBrainMergePolicy<Object,
             SplitBrainMergeTypes.MapMergeTypes<Object, Object>, Object> mergePolicy;
-    private volatile boolean disableWanReplicationEvent;
     private volatile MapEntries mapEntries;
     private volatile EntryEventType entryEventType;
     private volatile Record record;
     private volatile Queue<InternalIndex> notMarkedIndexes;
     private volatile Set keysFromIndex;
     private volatile Throwable throwable;
-    private volatile boolean triggerMapLoader;
 
     public State(RecordStore recordStore, MapOperation operation) {
         this.recordStore = recordStore;
@@ -465,5 +468,31 @@ public class State {
 
     public boolean isTriggerMapLoader() {
         return triggerMapLoader;
+    }
+
+    public State setShouldLoad(boolean shouldLoad) {
+        this.shouldLoad = shouldLoad;
+        return this;
+    }
+
+    public boolean isShouldLoad() {
+        return shouldLoad;
+    }
+
+    public boolean isBlockReads() {
+        return blockReads;
+    }
+
+    public State setBlockReads(boolean blockReads) {
+        this.blockReads = blockReads;
+        return this;
+    }
+
+    public void setBackupPairs(List backupPairs) {
+        this.backupPairs = backupPairs;
+    }
+
+    public List getBackupPairs() {
+        return backupPairs;
     }
 }

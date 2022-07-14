@@ -54,11 +54,6 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         super.afterRunInternal();
     }
 
-    public State createState() {
-        return super.createState()
-                .setKey(dataKey);
-    }
-
     @Override
     public void applyState(State state) {
         super.applyState(state);

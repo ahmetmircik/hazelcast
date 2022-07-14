@@ -45,12 +45,6 @@ public class ContainsKeyOperation
     }
 
     @Override
-    public State createState() {
-        return super.createState()
-                .setKey(dataKey);
-    }
-
-    @Override
     public void applyState(State state) {
         super.applyState(state);
         containsKey = state.getOldValue() != null;

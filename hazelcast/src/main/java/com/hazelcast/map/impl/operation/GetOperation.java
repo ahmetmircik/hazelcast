@@ -64,12 +64,6 @@ public final class GetOperation extends ReadonlyKeyBasedMapOperation implements 
     }
 
     @Override
-    public State createState() {
-        return super.createState()
-                .setKey(dataKey);
-    }
-
-    @Override
     public Step getStartingStep() {
         return GetOpSteps.READ;
     }

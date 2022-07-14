@@ -21,6 +21,7 @@ import com.hazelcast.internal.nearcache.impl.invalidation.Invalidator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.services.ObjectNamespace;
 import com.hazelcast.internal.services.ServiceNamespaceAware;
+import com.hazelcast.internal.util.ThreadUtil;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapDataSerializerHook;
@@ -60,7 +61,7 @@ import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.EntryViews.createWanEntryView;
 import static com.hazelcast.map.impl.operation.ForcedEviction.runWithForcedEvictionStrategies;
-import static com.hazelcast.map.impl.operation.steps.engine.StepRunner.isRequestFromInProgressStepRunner;
+import static com.hazelcast.map.impl.operation.steps.engine.StepRunner.isStepRunnerCurrentlyExecutingOnPartitionThread;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.RESPONSE;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.VOID;
 import static com.hazelcast.spi.impl.operationservice.CallStatus.WAIT;
@@ -79,11 +80,12 @@ public abstract class MapOperation extends AbstractNamedOperation
     protected transient MapEventPublisher mapEventPublisher;
 
     protected transient boolean hasMapStore;
-    protected transient boolean mapStoreOffloadEnabled;
     protected transient boolean createRecordStoreOnDemand = true;
     protected transient boolean disposeDeferredBlocks = true;
 
+    private transient boolean mapStoreOffloadEnabled;
     private transient boolean canPublishWanEvent;
+    private transient boolean operationCreatedOnPartitionThread = ThreadUtil.isRunningOnPartitionThread();
 
     public MapOperation() {
     }
@@ -155,13 +157,24 @@ public abstract class MapOperation extends AbstractNamedOperation
             }
         }
 
-        if (mapStoreOffloadEnabled && !isRequestFromInProgressStepRunner()) {
+        if (isMapStoreOffloadEnabled()) {
             assert recordStore != null;
             return offloadOperation();
         }
 
         run();
         return returnsResponse() ? RESPONSE : VOID;
+    }
+
+    protected final boolean isMapStoreOffloadEnabled() {
+        // This is for nested calls from partition thread. When we see
+        // nested call we directly run the call without offloading.
+        if (mapStoreOffloadEnabled
+                && operationCreatedOnPartitionThread
+                && isStepRunnerCurrentlyExecutingOnPartitionThread()) {
+            return false;
+        }
+        return mapStoreOffloadEnabled;
     }
 
     protected Offload offloadOperation() {
