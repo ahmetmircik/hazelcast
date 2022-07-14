@@ -16,6 +16,7 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
+import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
@@ -159,6 +160,8 @@ public enum PutOpSteps implements Step<State> {
         @Override
         public void runStep(State state) {
             DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
+            MapContainer mapContainer = recordStore.getMapContainer();
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
 
             Record record = recordStore.getRecord(state.getKey());
             if (record == null) {
@@ -167,6 +170,10 @@ public enum PutOpSteps implements Step<State> {
                         state.getTtl(), state.getMaxIdle(), state.getExpiryTime(),
                         state.getNow(), EntryEventType.ADDED, state.getStaticParams().isBackup());
             } else {
+                // To heap copy and state object update are
+                // needed for re-runs in case of forced eviction
+                state.setOldValue(recordStore.getInMemoryFormat() == InMemoryFormat.OBJECT
+                        ? record.getValue() : mapServiceContext.toData(record.getValue()));
                 recordStore.updateRecord0(record, state.getNow(), state.getStaticParams().isCountAsAccess());
                 recordStore.updateMemory(record, state.getKey(), state.getOldValue(), state.getNewValue(),
                         state.getTtl(), state.getMaxIdle(), state.getExpiryTime(), state.getNow(),

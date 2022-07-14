@@ -114,27 +114,43 @@ public class StepRunner extends Offload
         return offloadedOperations.size() == 1;
     }
 
+    @Override
+    public void run() {
+        boolean runningOnPartitionThread = isRunningOnPartitionThread();
+        try {
+            markAsRunning(runningOnPartitionThread);
+            run0(runningOnPartitionThread);
+        } finally {
+            markAsFinished(runningOnPartitionThread);
+        }
+    }
+
+    /**
+     * Marks current partition thread if step runner is currently NOT running.
+     */
+    private static void markAsFinished(boolean runningOnPartitionThread) {
+        markThread(runningOnPartitionThread, false);
+    }
+
+    /**
+     * Marks current partition thread if step runner is currently running.
+     */
+    private static void markAsRunning(boolean runningOnPartitionThread) {
+        markThread(runningOnPartitionThread, true);
+    }
+
+    private static void markThread(boolean runningOnPartitionThread, boolean value) {
+        if (runningOnPartitionThread) {
+            STEP_RUNNER_IS_IN_PROGRESS.set(value);
+        }
+    }
+
     /**
      * Runs all queued operations one by one.
      * <p>
      * For fair usage of partition thread, it
      * has a {@link #maxRunNanos} upper limit.
      */
-    @Override
-    public void run() {
-        boolean runningOnPartitionThread = isRunningOnPartitionThread();
-        try {
-            if (runningOnPartitionThread) {
-                STEP_RUNNER_IS_IN_PROGRESS.set(true);
-            }
-            run0(runningOnPartitionThread);
-        } finally {
-            if (runningOnPartitionThread) {
-                STEP_RUNNER_IS_IN_PROGRESS.set(false);
-            }
-        }
-    }
-
     @SuppressWarnings("checkstyle:innerassignment")
     private void run0(boolean runningOnPartitionThread) {
         long start = System.nanoTime();

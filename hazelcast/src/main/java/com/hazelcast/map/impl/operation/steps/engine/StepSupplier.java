@@ -32,6 +32,7 @@ import static com.hazelcast.map.impl.operation.ForcedEviction.runStepWithForcedE
 
 /**
  * <lu>
+ * <li>This is a single operation's step supplier</li>
  * <li>Supplies steps and decides next step after executed one.</li>
  * <li>Must be thread safe</li>
  * </lu>
@@ -47,19 +48,19 @@ public class StepSupplier implements Supplier<Runnable> {
     /**
      * Only here to disable check for testing purposes.
      */
-    private final boolean doRunningThreadChecks;
+    private final boolean checkCurrentThread;
 
     public StepSupplier(MapOperation operation) {
         this(operation, true);
     }
 
-    public StepSupplier(MapOperation operation, boolean doRunningThreadChecks) {
+    public StepSupplier(MapOperation operation, boolean checkCurrentThread) {
         assert operation != null;
 
         this.state = operation.createState();
         this.currentStep = operation.getStartingStep();
         this.operationRunner = getPartitionOperationRunner(operation);
-        this.doRunningThreadChecks = doRunningThreadChecks;
+        this.checkCurrentThread = checkCurrentThread;
 
         assert state != null;
         assert currentStep != null;
@@ -98,7 +99,7 @@ public class StepSupplier implements Supplier<Runnable> {
             return new Runnable() {
                 @Override
                 public void run() {
-                    if (doRunningThreadChecks) {
+                    if (checkCurrentThread) {
                         assert !isRunningOnPartitionThread();
                     }
 
@@ -117,7 +118,7 @@ public class StepSupplier implements Supplier<Runnable> {
         return new PartitionSpecificRunnable() {
             @Override
             public void run() {
-                if (doRunningThreadChecks) {
+                if (checkCurrentThread) {
                     assert isRunningOnPartitionThread();
                 }
                 runStepWith(step, state);
@@ -136,11 +137,12 @@ public class StepSupplier implements Supplier<Runnable> {
     }
 
     private void runStepWith(Step step, State state) {
+        boolean runningOnPartitionThread = isRunningOnPartitionThread();
         try {
             try {
                 log(step, state);
 
-                if (isRunningOnPartitionThread() && state.getThrowable() == null) {
+                if (runningOnPartitionThread && state.getThrowable() == null) {
                     operationRunner.checkOp(state.getOperation());
                 }
                 step.runStep(state);
@@ -152,7 +154,9 @@ public class StepSupplier implements Supplier<Runnable> {
                 });
             }
         } catch (Throwable throwable) {
-            state.getOperation().disposeDeferredBlocks();
+            if (runningOnPartitionThread) {
+                state.getOperation().disposeDeferredBlocks();
+            }
             state.setThrowable(throwable);
         } finally {
             currentStep = nextStep(step);
