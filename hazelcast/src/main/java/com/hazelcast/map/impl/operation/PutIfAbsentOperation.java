@@ -50,8 +50,7 @@ public class PutIfAbsentOperation
     @Override
     public void applyState(State state) {
         super.applyState(state);
-        this.oldValue = mapServiceContext.toData(state.getOldValue());
-        this.successful = this.oldValue == null;
+        successful = oldValue == null;
     }
 
     @Override

@@ -29,7 +29,8 @@ import com.hazelcast.spi.impl.operationservice.Operation;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public abstract class BasePutOperation extends LockAwareOperation implements BackupAwareOperation {
+public abstract class BasePutOperation
+        extends LockAwareOperation implements BackupAwareOperation {
 
     protected transient Object oldValue;
     protected transient EntryEventType eventType;
@@ -69,9 +70,13 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
 
     @Override
     public void applyState(State state) {
-        oldValue = mapServiceContext.toData(state.getOldValue());
+        oldValue = getOldValue(state);
         eventType = getEventType();
         recordToBackup = state.getRecord();
+    }
+
+    protected Data getOldValue(State state) {
+        return mapServiceContext.toData(state.getOldValue());
     }
 
     @Override
@@ -98,7 +103,7 @@ public abstract class BasePutOperation extends LockAwareOperation implements Bac
         return UNSET;
     }
 
-    private EntryEventType getEventType() {
+    protected final EntryEventType getEventType() {
         if (eventType == null) {
             eventType = oldValue == null ? EntryEventType.ADDED : EntryEventType.UPDATED;
         }

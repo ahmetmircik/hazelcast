@@ -139,7 +139,7 @@ public class MapRemoveFailingBackupTest extends HazelcastTestSupport {
         @Override
         public void applyState(State state) {
             super.applyState(state);
-            dataOldValue = mapServiceContext.toData(state.getOldValue());
+
             successful = dataOldValue != null;
         }
 

@@ -110,7 +110,6 @@ public class MapService implements ManagedService, ChunkedMigrationAwareService,
         OffloadedReplicationPreparation {
 
     public static final String SERVICE_NAME = "hz:impl:mapService";
-    private static final String TAG_NAME = "partitionId";
 
     protected ManagedService managedService;
     protected CountingMigrationAwareService migrationAwareService;

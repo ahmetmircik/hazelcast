@@ -79,14 +79,6 @@ public class StepSupplier implements Supplier<Runnable> {
         return currentRunnable;
     }
 
-    private Step nextStep(Step step) {
-        if (state.getThrowable() != null
-                && currentStep != UtilSteps.HANDLE_ERROR) {
-            return UtilSteps.HANDLE_ERROR;
-        }
-        return step.nextStep(state);
-    }
-
     private Runnable createRunnable(Step step, State state) {
         // 0. If null step return null
         if (step == null) {
@@ -136,6 +128,13 @@ public class StepSupplier implements Supplier<Runnable> {
         };
     }
 
+    /**
+     * Responsibilities of this method:
+     * <lu>
+     *     <li>Runs this step</li>
+     *     <li>Sets next step to run</li>
+     * </lu>
+     */
     private void runStepWith(Step step, State state) {
         boolean runningOnPartitionThread = isRunningOnPartitionThread();
         try {
@@ -162,6 +161,18 @@ public class StepSupplier implements Supplier<Runnable> {
             currentStep = nextStep(step);
             currentRunnable = createRunnable(currentStep, state);
         }
+    }
+
+    /**
+     * In case of exception, sets next step as {@link UtilSteps#HANDLE_ERROR},
+     * otherwise finds next step by calling {@link Step#nextStep}
+     */
+    private Step nextStep(Step step) {
+        if (state.getThrowable() != null
+                && currentStep != UtilSteps.HANDLE_ERROR) {
+            return UtilSteps.HANDLE_ERROR;
+        }
+        return step.nextStep(state);
     }
 
     private void rerunWithForcedEviction(Runnable step) {

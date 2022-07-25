@@ -186,17 +186,7 @@ class MapMigrationAwareService
         }
 
         if (SOURCE == event.getMigrationEndpoint()) {
-            PartitionContainer partitionContainer
-                    = mapServiceContext.getPartitionContainer(event.getPartitionId());
-            for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
-                Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
-                List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
-                opList.addAll(offloadedOperations);
-                for (MapOperation op : opList) {
-                    PartitionMigratingException pme = createPME(event, op);
-                    op.getOperationResponseHandler().sendResponse(op, pme);
-                }
-            }
+            notifyOffloadedOperationsOnMigrationCommit(event);
         }
 
         PartitionContainer partitionContainer
@@ -212,7 +202,28 @@ class MapMigrationAwareService
         removeOrRegenerateNearCacheUuid(event);
     }
 
-    private PartitionMigratingException createPME(PartitionMigrationEvent event, MapOperation op) {
+    /**
+     * Offloaded operations are notified upon migration,
+     * these notified operations will be retried and
+     * will run on new partition owner as a result.
+     *
+     * @see com.hazelcast.map.impl.operation.steps.engine.StepSupplier#nextStep
+     */
+    private void notifyOffloadedOperationsOnMigrationCommit(PartitionMigrationEvent event) {
+        PartitionContainer partitionContainer
+                = mapServiceContext.getPartitionContainer(event.getPartitionId());
+        for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
+            Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
+            List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
+            opList.addAll(offloadedOperations);
+            for (MapOperation op : opList) {
+                op.getOperationResponseHandler()
+                        .sendResponse(op, newPartitionMigratingException(event, op));
+            }
+        }
+    }
+
+    private PartitionMigratingException newPartitionMigratingException(PartitionMigrationEvent event, MapOperation op) {
         return new PartitionMigratingException(mapServiceContext.getNodeEngine().getThisAddress(),
                 event.getPartitionId(), op.getClass().getName(), op.getServiceName());
     }

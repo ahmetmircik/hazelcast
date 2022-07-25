@@ -61,6 +61,11 @@ public class ReplaceIfSameOperation extends BasePutOperation implements Mutating
     }
 
     @Override
+    protected Data getOldValue(State state) {
+        return expect;
+    }
+
+    @Override
     protected StaticParams getStaticParams() {
         return StaticParams.REPLACE_IF_SAME_PARAMS;
     }

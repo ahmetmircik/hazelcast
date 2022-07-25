@@ -194,6 +194,24 @@ compare it with the current situation(which is all operations
 of all maps in a partition waiting head-operation), it can
 also be deemed as a limitation to preserve current behavior.
 
+**NOTE**: IMap api calls like `getEntryView` will not be queued
+even map has a map-store, since it only returns in memory
+view of an entry, and it has no map-store interaction, it is ok
+to run this kind of api calls without waiting previously offloaded operations.
+What this means is can be seen as in below example:
+
+```java
+map.put
+map.getEntryView --> always sees result of map.putAsync
+```
+
+```java
+map.putAsync
+map.getEntryView --> may not see result of map.putAsync 
+```
+
+
+
 ### Metrics
 With metric
 `map.store.offloaded.operations.waitingToBeProcessedCount`,

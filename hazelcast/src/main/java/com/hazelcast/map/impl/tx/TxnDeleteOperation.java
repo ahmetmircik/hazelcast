@@ -95,7 +95,7 @@ public class TxnDeleteOperation
     @Override
     public void applyState(State state) {
         super.applyState(state);
-        dataOldValue = mapServiceContext.toData(state.getOldValue());
+
         successful = dataOldValue != null;
     }
 

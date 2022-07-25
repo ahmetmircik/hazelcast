@@ -59,7 +59,11 @@ public abstract class BaseRemoveOperation extends LockAwareOperation
         super.applyState(state);
 
         this.dataKey = state.getKey();
-        this.dataOldValue = mapServiceContext.toData(state.getOldValue());
+        this.dataOldValue = getOldValue(state);
+    }
+
+    protected Data getOldValue(State state) {
+        return mapServiceContext.toData(state.getOldValue());
     }
 
     @Override

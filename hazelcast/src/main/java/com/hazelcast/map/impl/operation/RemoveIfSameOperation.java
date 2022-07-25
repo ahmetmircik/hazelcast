@@ -62,10 +62,19 @@ public class RemoveIfSameOperation extends BaseRemoveOperation {
     @Override
     public void applyState(State state) {
         super.applyState(state);
+
         successful = ((Boolean) state.getResult());
+        if (successful) {
+            dataOldValue = getOldValue(state);
+        }
+    }
+
+    @Override
+    protected Data getOldValue(State state) {
         if (successful) {
             dataOldValue = mapServiceContext.toData(state.getOldValue());
         }
+        return null;
     }
 
     @Override

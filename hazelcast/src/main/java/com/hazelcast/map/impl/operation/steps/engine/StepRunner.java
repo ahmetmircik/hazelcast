@@ -106,7 +106,7 @@ public class StepRunner extends Offload
     }
 
     private void addToOffloadedOperations(MapOperation op) {
-        op.setOperationResponseHandler(new StepResponseHandler(op.getOperationResponseHandler()));
+        op.setOperationResponseHandler(new OffloadedStepResponseHandler(op.getOperationResponseHandler()));
         offloadedOperations.add(op);
         op.getRecordStore().incMapStoreOffloadedOperationsCount();
     }
@@ -229,13 +229,15 @@ public class StepRunner extends Offload
     }
 
     /**
-     * Removes response sent operation from offloadedOperations.
+     * After response is sent for an offloaded operation,
+     * this callback removes offloaded operation from
+     * the {@link #offloadedOperations} registry.
      */
-    private class StepResponseHandler implements OperationResponseHandler {
+    private class OffloadedStepResponseHandler implements OperationResponseHandler {
 
         private OperationResponseHandler delegate;
 
-        StepResponseHandler(OperationResponseHandler delegate) {
+        OffloadedStepResponseHandler(OperationResponseHandler delegate) {
             this.delegate = delegate;
         }
 
