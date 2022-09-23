@@ -81,6 +81,10 @@ public abstract class AbstractIndex implements InternalIndex {
         this.stats = stats;
     }
 
+    public IndexStore getIndexStore() {
+        return indexStore;
+    }
+
     protected abstract IndexStore createIndexStore(IndexConfig config, PerIndexStats stats);
 
     @Override
