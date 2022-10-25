@@ -22,6 +22,7 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
@@ -165,7 +166,7 @@ public enum PartitionWideOpSteps implements Step<State> {
     STORE_OR_DELETE() {
         @Override
         public boolean isOffloadStep(State state) {
-            return true;
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
         }
 
         @Override

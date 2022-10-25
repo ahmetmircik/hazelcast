@@ -18,6 +18,7 @@ package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
@@ -42,7 +43,7 @@ public enum ClearOpSteps implements Step<State> {
 
             ArrayList<Data> keys = new ArrayList<>();
             ArrayList<Record> records = new ArrayList<>();
-            // we don't remove locked keys. These are clearable records.
+            // we don't remove locked keys. These are clear-able records.
             recordStore.forEach(new BiConsumer<Data, Record>() {
                 final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
 
@@ -70,7 +71,7 @@ public enum ClearOpSteps implements Step<State> {
     CLEAR_MAP_STORE() {
         @Override
         public boolean isOffloadStep(State state) {
-            return true;
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
         }
 
         @Override
@@ -90,7 +91,8 @@ public enum ClearOpSteps implements Step<State> {
         @Override
         public void runStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
-            int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(), state.getRecords(), false);
+            int removedKeyCount = recordStore.removeBulk((ArrayList<Data>) state.getKeys(),
+                    state.getRecords(), false);
             if (removedKeyCount > 0) {
                 recordStore.updateStatsOnRemove(Clock.currentTimeMillis());
             }

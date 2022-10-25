@@ -23,6 +23,7 @@ import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapEntries;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
+import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.operation.PutAllOperation;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
@@ -71,11 +72,14 @@ public enum PutAllOpSteps implements Step<State> {
 
         @Override
         public Step nextStep(State state) {
-            return PutAllOpSteps.LOAD_ALL_STORE_ALL;
+            if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
+                return PutAllOpSteps.LOAD_ALL;
+            }
+            return PutAllOpSteps.STORE_ALL;
         }
     },
 
-    LOAD_ALL_STORE_ALL() {
+    LOAD_ALL() {
         @Override
         public boolean isOffloadStep(State state) {
             return true;
@@ -83,10 +87,23 @@ public enum PutAllOpSteps implements Step<State> {
 
         @Override
         public void runStep(State state) {
-            if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
-                MultipleEntryOpSteps.LOAD_ALL.runStep(state);
-            }
+            MultipleEntryOpSteps.LOAD_ALL.runStep(state);
+        }
 
+        @Override
+        public Step nextStep(State state) {
+            return PutAllOpSteps.STORE_ALL;
+        }
+    },
+
+    STORE_ALL() {
+        @Override
+        public boolean isOffloadStep(State state) {
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
+        }
+
+        @Override
+        public void runStep(State state) {
             DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             long expirationTime = recordStore.getExpirySystem().calculateExpirationTime(state.getTtl(),
                     state.getMaxIdle(), state.getNow(), state.getNow());

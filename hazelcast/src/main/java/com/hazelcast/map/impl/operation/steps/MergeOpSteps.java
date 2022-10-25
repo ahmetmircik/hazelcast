@@ -21,6 +21,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.event.MapEventPublisher;
+import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.operation.MergeOperation;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
@@ -103,7 +104,7 @@ public enum MergeOpSteps implements Step<State> {
     STORE_OR_DELETE() {
         @Override
         public boolean isOffloadStep(State state) {
-            return true;
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
         }
 
         @Override

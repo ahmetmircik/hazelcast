@@ -89,7 +89,9 @@ public class StepRunner extends Offload
         Operation op = offloadedOperation();
         addOpToOffloadedOps(((MapOperation) op));
 
-        if (isCurrentOffloadedOpCountOne()) {
+        // When there is only 1 op in queue,
+        // we have to start this step-runner
+        if (isHeadOp()) {
             run();
         }
     }
@@ -108,7 +110,7 @@ public class StepRunner extends Offload
         op.getRecordStore().incMapStoreOffloadedOperationsCount();
     }
 
-    private boolean isCurrentOffloadedOpCountOne() {
+    private boolean isHeadOp() {
         return offloadedOperations.size() == 1;
     }
 

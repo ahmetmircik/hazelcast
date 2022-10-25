@@ -19,6 +19,7 @@ package com.hazelcast.map.impl.operation.steps;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapServiceContext;
+import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.operation.EntryOperation;
 import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.steps.engine.State;
@@ -221,7 +222,7 @@ public enum EntryOpSteps implements Step<State> {
     STORE() {
         @Override
         public boolean isOffloadStep(State state) {
-            return true;
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
         }
 
         @Override
@@ -250,7 +251,7 @@ public enum EntryOpSteps implements Step<State> {
     DELETE() {
         @Override
         public boolean isOffloadStep(State state) {
-            return true;
+            return !(state.getRecordStore().getMapDataStore() instanceof WriteBehindStore);
         }
 
         @Override
