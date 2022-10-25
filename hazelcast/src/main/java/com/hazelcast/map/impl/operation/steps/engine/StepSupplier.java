@@ -88,7 +88,7 @@ public class StepSupplier implements Supplier<Runnable> {
 
         // 1. If step needs to be offloaded,
         // return step wrapped as a runnable.
-        if (step.isOffloadStep()) {
+        if (step.isOffloadStep(state)) {
             return new Runnable() {
                 @Override
                 public void run() {

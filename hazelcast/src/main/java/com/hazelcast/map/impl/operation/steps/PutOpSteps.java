@@ -45,7 +45,7 @@ public enum PutOpSteps implements Step<State> {
 
     LOAD() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 
@@ -139,7 +139,7 @@ public enum PutOpSteps implements Step<State> {
 
     STORE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

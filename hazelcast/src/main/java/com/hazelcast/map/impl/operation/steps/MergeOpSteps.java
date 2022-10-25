@@ -102,7 +102,7 @@ public enum MergeOpSteps implements Step<State> {
 
     STORE_OR_DELETE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

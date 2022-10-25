@@ -69,7 +69,7 @@ public enum ClearOpSteps implements Step<State> {
 
     CLEAR_MAP_STORE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

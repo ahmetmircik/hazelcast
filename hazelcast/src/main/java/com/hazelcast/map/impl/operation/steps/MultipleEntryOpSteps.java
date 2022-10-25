@@ -71,7 +71,7 @@ public enum MultipleEntryOpSteps implements Step<State> {
 
     LOAD_ALL() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 
@@ -175,7 +175,7 @@ public enum MultipleEntryOpSteps implements Step<State> {
 
     STORE_OR_DELETE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

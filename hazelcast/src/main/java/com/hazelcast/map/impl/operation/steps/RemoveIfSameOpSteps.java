@@ -43,7 +43,7 @@ public enum RemoveIfSameOpSteps implements Step<State> {
 
     LOAD() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 
@@ -94,7 +94,7 @@ public enum RemoveIfSameOpSteps implements Step<State> {
 
     DELETE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

@@ -51,7 +51,7 @@ public enum GetAllOpSteps implements Step<State> {
 
     LOAD_ALL() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

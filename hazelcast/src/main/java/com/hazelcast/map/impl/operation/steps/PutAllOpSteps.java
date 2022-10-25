@@ -77,7 +77,7 @@ public enum PutAllOpSteps implements Step<State> {
 
     LOAD_ALL_STORE_ALL() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isOffloadStep(State state) {
             return true;
         }
 

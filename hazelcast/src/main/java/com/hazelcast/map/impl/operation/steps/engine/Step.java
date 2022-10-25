@@ -45,12 +45,13 @@ public interface Step<S> {
     Step nextStep(S state);
 
     /**
+     * @param state state
      * @return {@code true} if this step must be
      * offloaded to a thread other than {@link
      * com.hazelcast.spi.impl.operationexecutor.impl.PartitionOperationThread}
      * otherwise {@code false}
      */
-    default boolean isOffloadStep() {
+    default boolean isOffloadStep(State state) {
         return false;
     }
 }
