@@ -218,6 +218,7 @@ public class StepRunner extends Offload
         } else {
             Offloadable offloadableStep = (Offloadable) step;
             executorName = offloadableStep.getExecutorName();
+            // TODO what if there is RejectedExecutionException
             executionService.getExecutor(executorName).execute(offload);
         }
     }

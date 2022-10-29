@@ -30,7 +30,7 @@ import com.hazelcast.map.impl.recordstore.StaticParams;
 
 import static com.hazelcast.map.impl.record.Record.UNSET;
 
-public enum PutOpSteps implements Step<State> {
+public enum PutOpSteps implements IMapOpStep {
 
     READ() {
         @Override
@@ -51,7 +51,7 @@ public enum PutOpSteps implements Step<State> {
 
     LOAD() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isLoad() {
             return true;
         }
 
@@ -145,7 +145,7 @@ public enum PutOpSteps implements Step<State> {
 
     STORE() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isStore() {
             return true;
         }
 

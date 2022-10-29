@@ -30,6 +30,7 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.map.impl.recordstore.StaticParams;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,7 +42,7 @@ import static com.hazelcast.core.EntryEventType.ADDED;
 import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
 
-public enum PutAllOpSteps implements Step<State> {
+public enum PutAllOpSteps implements IMapOpStep {
 
     READ() {
         @Override
@@ -71,13 +72,34 @@ public enum PutAllOpSteps implements Step<State> {
 
         @Override
         public Step nextStep(State state) {
-            return PutAllOpSteps.LOAD_ALL_STORE_ALL;
+            if (!CollectionUtil.isEmpty(state.getKeysToLoad())) {
+                return PutAllOpSteps.LOAD_ALL;
+            }
+            return PutAllOpSteps.STORE_ALL;
         }
     },
 
-    LOAD_ALL_STORE_ALL() {
+    LOAD_ALL() {
         @Override
-        public boolean isOffloadStep() {
+        public boolean isLoad() {
+            return true;
+        }
+
+        @Override
+        public void runStep(State state) {
+            MultipleEntryOpSteps.LOAD_ALL.runStep(state);
+        }
+
+        @Nullable
+        @Override
+        public Step nextStep(State state) {
+            return STORE_ALL;
+        }
+    },
+
+    STORE_ALL() {
+        @Override
+        public boolean isStore() {
             return true;
         }
 

@@ -28,7 +28,7 @@ import com.hazelcast.map.impl.operation.steps.engine.StepResponseUtil;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.operationservice.Operation;
 
-public enum UtilSteps implements Step<State> {
+public enum UtilSteps implements IMapOpStep {
 
     SEND_RESPONSE() {
         @Override
