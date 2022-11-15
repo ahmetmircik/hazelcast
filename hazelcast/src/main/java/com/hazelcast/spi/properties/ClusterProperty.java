@@ -462,7 +462,7 @@ public final class ClusterProperty {
      * @see ClusterProperty#PARTITION_FRAGMENTED_MIGRATION_ENABLED
      */
     public static final HazelcastProperty PARTITION_CHUNKED_MIGRATION_ENABLED
-            = new HazelcastProperty("hazelcast.partition.migration.chunks.enabled", true);
+            = new HazelcastProperty("hazelcast.partition.migration.chunks.enabled", false);
 
     /**
      * Total size of all chunks in bytes during a single partition migration.
