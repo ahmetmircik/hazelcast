@@ -61,10 +61,19 @@ public class LocalWanPublisherStatsImpl implements LocalWanPublisherStats {
         outboundQueueSize = 0;
         totalPublishLatency = 0;
         totalPublishedEventCount = 0;
-        sentMapEventCounter.clear();
-        sentCacheEventCounter.clear();
-        lastConsistencyCheckResults.clear();
-        lastSyncStats.clear();
+        if (sentMapEventCounter != null) {
+            sentMapEventCounter.clear();
+        }
+
+        if(sentCacheEventCounter != null){
+            sentCacheEventCounter.clear();
+        }
+        if(lastConsistencyCheckResults != null){
+            lastConsistencyCheckResults.clear();
+        }
+        if(lastSyncStats != null){
+            lastSyncStats.clear();
+        }
     }
 
     @Override
