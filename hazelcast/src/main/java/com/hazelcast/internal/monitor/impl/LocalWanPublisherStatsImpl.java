@@ -57,6 +57,16 @@ public class LocalWanPublisherStatsImpl implements LocalWanPublisherStats {
     private volatile Map<String, ConsistencyCheckResult> lastConsistencyCheckResults;
     private volatile Map<String, WanSyncStats> lastSyncStats;
 
+    public void reset() {
+        outboundQueueSize = 0;
+        totalPublishLatency = 0;
+        totalPublishedEventCount = 0;
+        sentMapEventCounter.clear();
+        sentCacheEventCounter.clear();
+        lastConsistencyCheckResults.clear();
+        lastSyncStats.clear();
+    }
+
     @Override
     public boolean isConnected() {
         return connected;
