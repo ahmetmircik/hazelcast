@@ -19,13 +19,13 @@ package com.hazelcast.multimap;
 import com.hazelcast.config.MultiMapConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.Clock;
+import com.hazelcast.map.IMap;
 import com.hazelcast.map.LocalMapStats;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -373,7 +373,6 @@ public class LocalMultiMapStatsTest extends HazelcastTestSupport {
     }
 
     @Test
-    @Ignore("https://github.com/hazelcast/hazelcast/issues/19382")
     public void testHitCountNotLost_whenKeysAreRemoved() {
         MultiMap<Integer, Integer> map = getMultiMap();
         for (int i = 0; i < 100; i++) {
@@ -385,6 +384,21 @@ public class LocalMultiMapStatsTest extends HazelcastTestSupport {
         }
 
         LocalMapStats localMapStats = getMultiMapStats();
+        assertEquals(100, localMapStats.getHits());
+    }
+
+    @Test
+    public void testHitCountNotLost_whenKeysAreRemoved2() {
+        IMap<Object, Object> map = instance.getMap("fa");
+        for (int i = 0; i < 100; i++) {
+            map.put(i, i);
+            map.get(i);
+        }
+        for (int i = 0; i < 50; i++) {
+            map.remove(i);
+        }
+
+        LocalMapStats localMapStats = map.getLocalMapStats();
         assertEquals(100, localMapStats.getHits());
     }
 }

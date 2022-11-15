@@ -1322,6 +1322,7 @@ public abstract class HazelcastTestSupport {
                                 .append(historicProgress.getProgressString())
                                 .append("\n");
                     }
+                    LOGGER.severe(progress.getExceptionMsg());
                     LOGGER.severe(sb.toString());
                     fail("Stall tolerance " + stallToleranceSeconds
                             + " seconds has been exceeded without completing the task. " + (message != null ? message : ""));

@@ -54,4 +54,8 @@ public interface TaskProgress {
      * @return the formatted progress string
      */
     String getProgressString();
+
+    default String getExceptionMsg() {
+        return "Override-msg-method";
+    }
 }
