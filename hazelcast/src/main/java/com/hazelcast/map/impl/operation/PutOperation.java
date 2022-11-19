@@ -33,6 +33,10 @@ public class PutOperation extends BasePutOperation implements MutatingOperation 
     @Override
     protected void runInternal() {
         oldValue = mapServiceContext.toData(recordStore.put(dataKey, dataValue, getTtl(), getMaxIdle()));
+
+        Object value = isPostProcessingOrHasInterceptor(recordStore)
+                ? recordStore.getRecord(dataKey).getValue() : dataValue;
+        publishWanUpdate(dataKey, value);
     }
 
     @Override

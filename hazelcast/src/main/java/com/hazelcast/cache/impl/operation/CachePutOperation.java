@@ -61,11 +61,13 @@ public class CachePutOperation extends MutatingCacheOperation {
         } else {
             backupRecord = recordStore.put(key, value, expiryPolicy, getCallerUuid(), completionId);
         }
+
+        publishWanUpdate(key, backupRecord);
     }
 
     @Override
     public void afterRun() throws Exception {
-        publishWanUpdate(key, backupRecord);
+
         super.afterRun();
     }
 
