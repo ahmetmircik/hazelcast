@@ -62,13 +62,15 @@ public class CachePutBackupOperation
             recordStore.putRecord(key, cacheRecord, true);
             response = Boolean.TRUE;
         }
+
+        if (recordStore != null && !wanOriginated) {
+            publishWanUpdate(key, cacheRecord);
+        }
     }
 
     @Override
     public void afterRun() {
-        if (recordStore != null && !wanOriginated) {
-            publishWanUpdate(key, cacheRecord);
-        }
+
     }
 
     @Override

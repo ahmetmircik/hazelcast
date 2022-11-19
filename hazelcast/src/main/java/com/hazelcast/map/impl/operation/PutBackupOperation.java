@@ -56,6 +56,8 @@ public class PutBackupOperation
         Record currentRecord = recordStore.putBackup(dataKey, record,
                 expiryMetadata, isPutTransient(), getCallerProvenance());
         Records.copyMetadataFrom(record, currentRecord);
+
+        publishWanUpdate(dataKey, record.getValue());
     }
 
     protected boolean isPutTransient() {
@@ -65,7 +67,7 @@ public class PutBackupOperation
     @Override
     public void afterRunInternal() {
         evict(dataKey);
-        publishWanUpdate(dataKey, record.getValue());
+
 
         super.afterRunInternal();
     }
