@@ -22,6 +22,7 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.PartitioningStrategyConfig;
 import com.hazelcast.internal.eviction.ExpirationManager;
 import com.hazelcast.internal.partition.IPartitionService;
+import com.hazelcast.internal.partition.MigrationInfo;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.DataType;
 import com.hazelcast.internal.serialization.InternalSerializationService;
@@ -45,6 +46,7 @@ import com.hazelcast.map.impl.journal.RingbufferMapEventJournalImpl;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.NodeWideUsedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
+import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MapOperationProviders;
 import com.hazelcast.map.impl.operation.MapPartitionDestroyOperation;
@@ -74,6 +76,7 @@ import com.hazelcast.query.impl.IndexCopyBehavior;
 import com.hazelcast.query.impl.IndexProvider;
 import com.hazelcast.query.impl.getters.Extractors;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
+import com.hazelcast.spi.exception.PartitionMigratingException;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.eventservice.EventFilter;
 import com.hazelcast.spi.impl.eventservice.EventRegistration;
@@ -84,6 +87,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -119,6 +123,7 @@ class MapServiceContextImpl implements MapServiceContext {
     private static final long DESTROY_TIMEOUT_SECONDS = 30;
 
     protected final ILogger logger;
+
     private final NodeEngine nodeEngine;
     private final QueryEngine queryEngine;
     private final EventService eventService;
@@ -912,5 +917,33 @@ class MapServiceContextImpl implements MapServiceContext {
     @Override
     public EventListenerCounter getEventListenerCounter() {
         return eventListenerCounter;
+    }
+
+    @Override
+    public void onPartitionMigrate(MigrationInfo migrationInfo) {
+        if (migrationInfo.getSource() == null
+                || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
+            return;
+        }
+
+        int partitionId = migrationInfo.getPartitionId();
+        PartitionContainer partitionContainer = getPartitionContainer(partitionId);
+        for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
+            Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
+            // This copying is needed to escape from ConcurrentModificationException.
+            // Inside `sendResponse`, we also remove operation from Set.
+            List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
+            opList.addAll(offloadedOperations);
+            for (MapOperation op : opList) {
+                op.getOperationResponseHandler()
+                        .sendResponse(op, newPartitionMigratingException(op, partitionId));
+            }
+        }
+    }
+
+    private PartitionMigratingException newPartitionMigratingException(MapOperation op,
+                                                                       int partitionId) {
+        return new PartitionMigratingException(getNodeEngine().getThisAddress(),
+                partitionId, op.getClass().getName(), op.getServiceName());
     }
 }

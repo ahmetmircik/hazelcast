@@ -396,4 +396,8 @@ public class MapService implements ManagedService, ChunkedMigrationAwareService,
     public ChunkSupplier newChunkSupplier(PartitionReplicationEvent event, Collection<ServiceNamespace> namespace) {
         return migrationAwareService.newChunkSupplier(event, namespace);
     }
+
+    public CountingMigrationAwareService getMigrationAwareService() {
+        return migrationAwareService;
+    }
 }

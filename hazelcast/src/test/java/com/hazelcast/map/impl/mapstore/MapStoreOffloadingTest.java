@@ -27,6 +27,9 @@ import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.transaction.TransactionContext;
+import com.hazelcast.transaction.TransactionException;
+import com.hazelcast.transaction.TransactionalMap;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -35,6 +38,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -93,6 +98,73 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
             assertTrueEventually(() -> {
                 for (Future future : futures) {
                     assertEquals(-1, future.get());
+                }
+            });
+        } finally {
+            factory.terminateAll();
+        }
+    }
+
+    @Test
+    public void offloaded_operations_are_retried_and_finish_when_partition_migrated_txn() {
+        // configure map
+        Config config = getConfig();
+        config.setProperty(ClusterProperty.PARTITION_COUNT.getName(), "2");
+        config.setProperty(ClusterProperty.PARTITION_OPERATION_THREAD_COUNT.getName(), "1");
+
+        MapStoreConfig mapStoreConfig = new MapStoreConfig();
+        mapStoreConfig.setEnabled(true);
+        mapStoreConfig.setInitialLoadMode(MapStoreConfig.InitialLoadMode.EAGER);
+        mapStoreConfig.setImplementation(new MapStoreAdapter<Integer, Integer>() {
+
+            @Override
+            public Integer load(Integer key) {
+                sleepSeconds(3);
+                return -1;
+            }
+
+            @Override
+            public void store(Integer key, Integer value) {
+                sleepSeconds(3);
+            }
+        });
+        String slowMapName = "slowMap";
+        config.getMapConfig(slowMapName).setMapStoreConfig(mapStoreConfig);
+
+        // create cluster
+        TestHazelcastFactory factory = new TestHazelcastFactory(2);
+        factory.newHazelcastInstance(config);
+
+        // create client
+        HazelcastInstance client = factory.newHazelcastClient();
+
+        ExecutorService executorService = Executors.newCachedThreadPool();
+        List<Future> futures = new ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            int finalI = 1;
+            Runnable runnable = () -> {
+                TransactionContext context = client.newTransactionContext();
+                context.beginTransaction();
+                TransactionalMap map = context.getMap(slowMapName);
+                map.set(finalI, finalI);
+                try {
+                    context.commitTransaction();
+                } catch (TransactionException e) {
+                    context.rollbackTransaction();
+                }
+            };
+
+            futures.add(executorService.submit(runnable));
+        };
+
+        // start new member to trigger migration
+        factory.newHazelcastInstance(config);
+
+        try {
+            assertTrueEventually(() -> {
+                for (Future future : futures) {
+                    assertNull(future.get());
                 }
             });
         } finally {

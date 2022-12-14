@@ -55,6 +55,7 @@ import com.hazelcast.jet.impl.JetServiceBackend;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.logging.impl.LoggingServiceImpl;
+import com.hazelcast.map.impl.MapService;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
 import com.hazelcast.spi.exception.ServiceNotFoundException;
 import com.hazelcast.spi.impl.eventservice.EventService;
@@ -488,6 +489,10 @@ public class NodeEngineImpl implements NodeEngine {
 
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
         operationParker.onPartitionMigrate(migrationInfo);
+
+        MapService mapService = getService(MapService.SERVICE_NAME);
+        mapService.getMapServiceContext()
+                .onPartitionMigrate(migrationInfo);
     }
 
     /**

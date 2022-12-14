@@ -153,7 +153,8 @@ public class OperationParkerImpl implements OperationParker, LiveOperationsTrack
      * Invoked on the migration destination. This is executed under partition migration lock!
      */
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
-        if (migrationInfo.getSource() == null || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
+        if (migrationInfo.getSource() == null
+                || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
             return;
         }
 

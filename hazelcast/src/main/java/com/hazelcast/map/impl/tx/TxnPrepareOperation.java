@@ -58,7 +58,9 @@ public class TxnPrepareOperation extends KeyBasedMapOperation
     }
 
     @Override
-    protected void runInternal() {
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+
         try {
             wbqCapacityCounter().increment(transactionId, false);
         } catch (ReachedMaxSizeException e) {

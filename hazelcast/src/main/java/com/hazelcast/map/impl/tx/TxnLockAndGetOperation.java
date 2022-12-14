@@ -59,10 +59,16 @@ public class TxnLockAndGetOperation
     }
 
     @Override
-    protected void runInternal() {
+    protected void innerBeforeRun() throws Exception {
+        super.innerBeforeRun();
+
         if (!recordStore.txnLock(getKey(), ownerUuid, getThreadId(), getCallId(), ttl, blockReads)) {
             throw new TransactionException("Transaction couldn't obtain lock.");
         }
+    }
+
+    @Override
+    protected void runInternal() {
         Record record = recordStore.getRecordOrNull(dataKey);
         if (record == null && shouldLoad) {
             record = recordStore.loadRecordOrNull(dataKey, false, getCallerAddress());

@@ -16,32 +16,14 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.recordstore.RecordStore;
-import com.hazelcast.transaction.TransactionException;
-
-import java.util.UUID;
 
 public enum TxnLockAndGetOpSteps implements IMapOpStep {
 
     READ() {
         @Override
         public void runStep(State state) {
-            RecordStore recordStore = state.getRecordStore();
-
-            Data dataKey = state.getKey();
-            long threadId = state.getThreadId();
-            long ttl = state.getTtl();
-            UUID ownerUuid = state.getOwnerUuid();
-            boolean blockReads = state.isBlockReads();
-            long callId = state.getOperation().getCallId();
-
-            if (!recordStore.txnLock(dataKey, ownerUuid, threadId, callId, ttl, blockReads)) {
-                throw new TransactionException("Transaction couldn't obtain lock.");
-            }
-
             GetOpSteps.READ.runStep(state);
         }
 
