@@ -20,9 +20,7 @@ import com.hazelcast.config.Config;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.RandomPicker;
 import com.hazelcast.internal.util.RuntimeAvailableProcessors;
-import com.hazelcast.map.IMap;
 import com.hazelcast.map.MapStoreAdapter;
-import com.hazelcast.map.ReachedMaxSizeException;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.map.impl.PartitionContainer;
@@ -34,16 +32,13 @@ import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.TestHazelcastInstanceFactory;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;
+import com.hazelcast.test.annotation.Repeat;
 import com.hazelcast.transaction.TransactionContext;
 import com.hazelcast.transaction.TransactionException;
 import com.hazelcast.transaction.TransactionOptions;
 import com.hazelcast.transaction.TransactionalMap;
-import com.hazelcast.transaction.TransactionalQueue;
-import org.junit.Ignore;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
 import java.util.Collection;
@@ -54,206 +49,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.map.impl.mapstore.writebehind.WriteBehindFlushTest.assertWriteBehindQueuesEmpty;
 import static com.hazelcast.test.Accessors.getNodeEngineImpl;
-import static com.hazelcast.transaction.TransactionOptions.TransactionType.ONE_PHASE;
 import static com.hazelcast.transaction.TransactionOptions.TransactionType.TWO_PHASE;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.hamcrest.core.Is.isA;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelJVMTest.class})
 public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends HazelcastTestSupport {
-
-    @Rule
-    public ExpectedException expectedException = ExpectedException.none();
-
-    @Test
-    public void get_for_update_does_not_increment_node_wide_used_capacity() {
-        String mapName = "map";
-        long maxWbqCapacity = 100;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, TWO_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap map = context.getMap(mapName);
-
-        map.getForUpdate("key1");
-        map.getForUpdate("key2");
-
-        context.commitTransaction();
-
-        assertEquals(0, getNodeWideUsedCapacity(node));
-    }
-
-    @Test
-    public void values_does_not_increment_node_wide_used_capacity() {
-        String mapName = "map";
-        long maxWbqCapacity = 100;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        IMap entries = node.getMap(mapName);
-        for (int i = 0; i < 100; i++) {
-            entries.set(i, i);
-        }
-
-        // what map-store insert of entries at prev step
-        assertTrueEventually(() -> assertEquals(0, getNodeWideUsedCapacity(node)));
-
-        TransactionContext context = newTransactionContext(node, TWO_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap map = context.getMap(mapName);
-
-        map.values();
-
-        context.commitTransaction();
-
-        assertEquals(0, getNodeWideUsedCapacity(node));
-    }
-
-    @Test
-    public void prepare_step_throws_reached_max_size_exception_when_two_phase() {
-        expectedException.expect(TransactionException.class);
-        expectedException.expectCause(isA(ReachedMaxSizeException.class));
-
-        String mapName = "map";
-        long maxWbqCapacity = 100;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, TWO_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap map = context.getMap(mapName);
-
-        for (int i = 0; i < 101; i++) {
-            map.put("item-" + i, "value");
-        }
-        context.commitTransaction();
-    }
-
-    private static TransactionContext newTransactionContext(HazelcastInstance node,
-                                                            TransactionOptions.TransactionType twoPhase) {
-        TransactionOptions options = new TransactionOptions()
-                .setTransactionType(twoPhase);
-        return node.newTransactionContext(options);
-    }
-
-    @Test
-    public void commit_step_does_not_throw_reached_max_size_exception_when_two_phase() {
-        String mapName = "map";
-        long maxWbqCapacity = 10;
-        int keySpace = 10;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, TWO_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap txMap = context.getMap(mapName);
-
-        for (int i = 0; i < keySpace; i++) {
-            txMap.remove("item-" + i);
-        }
-
-        try {
-            context.commitTransaction();
-        } catch (TransactionException e) {
-            fail("no txn exception is expected here...");
-        }
-
-        assertEquals(0, node.getMap(mapName).size());
-        assertWriteBehindQueuesEmpty(mapName, Collections.singletonList(node));
-        assertEquals(0, getTotalNumOfTxnReservedCapacity(mapName, node));
-        assertEquals(0, getNodeWideUsedCapacity(node));
-    }
-
-    @Test
-    public void rollback_successful_when_prepare_step_throws_exception_when_two_phase() {
-        String mapName = "map";
-        String queueName = "queue";
-        long maxWbqCapacity = 100;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, TWO_PHASE);
-        try {
-            context.beginTransaction();
-
-            TransactionalQueue queue = context.getQueue(queueName);
-            queue.offer(1);
-            queue.offer(2);
-            queue.offer(3);
-
-            TransactionalMap map = context.getMap(mapName);
-            for (int i = 0; i < 1000; i++) {
-                map.put("item-" + i, "value");
-            }
-
-            context.commitTransaction();
-        } catch (TransactionException e) {
-            context.rollbackTransaction();
-        }
-
-        assertEquals(0, node.getQueue(queueName).size());
-        assertEquals(0, node.getMap(mapName).size());
-    }
-
-    @Test
-    public void throws_reached_max_size_exception_when_one_phase() {
-        expectedException.expect(ReachedMaxSizeException.class);
-
-        String mapName = "map";
-        Config config = getConfig(mapName, 100);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, ONE_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap map = context.getMap("map");
-
-        for (int i = 0; i < 101; i++) {
-            map.put("item-" + i, "value");
-        }
-
-        context.commitTransaction();
-    }
-
-    @Ignore
-    @Test
-    public void rollback_does_not_preserve_latest_state_after_reached_max_size_exception_when_one_phase() {
-        String mapName = "map";
-        long maxWbqCapacity = 100;
-
-        Config config = getConfig(mapName, maxWbqCapacity);
-        HazelcastInstance node = createHazelcastInstance(config);
-
-        TransactionContext context = newTransactionContext(node, ONE_PHASE);
-        context.beginTransaction();
-
-        TransactionalMap map = context.getMap(mapName);
-
-        for (int i = 0; i < 101; i++) {
-            map.put("item-" + i, "value");
-        }
-
-        try {
-            context.commitTransaction();
-        } catch (TransactionException e) {
-            context.rollbackTransaction();
-        }
-
-        assertEquals(100, node.getMap(mapName).size());
-    }
 
     private Config getConfig(String mapName, long maxWbqCapacity) {
         Config config = smallInstanceConfigWithoutJetAndMetrics();
@@ -270,27 +72,8 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         return config;
     }
 
-    @Test
-    public void no_exception_after_prepare_phase_when_wbq_is_full() {
-
-    }
-
-    @Test
-    public void stable_state_after_rollback() {
-
-    }
-
-    @Test
-    public void no_exception_when_wbq_has_empty_slot() {
-
-    }
-
-    @Test
-    public void multiple_tx_rollback_successful_when_prepare_step_throws_exception_when_two_phase() {
-
-    }
-
     @Test(timeout = 5 * 60 * 1000)
+    @Repeat(30)
     public void stress() throws InterruptedException {
         final String mapName = "map-name";
         final long maxWbqCapacity = 50;
@@ -368,6 +151,13 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         return mapServiceContext.getNodeWideUsedCapacityCounter().currentValue();
     }
 
+    private static TransactionContext newTransactionContext(HazelcastInstance node,
+                                                            TransactionOptions.TransactionType twoPhase) {
+        TransactionOptions options = new TransactionOptions()
+                .setTransactionType(twoPhase);
+        return node.newTransactionContext(options);
+    }
+
     private enum OpType {
         TX_PUT {
             @Override
@@ -439,44 +229,4 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         abstract void doOp(String mapName, HazelcastInstance node, int keySpace);
     }
 
-    @Test
-    public void name() {
-        String mapName = "map";
-        Config config = getConfig(mapName, 50);
-
-        TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(3);
-        HazelcastInstance node1 = factory.newHazelcastInstance(config);
-        HazelcastInstance node2 = factory.newHazelcastInstance(config);
-
-        for (int ii = 0; ii < 100; ii++) {
-            TransactionContext context = newTransactionContext(node1, TWO_PHASE);
-            context.beginTransaction();
-
-            TransactionalMap map = context.getMap("map");
-
-            for (int i = 0; i < 51; i++) {
-                map.put("item-" + i, "value");
-            }
-
-            try {
-                context.commitTransaction();
-            } catch (TransactionException e) {
-                context.rollbackTransaction();
-            } catch (Throwable t) {
-                // ignore other commit time exceptions.
-            }
-        }
-
-        HazelcastInstance node3 = factory.newHazelcastInstance(config);
-
-        assertTrueEventually(() -> {
-            Collection<HazelcastInstance> instances = factory.getAllHazelcastInstances();
-            for (HazelcastInstance node : instances) {
-                assertWriteBehindQueuesEmpty(mapName, Collections.singletonList(node));
-
-                assertEquals(0, getNodeWideUsedCapacity(node));
-                assertEquals(0, getTotalNumOfTxnReservedCapacity(mapName, node));
-            }
-        }, 30);
-    }
 }
