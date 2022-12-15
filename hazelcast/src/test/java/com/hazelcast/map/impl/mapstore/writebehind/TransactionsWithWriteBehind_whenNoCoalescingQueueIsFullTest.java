@@ -65,11 +65,35 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                 .setBackupCount(1)
                 .setAsyncBackupCount(0)
                 .getMapStoreConfig()
-                .setEnabled(true).setOffload(true)
-                .setImplementation(new MapStoreAdapter())
+                .setEnabled(true)
+                .setOffload(true)
+                .setImplementation(new MapStoreAdapter(){
+
+                    @Override
+                    public Object load(Object key) {
+                        randomSleepMillis();
+                        return super.load(key);
+                    }
+
+                    @Override
+                    public void store(Object key, Object value) {
+                        randomSleepMillis();
+                        super.store(key, value);
+                    }
+
+                    @Override
+                    public void delete(Object key) {
+                        randomSleepMillis();
+                        super.delete(key);
+                    }
+                })
                 .setWriteCoalescing(false)
                 .setWriteDelaySeconds(6);
         return config;
+    }
+
+    private static void randomSleepMillis() {
+        sleepMillis(RandomPicker.getInt(100,300));
     }
 
     @Test(timeout = 5 * 60 * 1000)

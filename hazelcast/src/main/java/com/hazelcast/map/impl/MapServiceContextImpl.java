@@ -100,6 +100,7 @@ import java.util.function.Predicate;
 import static com.hazelcast.internal.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.internal.util.Preconditions.checkPositive;
 import static com.hazelcast.internal.util.SetUtil.immutablePartitionIdSet;
+import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.map.impl.MapKeyLoader.LOADED_KEY_LIMITER_PER_NODE;
 import static com.hazelcast.map.impl.MapKeyLoader.PROP_LOADED_KEY_LIMITER_PER_NODE;
@@ -112,6 +113,7 @@ import static com.hazelcast.spi.properties.ClusterProperty.AGGREGATION_ACCUMULAT
 import static com.hazelcast.spi.properties.ClusterProperty.INDEX_COPY_BEHAVIOR;
 import static com.hazelcast.spi.properties.ClusterProperty.OPERATION_CALL_TIMEOUT_MILLIS;
 import static com.hazelcast.spi.properties.ClusterProperty.QUERY_PREDICATE_PARALLEL_EVALUATION;
+import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 
 /**
@@ -921,16 +923,14 @@ class MapServiceContextImpl implements MapServiceContext {
 
     @Override
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
+        assertRunningOnPartitionThread();
+
         if (migrationInfo.getSource() == null
                 || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
             return;
         }
 
         int partitionId = migrationInfo.getPartitionId();
-
-//        logger.info(format("Passing PartitionMigratingException to all queued "
-//                + "map-store offload operations to force them retry[partitionId=%d]", partitionId));
-
         PartitionContainer partitionContainer = getPartitionContainer(partitionId);
         for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
             Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
@@ -943,6 +943,10 @@ class MapServiceContextImpl implements MapServiceContext {
                         .sendResponse(op, newPartitionMigratingException(op, partitionId));
             }
         }
+
+        logger.info(format("Passed PartitionMigratingException to all queued "
+                + "map-store offload operations to force them retry[partitionId=%d]", partitionId));
+
     }
 
     private PartitionMigratingException newPartitionMigratingException(MapOperation op,
