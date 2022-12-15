@@ -112,6 +112,7 @@ import static com.hazelcast.spi.properties.ClusterProperty.AGGREGATION_ACCUMULAT
 import static com.hazelcast.spi.properties.ClusterProperty.INDEX_COPY_BEHAVIOR;
 import static com.hazelcast.spi.properties.ClusterProperty.OPERATION_CALL_TIMEOUT_MILLIS;
 import static com.hazelcast.spi.properties.ClusterProperty.QUERY_PREDICATE_PARALLEL_EVALUATION;
+import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 
 /**
@@ -927,6 +928,10 @@ class MapServiceContextImpl implements MapServiceContext {
         }
 
         int partitionId = migrationInfo.getPartitionId();
+
+        logger.info(format("Passing PartitionMigratingException to all queued "
+                + "map-store offload operations to force them retry[partitionId=%d]", partitionId));
+
         PartitionContainer partitionContainer = getPartitionContainer(partitionId);
         for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
             Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
