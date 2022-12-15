@@ -66,34 +66,10 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                 .setAsyncBackupCount(0)
                 .getMapStoreConfig()
                 .setEnabled(true)
-                .setOffload(true)
-                .setImplementation(new MapStoreAdapter(){
-
-                    @Override
-                    public Object load(Object key) {
-                        randomSleepMillis();
-                        return super.load(key);
-                    }
-
-                    @Override
-                    public void store(Object key, Object value) {
-                        randomSleepMillis();
-                        super.store(key, value);
-                    }
-
-                    @Override
-                    public void delete(Object key) {
-                        randomSleepMillis();
-                        super.delete(key);
-                    }
-                })
+                .setImplementation(new MapStoreAdapter())
                 .setWriteCoalescing(false)
                 .setWriteDelaySeconds(6);
         return config;
-    }
-
-    private static void randomSleepMillis() {
-//        sleepMillis(RandomPicker.getInt(100,300));
     }
 
     @Test(timeout = 5 * 60 * 1000)
@@ -195,7 +171,11 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.put("item-" + i, "value");
                 }
 
-                commitOrRollback(context);
+                try {
+                    context.commitTransaction();
+                } catch (TransactionException e) {
+                    context.rollbackTransaction();
+                }
             }
         },
 
@@ -211,7 +191,11 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.remove("item-" + i);
                 }
 
-                commitOrRollback(context);
+                try {
+                    context.commitTransaction();
+                } catch (TransactionException e) {
+                    context.rollbackTransaction();
+                }
             }
         },
 
@@ -231,25 +215,13 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.remove("item-" + i);
                 }
 
-                commitOrRollback(context);
+                try {
+                    context.commitTransaction();
+                } catch (TransactionException e) {
+                    context.rollbackTransaction();
+                }
             }
         };
-
-        private static void commitOrRollback(TransactionContext context) {
-            try {
-                context.commitTransaction();
-            } catch (TransactionException e) {
-                if (!(e.getCause() instanceof com.hazelcast.map.ReachedMaxSizeException)) {
-                    e.printStackTrace();
-                }
-                try {
-                    context.rollbackTransaction();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    throw new RuntimeException(ex);
-                }
-            }
-        }
 
         OpType() {
         }
