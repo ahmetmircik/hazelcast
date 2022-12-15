@@ -17,7 +17,9 @@
 package com.hazelcast.map.impl.operation.steps.engine;
 
 import com.hazelcast.core.Offloadable;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.operation.MapOperation;
+import com.hazelcast.map.impl.tx.TxnRollbackOperation;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.executionservice.ExecutionService;
@@ -63,6 +65,7 @@ public class StepRunner extends Offload
     private final Set<MapOperation> offloadedOperations;
     private final OperationExecutor operationExecutor;
     private final ExecutionService executionService;
+    private final ILogger logger;
 
     private volatile StepSupplier stepSupplier;
 
@@ -74,6 +77,7 @@ public class StepRunner extends Offload
         this.offloadedOperations = getOffloadedOperations(mapOperation);
         this.partitionId = mapOperation.getPartitionId();
         NodeEngine nodeEngine = mapOperation.getNodeEngine();
+        this.logger = nodeEngine.getLogger(getClass());
         this.operationExecutor = ((OperationServiceImpl) nodeEngine
                 .getOperationService()).getOperationExecutor();
         this.executionService = nodeEngine.getExecutionService();
@@ -254,4 +258,22 @@ public class StepRunner extends Offload
             }
         }
     }
+
+    private String getStackTraceOrNull(Object operation) {
+        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
+        if (!(operation instanceof TxnRollbackOperation)) {
+            return null;
+        }
+        StringBuilder stackTraceStringBuilder = new StringBuilder();
+        String prefix = "";
+        for (StackTraceElement stackTraceElement : stackTraceElements) {
+            stackTraceStringBuilder.append(prefix).append(stackTraceElement.toString());
+            prefix = "\n\t";
+        }
+
+        String stackTrace = stackTraceStringBuilder.toString();
+        stackTraceStringBuilder.setLength(0);
+        return stackTrace;
+    }
+
 }

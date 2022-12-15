@@ -171,11 +171,7 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.put("item-" + i, "value");
                 }
 
-                try {
-                    context.commitTransaction();
-                } catch (TransactionException e) {
-                    context.rollbackTransaction();
-                }
+                commitOrRollback(context);
             }
         },
 
@@ -191,11 +187,7 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.remove("item-" + i);
                 }
 
-                try {
-                    context.commitTransaction();
-                } catch (TransactionException e) {
-                    context.rollbackTransaction();
-                }
+                commitOrRollback(context);
             }
         },
 
@@ -215,13 +207,25 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                     map.remove("item-" + i);
                 }
 
-                try {
-                    context.commitTransaction();
-                } catch (TransactionException e) {
-                    context.rollbackTransaction();
-                }
+                commitOrRollback(context);
             }
         };
+
+        private static void commitOrRollback(TransactionContext context) {
+            try {
+                context.commitTransaction();
+            } catch (TransactionException e) {
+                if (!(e.getCause() instanceof com.hazelcast.map.ReachedMaxSizeException)) {
+                    e.printStackTrace();
+                }
+                try {
+                    context.rollbackTransaction();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    throw new RuntimeException(ex);
+                }
+            }
+        }
 
         OpType() {
         }
