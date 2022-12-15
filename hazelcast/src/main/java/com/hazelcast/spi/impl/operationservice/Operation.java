@@ -614,7 +614,7 @@ public abstract class Operation implements DataSerializable, Tenantable {
         return this;
     }
 
-    protected final ILogger getLogger() {
+    public final ILogger getLogger() {
         final NodeEngine ne = nodeEngine;
         return ne != null ? ne.getLogger(getClass()) : Logger.getLogger(getClass());
     }

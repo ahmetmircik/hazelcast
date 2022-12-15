@@ -24,6 +24,7 @@ public enum TxnRollbackOpSteps implements IMapOpStep {
     ROLLBACK() {
         @Override
         public void runStep(State state) {
+            state.getOperation().run();
         }
 
         @Override

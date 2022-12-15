@@ -24,6 +24,7 @@ public enum TxnPrepareOpSteps implements IMapOpStep {
     PREPARE() {
         @Override
         public void runStep(State state) {
+            state.getOperation().run();
         }
 
         @Override

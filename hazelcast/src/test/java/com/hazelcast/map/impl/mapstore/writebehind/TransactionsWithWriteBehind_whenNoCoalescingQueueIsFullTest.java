@@ -65,7 +65,7 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
                 .setBackupCount(1)
                 .setAsyncBackupCount(0)
                 .getMapStoreConfig()
-                .setEnabled(true)
+                .setEnabled(true).setOffload(true)
                 .setImplementation(new MapStoreAdapter())
                 .setWriteCoalescing(false)
                 .setWriteDelaySeconds(6);

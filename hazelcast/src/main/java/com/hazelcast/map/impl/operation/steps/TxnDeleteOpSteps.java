@@ -17,9 +17,10 @@
 package com.hazelcast.map.impl.operation.steps;
 
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.map.impl.mapstore.writebehind.TxnReservedCapacityCounter;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
+import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 
@@ -31,7 +32,6 @@ public enum TxnDeleteOpSteps implements IMapOpStep {
         @Override
         public void runStep(State state) {
             RecordStore recordStore = state.getRecordStore();
-
             Data dataKey = state.getKey();
             long threadId = state.getThreadId();
             long version = state.getVersion();
@@ -39,6 +39,7 @@ public enum TxnDeleteOpSteps implements IMapOpStep {
             long callId = state.getOperation().getCallId();
             UUID transactionId = state.getTxnId();
             MapOperation operation = state.getOperation();
+            TxnReservedCapacityCounter wbqCapacityCounter = operation.wbqCapacityCounter();
 
             recordStore.unlock(dataKey, ownerUuid, threadId, callId);
 
@@ -48,7 +49,7 @@ public enum TxnDeleteOpSteps implements IMapOpStep {
             }
 
             if (record == null) {
-                operation.wbqCapacityCounter().decrement(transactionId);
+                wbqCapacityCounter.decrement(transactionId);
             }
         }
 

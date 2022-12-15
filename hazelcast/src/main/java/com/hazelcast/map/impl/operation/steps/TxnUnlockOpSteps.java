@@ -16,28 +16,15 @@
 
 package com.hazelcast.map.impl.operation.steps;
 
-import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.recordstore.RecordStore;
-
-import java.util.UUID;
 
 public enum TxnUnlockOpSteps implements IMapOpStep {
 
     UNLOCK() {
         @Override
         public void runStep(State state) {
-            RecordStore recordStore = state.getRecordStore();
-
-            Data dataKey = state.getKey();
-            long threadId = state.getThreadId();
-            UUID ownerUuid = state.getOwnerUuid();
-            MapOperation operation = state.getOperation();
-            long callId = operation.getCallId();
-
-            recordStore.unlock(dataKey, ownerUuid, threadId, callId);
+           state.getOperation().run();
         }
 
         @Override

@@ -57,9 +57,7 @@ public class TxnRollbackOperation
     }
 
     @Override
-    protected void innerBeforeRun() throws Exception {
-        super.innerBeforeRun();
-
+    protected void runInternal() {
         wbqCapacityCounter().decrement(transactionId);
         if (recordStore.isLocked(getKey())
                 && !recordStore.unlock(getKey(), ownerUuid, getThreadId(), getCallId())) {

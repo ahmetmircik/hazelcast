@@ -58,9 +58,7 @@ public class TxnPrepareOperation extends KeyBasedMapOperation
     }
 
     @Override
-    protected void innerBeforeRun() throws Exception {
-        super.innerBeforeRun();
-
+    protected void runInternal() {
         try {
             wbqCapacityCounter().increment(transactionId, false);
         } catch (ReachedMaxSizeException e) {
@@ -70,7 +68,8 @@ public class TxnPrepareOperation extends KeyBasedMapOperation
         if (!recordStore.extendLock(getKey(), ownerUuid, getThreadId(), LOCK_TTL_MILLIS)) {
             ILogger logger = getLogger();
             if (logger.isFinestEnabled()) {
-                logger.finest("Locked: [" + recordStore.isLocked(getKey()) + "], key: [" + getKey() + ']');
+                logger.finest("Locked: [" + recordStore.isLocked(getKey())
+                        + "], key: [" + getKey() + ']');
             }
 
             wbqCapacityCounter().decrement(transactionId);

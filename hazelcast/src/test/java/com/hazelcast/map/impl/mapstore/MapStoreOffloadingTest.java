@@ -141,9 +141,10 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
         ExecutorService executorService = Executors.newCachedThreadPool();
         List<Future> futures = new ArrayList<>();
 
-        for (int i = 0; i < 10; i++) {
-            int finalI = 1;
-            Runnable runnable = () -> {
+        int finalI = 1;
+        Runnable runnable = () -> {
+            while (true) {
+
                 TransactionContext context = client.newTransactionContext();
                 context.beginTransaction();
                 TransactionalMap map = context.getMap(slowMapName);
@@ -153,13 +154,31 @@ public class MapStoreOffloadingTest extends HazelcastTestSupport {
                 } catch (TransactionException e) {
                     context.rollbackTransaction();
                 }
-            };
-
-            futures.add(executorService.submit(runnable));
+            }
         };
 
-        // start new member to trigger migration
-        factory.newHazelcastInstance(config);
+        Runnable runnable2 = () -> {
+            while (true) {
+                client.getMap(slowMapName).lock(finalI);
+                sleepSeconds(1);
+                client.getMap(slowMapName).unlock(finalI);
+            }
+        };
+
+        Runnable runnable3 = () -> {
+            while (true) {
+                // start new member to trigger migration
+                HazelcastInstance instance = factory.newHazelcastInstance(config);
+                sleepSeconds(2);
+                instance.getLifecycleService().terminate();
+            }
+        };
+
+
+        futures.add(executorService.submit(runnable2));
+        futures.add(executorService.submit(runnable3));
+        futures.add(executorService.submit(runnable));
+
 
         try {
             assertTrueEventually(() -> {

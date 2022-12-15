@@ -31,7 +31,6 @@ public enum TxnSetOpSteps implements IMapOpStep {
         @Override
         public void runStep(State state) {
             RecordStore recordStore = state.getRecordStore();
-
             Data dataKey = state.getKey();
             long threadId = state.getThreadId();
             long version = state.getVersion();
@@ -39,7 +38,6 @@ public enum TxnSetOpSteps implements IMapOpStep {
             long callId = state.getOperation().getCallId();
 
             recordStore.unlock(dataKey, ownerUuid, threadId, callId);
-
             Record record = recordStore.getRecordOrNull(dataKey);
             if (record == null || version == record.getVersion()) {
                 PutOpSteps.READ.runStep(state);
