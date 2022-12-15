@@ -93,7 +93,7 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
     }
 
     private static void randomSleepMillis() {
-        sleepMillis(RandomPicker.getInt(100,300));
+//        sleepMillis(RandomPicker.getInt(100,300));
     }
 
     @Test(timeout = 5 * 60 * 1000)
