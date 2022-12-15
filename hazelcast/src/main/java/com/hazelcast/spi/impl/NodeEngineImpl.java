@@ -56,6 +56,7 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.logging.impl.LoggingServiceImpl;
 import com.hazelcast.map.impl.MapService;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.spi.exception.RetryableHazelcastException;
 import com.hazelcast.spi.exception.ServiceNotFoundException;
 import com.hazelcast.spi.impl.eventservice.EventService;
@@ -134,6 +135,7 @@ public class NodeEngineImpl implements NodeEngine {
     private final ConcurrencyDetection concurrencyDetection;
     private final TenantControlServiceImpl tenantControlService;
     private final ExternalDataStoreService externalDataStoreService;
+    private MapServiceContext mapServiceContext;
 
     @SuppressWarnings("checkstyle:executablestatementcount")
     public NodeEngineImpl(Node node) {
@@ -261,6 +263,9 @@ public class NodeEngineImpl implements NodeEngine {
 
         diagnostics.start();
         node.getNodeExtension().registerPlugins(diagnostics);
+
+        this.mapServiceContext = ((MapService) getService(MapService.SERVICE_NAME))
+                .getMapServiceContext();
     }
 
     public ConcurrencyDetection getConcurrencyDetection() {
@@ -489,10 +494,7 @@ public class NodeEngineImpl implements NodeEngine {
 
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
         operationParker.onPartitionMigrate(migrationInfo);
-
-        MapService mapService = getService(MapService.SERVICE_NAME);
-        mapService.getMapServiceContext()
-                .onPartitionMigrate(migrationInfo);
+        mapServiceContext.onPartitionMigrate(migrationInfo);
     }
 
     /**
