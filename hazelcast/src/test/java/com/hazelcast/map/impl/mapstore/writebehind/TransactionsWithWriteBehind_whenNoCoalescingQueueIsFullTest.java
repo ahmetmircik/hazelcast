@@ -139,7 +139,9 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         for (PartitionContainer partitionContainer : partitionContainers) {
             RecordStore recordStore = partitionContainer.getExistingRecordStore(mapName);
             if (recordStore != null) {
-                reservedCapacity += recordStore.getMapDataStore().getTxnReservedCapacityCounter().getReservedCapacityCountPerTxnId().size();
+                reservedCapacity += recordStore.getMapDataStore()
+                        .getTxnReservedCapacityCounter()
+                        .getReservedCapacityCountPerTxnId().size();
             }
         }
         return reservedCapacity;

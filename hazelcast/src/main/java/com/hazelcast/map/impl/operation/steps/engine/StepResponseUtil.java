@@ -75,7 +75,8 @@ public final class StepResponseUtil {
             if (operation instanceof Notifier) {
                 final Notifier notifier = (Notifier) operation;
                 if (notifier.shouldNotify()) {
-                    ((NodeEngineImpl) state.getRecordStore().getMapContainer().getMapServiceContext().getNodeEngine())
+                    ((NodeEngineImpl) state.getRecordStore().getMapContainer()
+                            .getMapServiceContext().getNodeEngine())
                             .getOperationParker().unpark(notifier);
                 }
             }
