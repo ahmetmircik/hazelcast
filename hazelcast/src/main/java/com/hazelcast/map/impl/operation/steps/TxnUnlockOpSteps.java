@@ -24,7 +24,7 @@ public enum TxnUnlockOpSteps implements IMapOpStep {
     UNLOCK() {
         @Override
         public void runStep(State state) {
-           state.getOperation().run();
+           state.getOperation().runInternalDirect();
         }
 
         @Override
