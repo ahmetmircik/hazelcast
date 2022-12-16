@@ -87,7 +87,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -113,7 +112,6 @@ import static com.hazelcast.spi.properties.ClusterProperty.AGGREGATION_ACCUMULAT
 import static com.hazelcast.spi.properties.ClusterProperty.INDEX_COPY_BEHAVIOR;
 import static com.hazelcast.spi.properties.ClusterProperty.OPERATION_CALL_TIMEOUT_MILLIS;
 import static com.hazelcast.spi.properties.ClusterProperty.QUERY_PREDICATE_PARALLEL_EVALUATION;
-import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 
 /**
@@ -925,29 +923,29 @@ class MapServiceContextImpl implements MapServiceContext {
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
         assertRunningOnPartitionThread();
 
-        if (migrationInfo.getSource() == null
-                || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
-            return;
-        }
-
-        int partitionId = migrationInfo.getPartitionId();
-        PartitionContainer partitionContainer = getPartitionContainer(partitionId);
-        for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
-            Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
-            // This copying is needed to escape from ConcurrentModificationException.
-            // Inside `sendResponse`, we also remove operation from Set.
-            List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
-            opList.addAll(offloadedOperations);
-            for (MapOperation op : opList) {
-                try {
-                    op.getOperationResponseHandler()
-                            .sendResponse(op, newPartitionMigratingException(op, partitionId));
-                } catch (Throwable e) {
-                    logger.warning(format("Exception while sending response "
-                            + "on partition migrate [partitionId=%d]", partitionId), e);
-                }
-            }
-        }
+//        if (migrationInfo.getSource() == null
+//                || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
+//            return;
+//        }
+//
+//        int partitionId = migrationInfo.getPartitionId();
+//        PartitionContainer partitionContainer = getPartitionContainer(partitionId);
+//        for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
+//            Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
+//            // This copying is needed to escape from ConcurrentModificationException.
+//            // Inside `sendResponse`, we also remove operation from Set.
+//            List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
+//            opList.addAll(offloadedOperations);
+//            for (MapOperation op : opList) {
+//                try {
+//                    op.getOperationResponseHandler()
+//                            .sendResponse(op, newPartitionMigratingException(op, partitionId));
+//                } catch (Throwable e) {
+//                    logger.warning(format("Exception while sending response "
+//                            + "on partition migrate [partitionId=%d]", partitionId), e);
+//                }
+//            }
+//        }
     }
 
     private PartitionMigratingException newPartitionMigratingException(MapOperation op,
