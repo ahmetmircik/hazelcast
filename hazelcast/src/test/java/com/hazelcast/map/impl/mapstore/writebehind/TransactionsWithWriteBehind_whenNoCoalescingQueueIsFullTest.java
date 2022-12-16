@@ -47,7 +47,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.hazelcast.map.IMapAccessors.getPendingOffloadedOpCount;
 import static com.hazelcast.map.impl.mapstore.writebehind.WriteBehindFlushTest.assertWriteBehindQueuesEmpty;
+import static com.hazelcast.spi.impl.operationservice.impl.OperationServiceAccessor.getAsyncOperationsCount;
 import static com.hazelcast.test.Accessors.getNodeEngineImpl;
 import static com.hazelcast.transaction.TransactionOptions.TransactionType.TWO_PHASE;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -119,6 +121,9 @@ public class TransactionsWithWriteBehind_whenNoCoalescingQueueIsFullTest extends
         assertTrueEventually(() -> {
             Collection<HazelcastInstance> instances = factory.getAllHazelcastInstances();
             for (HazelcastInstance node : instances) {
+                assertEquals(0, getAsyncOperationsCount(node));
+                assertEquals(0, getPendingOffloadedOpCount(node.getMap(mapName)));
+
                 String msg = "Failed on instance " + node;
                 assertWriteBehindQueuesEmpty(mapName, Collections.singletonList(node));
 
