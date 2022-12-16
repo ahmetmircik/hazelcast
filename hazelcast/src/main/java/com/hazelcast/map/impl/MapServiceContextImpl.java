@@ -22,7 +22,6 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.PartitioningStrategyConfig;
 import com.hazelcast.internal.eviction.ExpirationManager;
 import com.hazelcast.internal.partition.IPartitionService;
-import com.hazelcast.internal.partition.MigrationInfo;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.DataType;
 import com.hazelcast.internal.serialization.InternalSerializationService;
@@ -46,7 +45,6 @@ import com.hazelcast.map.impl.journal.RingbufferMapEventJournalImpl;
 import com.hazelcast.map.impl.mapstore.MapDataStore;
 import com.hazelcast.map.impl.mapstore.writebehind.NodeWideUsedCapacityCounter;
 import com.hazelcast.map.impl.nearcache.MapNearCacheManager;
-import com.hazelcast.map.impl.operation.MapOperation;
 import com.hazelcast.map.impl.operation.MapOperationProvider;
 import com.hazelcast.map.impl.operation.MapOperationProviders;
 import com.hazelcast.map.impl.operation.MapPartitionDestroyOperation;
@@ -76,7 +74,6 @@ import com.hazelcast.query.impl.IndexCopyBehavior;
 import com.hazelcast.query.impl.IndexProvider;
 import com.hazelcast.query.impl.getters.Extractors;
 import com.hazelcast.query.impl.predicates.QueryOptimizer;
-import com.hazelcast.spi.exception.PartitionMigratingException;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.eventservice.EventFilter;
 import com.hazelcast.spi.impl.eventservice.EventRegistration;
@@ -99,7 +96,6 @@ import java.util.function.Predicate;
 import static com.hazelcast.internal.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.internal.util.Preconditions.checkPositive;
 import static com.hazelcast.internal.util.SetUtil.immutablePartitionIdSet;
-import static com.hazelcast.internal.util.ThreadUtil.assertRunningOnPartitionThread;
 import static com.hazelcast.map.impl.ListenerAdapters.createListenerAdapter;
 import static com.hazelcast.map.impl.MapKeyLoader.LOADED_KEY_LIMITER_PER_NODE;
 import static com.hazelcast.map.impl.MapKeyLoader.PROP_LOADED_KEY_LIMITER_PER_NODE;
@@ -917,40 +913,5 @@ class MapServiceContextImpl implements MapServiceContext {
     @Override
     public EventListenerCounter getEventListenerCounter() {
         return eventListenerCounter;
-    }
-
-    @Override
-    public void onPartitionMigrate(MigrationInfo migrationInfo) {
-        assertRunningOnPartitionThread();
-
-//        if (migrationInfo.getSource() == null
-//                || !migrationInfo.getSource().isIdentical(nodeEngine.getLocalMember())) {
-//            return;
-//        }
-//
-//        int partitionId = migrationInfo.getPartitionId();
-//        PartitionContainer partitionContainer = getPartitionContainer(partitionId);
-//        for (RecordStore recordStore : partitionContainer.getAllRecordStores()) {
-//            Set<MapOperation> offloadedOperations = recordStore.getOffloadedOperations();
-//            // This copying is needed to escape from ConcurrentModificationException.
-//            // Inside `sendResponse`, we also remove operation from Set.
-//            List<MapOperation> opList = new ArrayList<>(offloadedOperations.size());
-//            opList.addAll(offloadedOperations);
-//            for (MapOperation op : opList) {
-//                try {
-//                    op.getOperationResponseHandler()
-//                            .sendResponse(op, newPartitionMigratingException(op, partitionId));
-//                } catch (Throwable e) {
-//                    logger.warning(format("Exception while sending response "
-//                            + "on partition migrate [partitionId=%d]", partitionId), e);
-//                }
-//            }
-//        }
-    }
-
-    private PartitionMigratingException newPartitionMigratingException(MapOperation op,
-                                                                       int partitionId) {
-        return new PartitionMigratingException(getNodeEngine().getThisAddress(),
-                partitionId, op.getClass().getName(), op.getServiceName());
     }
 }

@@ -22,7 +22,6 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MapStoreConfig;
 import com.hazelcast.config.PartitioningStrategyConfig;
 import com.hazelcast.internal.eviction.ExpirationManager;
-import com.hazelcast.internal.partition.MigrationInfo;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.internal.util.comparators.ValueComparator;
@@ -273,13 +272,4 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport,
      * @return {@link EventListenerCounter} object.
      */
     EventListenerCounter getEventListenerCounter();
-
-    /**
-     * Offloaded operations are notified upon migration,
-     * these notified operations will be retried and
-     * will run on new partition owner as a result.
-     *
-     * @see com.hazelcast.map.impl.operation.steps.engine.StepSupplier#nextStep
-     */
-    void onPartitionMigrate(MigrationInfo partitionId);
 }

@@ -19,7 +19,6 @@ package com.hazelcast.map.impl.operation.steps.engine;
 import com.hazelcast.core.Offloadable;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.map.impl.tx.TxnRollbackOperation;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.executionservice.ExecutionService;
@@ -104,7 +103,6 @@ public class StepRunner extends Offload
 
     private boolean addOpToOffloadedOps(MapOperation op) {
         if (offloadedOperations.add(op)) {
-            op.setOperationResponseHandler(newOperationResponseHandler(op));
             op.getRecordStore().incMapStoreOffloadedOperationsCount();
             return true;
         }
@@ -112,14 +110,14 @@ public class StepRunner extends Offload
         return false;
     }
 
-    private OperationResponseHandler newOperationResponseHandler(MapOperation op) {
-        OperationResponseHandler delegate = op.getOperationResponseHandler();
+    private void setOffloadedStepResponseHandler(MapOperation op) {
+        OperationResponseHandler current = op.getOperationResponseHandler();
 
-        if (delegate instanceof OffloadedStepResponseHandler) {
-            delegate = ((OffloadedStepResponseHandler) delegate).delegate;
+        if (current instanceof OffloadedStepResponseHandler) {
+            return;
         }
 
-        return new OffloadedStepResponseHandler(delegate);
+        op.setOperationResponseHandler(new OffloadedStepResponseHandler(current));
     }
 
     private boolean isHeadOp() {
@@ -159,12 +157,10 @@ public class StepRunner extends Offload
                     }
                 }
 
-//                if (runningOnPartitionThread) {
-//                    MapOperation op = stepSupplier.getOperation();
-//                    if (!(op.getOperationResponseHandler() instanceof OffloadedStepResponseHandler)) {
-//                        op.setOperationResponseHandler(new OffloadedStepResponseHandler(op.getOperationResponseHandler()));
-//                    }
-//                }
+                if (runningOnPartitionThread) {
+                    MapOperation op = stepSupplier.getOperation();
+                    setOffloadedStepResponseHandler(op);
+                }
 
                 // Try to run this step in this thread, otherwise
                 // offload the step to relevant executor(it
@@ -278,22 +274,4 @@ public class StepRunner extends Offload
             }
         }
     }
-
-    private String getStackTraceOrNull(Object operation) {
-        StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
-        if (!(operation instanceof TxnRollbackOperation)) {
-            return null;
-        }
-        StringBuilder stackTraceStringBuilder = new StringBuilder();
-        String prefix = "";
-        for (StackTraceElement stackTraceElement : stackTraceElements) {
-            stackTraceStringBuilder.append(prefix).append(stackTraceElement.toString());
-            prefix = "\n\t";
-        }
-
-        String stackTrace = stackTraceStringBuilder.toString();
-        stackTraceStringBuilder.setLength(0);
-        return stackTrace;
-    }
-
 }

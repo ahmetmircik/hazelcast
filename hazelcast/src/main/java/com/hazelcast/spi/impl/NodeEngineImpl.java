@@ -494,7 +494,6 @@ public class NodeEngineImpl implements NodeEngine {
 
     public void onPartitionMigrate(MigrationInfo migrationInfo) {
         operationParker.onPartitionMigrate(migrationInfo);
-        mapServiceContext.onPartitionMigrate(migrationInfo);
     }
 
     /**
