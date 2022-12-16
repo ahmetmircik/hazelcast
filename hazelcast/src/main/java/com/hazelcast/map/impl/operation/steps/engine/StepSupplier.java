@@ -43,7 +43,6 @@ public class StepSupplier implements Supplier<Runnable> {
 
     private volatile Runnable currentRunnable;
     private volatile Step currentStep;
-    private volatile boolean firstStep = true;
 
     /**
      * Only here to disable check for testing purposes.
@@ -137,17 +136,14 @@ public class StepSupplier implements Supplier<Runnable> {
      */
     private void runStepWithState(Step step, State state) {
         boolean runningOnPartitionThread = isRunningOnPartitionThread();
-        boolean metWithPreconditions = true;
+        boolean met = true;
         try {
+            if (runningOnPartitionThread && state.getThrowable() == null) {
+                // TODO refactor to return false only for timeout once at first step
+                met = metWithPreconditions();
+            }
+
             try {
-                if (runningOnPartitionThread && state.getThrowable() == null) {
-                    try {
-                        metWithPreconditions = metWithPreconditions();
-                    } catch (Throwable e) {
-                        metWithPreconditions = false;
-                        throw e;
-                    }
-                }
                 step.runStep(state);
             } catch (NativeOutOfMemoryError e) {
                 assertRunningOnPartitionThread();
@@ -162,7 +158,7 @@ public class StepSupplier implements Supplier<Runnable> {
             }
             state.setThrowable(throwable);
         } finally {
-            if (metWithPreconditions) {
+            if (met) {
                 currentStep = nextStep(step);
                 currentRunnable = createRunnable(currentStep, state);
             } else {
@@ -175,16 +171,7 @@ public class StepSupplier implements Supplier<Runnable> {
     private boolean metWithPreconditions() {
         assert isRunningOnPartitionThread();
 
-        // check node and cluster health before running each step
-        operationRunner.ensureNodeAndClusterHealth(state.getOperation());
-
-        // check timeout for only first step, as in no-offload flows
-        if (firstStep && operationRunner.timeout(state.getOperation())) {
-            firstStep = false;
-            return false;
-        }
-
-        return true;
+        return operationRunner.metWithPreconditions(state.getOperation());
     }
 
     /**
