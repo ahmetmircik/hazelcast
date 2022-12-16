@@ -146,6 +146,13 @@ public class StepRunner extends Offload
                     }
                 }
 
+                if (runningOnPartitionThread) {
+                    MapOperation op = stepSupplier.getOperation();
+                    if (!(op.getOperationResponseHandler() instanceof OffloadedStepResponseHandler)) {
+                        op.setOperationResponseHandler(new OffloadedStepResponseHandler(op.getOperationResponseHandler()));
+                    }
+                }
+
                 // Try to run this step in this thread, otherwise
                 // offload the step to relevant executor(it
                 // is operation or general-purpose executor)

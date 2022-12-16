@@ -196,6 +196,10 @@ public class StepSupplier implements Supplier<Runnable> {
         currentStep = UtilSteps.HANDLE_ERROR;
     }
 
+    public MapOperation getOperation() {
+        return state.getOperation();
+    }
+
     private interface ExecutorNameAwareRunnable extends Runnable, Offloadable {
 
     }
