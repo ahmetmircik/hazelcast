@@ -99,10 +99,23 @@ public class StepRunner extends Offload
         return CURRENTLY_EXECUTING_ON_PARTITION_THREAD.get();
     }
 
-    private void addOpToOffloadedOps(MapOperation op) {
-        op.setOperationResponseHandler(new OffloadedStepResponseHandler(op.getOperationResponseHandler()));
-        offloadedOperations.add(op);
-        op.getRecordStore().incMapStoreOffloadedOperationsCount();
+    private boolean addOpToOffloadedOps(MapOperation op) {
+        if (offloadedOperations.add(op)) {
+            op.getRecordStore().incMapStoreOffloadedOperationsCount();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void setOffloadedStepResponseHandler(MapOperation op) {
+        OperationResponseHandler current = op.getOperationResponseHandler();
+
+        if (current instanceof OffloadedStepResponseHandler) {
+            return;
+        }
+
+        op.setOperationResponseHandler(new OffloadedStepResponseHandler(current));
     }
 
     private boolean isHeadOp() {
@@ -140,6 +153,11 @@ public class StepRunner extends Offload
                         operationExecutor.execute(this);
                         return;
                     }
+                }
+
+                if (runningOnPartitionThread) {
+                    MapOperation op = stepSupplier.getOperation();
+                    setOffloadedStepResponseHandler(op);
                 }
 
                 // Try to run this step in this thread, otherwise
