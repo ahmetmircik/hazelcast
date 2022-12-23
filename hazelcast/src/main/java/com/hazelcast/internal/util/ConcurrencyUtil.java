@@ -16,9 +16,12 @@
 
 package com.hazelcast.internal.util;
 
+import com.hazelcast.logging.Logger;
+
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
@@ -49,10 +52,16 @@ public final class ConcurrencyUtil {
     // the common pool does not support parallelism
     private static Executor defaultAsyncExecutor;
 
+
     static {
         Executor asyncExecutor;
         if (ForkJoinPool.getCommonPoolParallelism() > 1) {
-            asyncExecutor = ForkJoinPool.commonPool();
+            asyncExecutor = new ForkJoinPool(
+                    Runtime.getRuntime().availableProcessors(),
+                    new PrefixedForkJoinWorkerThreadFactory("hazelcast-internal-fjp-"),
+                    newUncaughtExceptionHandler(),
+                    false
+            );
         } else {
             asyncExecutor = command -> new Thread(command).start();
         }
@@ -60,6 +69,11 @@ public final class ConcurrencyUtil {
     }
 
     private ConcurrencyUtil() {
+    }
+
+    private static Thread.UncaughtExceptionHandler newUncaughtExceptionHandler() {
+        return (t, e) -> Logger.getLogger(ConcurrencyUtil.class)
+                .severe(String.format("Caught an exception in %s and exited with error", t), e);
     }
 
     /**
@@ -156,6 +170,23 @@ public final class ConcurrencyUtil {
             value = current == null ? value : current;
         }
         return value;
+    }
+
+    private static class PrefixedForkJoinWorkerThreadFactory
+            implements ForkJoinPool.ForkJoinWorkerThreadFactory {
+
+        private final String prefix;
+
+        public PrefixedForkJoinWorkerThreadFactory(String namePrefix) {
+            this.prefix = namePrefix;
+        }
+
+        @Override
+        public ForkJoinWorkerThread newThread(ForkJoinPool pool) {
+            ForkJoinWorkerThread newThread = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+            newThread.setName(prefix + newThread.getName());
+            return newThread;
+        }
     }
 
 }
