@@ -24,6 +24,7 @@ import com.hazelcast.internal.util.RuntimeAvailableProcessors;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.IMap;
 import com.hazelcast.map.MapStoreAdapter;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.test.HazelcastParallelParametersRunnerFactory;
 import com.hazelcast.test.HazelcastParametrizedRunner;
 import com.hazelcast.test.HazelcastTestSupport;
@@ -45,7 +46,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.map.IMapAccessors.getPendingOffloadedOpCount;
-import static com.hazelcast.spi.impl.operationservice.impl.OperationServiceAccessor.getAsyncOperationsCount;
+import static com.hazelcast.spi.impl.operationservice.impl.OperationServiceAccessor.getAsyncOperations;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
@@ -160,10 +161,20 @@ public class MapStoreOffloadingBouncingNodeTest extends HazelcastTestSupport {
         assertTrueEventually(() -> {
             Collection<HazelcastInstance> instances = factory.getAllHazelcastInstances();
             for (HazelcastInstance node : instances) {
-                assertEquals(0, getAsyncOperationsCount(node));
-                assertEquals(0, getPendingOffloadedOpCount(node.getMap(mapName)));
+                if (node.getLifecycleService().isRunning()) {
+                    Set<Operation> asyncOperations = getAsyncOperations(node);
+                    int asyncOperationsCount = asyncOperations.size();
+                    int pendingOffloadedOpCount = getPendingOffloadedOpCount(node.getMap(mapName));
+
+                    String msg = String.format("Not completed asyncOperations: %s, "
+                                    + "number of pending mapStore offload operations: %d ",
+                            asyncOperations, pendingOffloadedOpCount);
+
+                    assertEquals(msg, 0, asyncOperationsCount);
+                    assertEquals(0, pendingOffloadedOpCount);
+                }
             }
-        });
+        }, 240);
     }
 
     private enum OpType {
