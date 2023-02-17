@@ -32,9 +32,16 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-/** A heartbeat sent from one cluster member to another. The sent timestamp is the cluster clock time of the sending member */
+/**
+ * A heartbeat sent from one cluster member to another. The sent timestamp is the cluster clock time of the sending member
+ */
 public final class HeartbeatOp extends AbstractClusterOperation implements Versioned {
+
+    public static final AtomicBoolean ENABLE = new AtomicBoolean();
+    public static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
 
     private MembersViewMetadata senderMembersViewMetadata;
     private UUID targetUuid;
@@ -57,6 +64,10 @@ public final class HeartbeatOp extends AbstractClusterOperation implements Versi
         ClusterServiceImpl service = getService();
         ClusterHeartbeatManager heartbeatManager = service.getClusterHeartbeatManager();
         heartbeatManager.handleHeartbeat(senderMembersViewMetadata, targetUuid, timestamp, suspectedMembers);
+
+        if (ENABLE.get()) {
+            getLogger().severe(String.format("---> instance count: %d", INSTANCE_COUNTER.incrementAndGet()));
+        }
     }
 
     @Override
