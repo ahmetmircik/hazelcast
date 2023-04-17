@@ -151,6 +151,7 @@ public final class ExecutionServiceImpl implements ExecutionService {
         register(ASYNC_EXECUTOR, coreSize, ASYNC_QUEUE_CAPACITY, ExecutorType.CONCRETE);
         register(OFFLOADABLE_EXECUTOR, coreSize, OFFLOADABLE_QUEUE_CAPACITY, ExecutorType.CACHED);
         register(JOB_OFFLOADABLE_EXECUTOR, coreSize, JOB_OFFLOADABLE_QUEUE_CAPACITY, ExecutorType.CACHED);
+        register(MAP_TIERED_STORE_COMPACTION_OFFLOADABLE_EXECUTOR, coreSize, OFFLOADABLE_QUEUE_CAPACITY, ExecutorType.CONCRETE);
     }
 
     // only used in tests
