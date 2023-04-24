@@ -25,6 +25,7 @@ import com.hazelcast.internal.monitor.LocalOperationStats;
 import com.hazelcast.json.internal.JsonSerializable;
 import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.map.IMap;
+import com.hazelcast.map.impl.MapServiceContext;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.properties.ClusterProperty;
@@ -54,6 +55,7 @@ abstract class SlowOperationDetectorAbstractTest extends HazelcastTestSupport {
 
     HazelcastInstance getSingleNodeCluster(int slowOperationThresholdMillis) {
         Config config = smallInstanceConfig();
+        config.setProperty(MapServiceContext.FORCE_OFFLOAD_ALL_OPERATIONS.getName(),"true");
         config.setProperty(ClusterProperty.SLOW_OPERATION_DETECTOR_THRESHOLD_MILLIS.getName(),
                 valueOf(slowOperationThresholdMillis));
 
