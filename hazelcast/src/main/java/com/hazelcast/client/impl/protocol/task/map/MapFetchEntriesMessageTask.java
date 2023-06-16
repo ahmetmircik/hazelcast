@@ -41,7 +41,7 @@ public class MapFetchEntriesMessageTask extends AbstractMapPartitionMessageTask<
     protected Operation prepareOperation() {
         MapOperationProvider operationProvider = getMapOperationProvider(parameters.name);
         IterationPointer[] pointers = decodePointers(parameters.iterationPointers);
-        return operationProvider.createFetchEntriesOperation(parameters.name, pointers, parameters.batch);
+        return operationProvider.createFetchEntriesOperation(parameters.name, pointers, 100_000);
     }
 
     @Override

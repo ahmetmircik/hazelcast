@@ -52,8 +52,8 @@ public class MapPartitionIterator<K, V> extends AbstractMapPartitionIterator<K, 
         String name = mapProxy.getName();
         MapOperationProvider operationProvider = mapProxy.getOperationProvider();
         MapOperation operation = prefetchValues
-                ? operationProvider.createFetchEntriesOperation(name, pointers, fetchSize)
-                : operationProvider.createFetchKeysOperation(name, pointers, fetchSize);
+                ? operationProvider.createFetchEntriesOperation(name, pointers, 100_000)
+                : operationProvider.createFetchKeysOperation(name, pointers, 100_000);
 
         AbstractCursor cursor = invoke(operation);
         setIterationPointers(cursor.getBatch(), cursor.getIterationPointers());

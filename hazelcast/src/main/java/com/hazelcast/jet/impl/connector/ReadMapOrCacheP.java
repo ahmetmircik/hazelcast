@@ -105,7 +105,7 @@ public final class ReadMapOrCacheP<F extends CompletableFuture, B, R> extends Ab
      * {@code #MAX_PARALLEL_READ} affect the throughput.
      */
     private static final int MAX_PARALLEL_READ = 5;
-    private static final int MAX_FETCH_SIZE = 2048;
+    private static final int MAX_FETCH_SIZE = 100_000;
 
     private final Reader<F, B, R> reader;
     private final int[] partitionIds;
