@@ -21,7 +21,6 @@ import com.hazelcast.logging.ILogger;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -39,13 +38,11 @@ public final class DirectoryLock {
 
     private final File dir;
     private final FileChannel channel;
-    private final FileLock lock;
     private final ILogger logger;
 
-    private DirectoryLock(File dir, FileChannel channel, FileLock lock, ILogger logger) {
+    private DirectoryLock(File dir, FileChannel channel,ILogger logger) {
         this.dir = dir;
         this.channel = channel;
-        this.lock = lock;
         this.logger = logger;
     }
 
@@ -60,7 +57,7 @@ public final class DirectoryLock {
      * Returns the actual {@link FileLock}.
      */
     FileLock getLock() {
-        return lock;
+        return null;
     }
 
     /**
@@ -69,13 +66,6 @@ public final class DirectoryLock {
     public void release() {
         if (logger.isFineEnabled()) {
             logger.fine("Releasing lock on " + lockFile().getAbsolutePath());
-        }
-        try {
-            lock.release();
-        } catch (ClosedChannelException e) {
-            EmptyStatement.ignore(e);
-        } catch (IOException e) {
-            logger.severe("Problem while releasing the lock on " + lockFile(), e);
         }
         try {
             channel.close();
@@ -99,11 +89,10 @@ public final class DirectoryLock {
     public static DirectoryLock lockForDirectory(File dir, ILogger logger) {
         File lockFile = new File(dir, FILE_NAME);
         FileChannel channel = openChannel(lockFile);
-        FileLock lock = acquireLock(lockFile, channel);
         if (logger.isFineEnabled()) {
             logger.fine("Acquired lock on " + lockFile.getAbsolutePath());
         }
-        return new DirectoryLock(dir, channel, lock, logger);
+        return new DirectoryLock(dir, channel, logger);
     }
 
     private static FileChannel openChannel(File lockFile) {
