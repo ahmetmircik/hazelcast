@@ -130,6 +130,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
     @Override
     protected void onAfterSplitBrainHealed(HazelcastInstance[] instances) {
+        System.err.println("-----> onAfterSplitBrainHealed iteration " + iteration);
         // wait until merge completes
         mergeLifecycleListener.await();
         for (Map.Entry<HazelcastInstance, UUID> entry : listenerRegistry.entrySet()) {
