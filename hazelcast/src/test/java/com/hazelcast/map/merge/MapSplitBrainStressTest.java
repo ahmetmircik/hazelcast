@@ -57,10 +57,10 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
             = new ChangeLoggingRule("log4j2-trace-map-split-brain-stress.xml");
 
     static final int ITERATION_COUNT = 50;
-    static final int MAP_COUNT = 100;
-    static final int ENTRY_COUNT = 100;
-    static final int FIRST_BRAIN_SIZE = 3;
-    static final int SECOND_BRAIN_SIZE = 2;
+    static final int MAP_COUNT = 1;
+    static final int ENTRY_COUNT = 100_000;
+    static final int FIRST_BRAIN_SIZE = 1;
+    static final int SECOND_BRAIN_SIZE = 1;
     static final Class<PassThroughMergePolicy> MERGE_POLICY = PassThroughMergePolicy.class;
 
     static final int TEST_TIMEOUT_IN_MILLIS = 15 * 60 * 1000;
@@ -145,7 +145,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
             int finalMapIndex = mapIndex;
             assertTrueEventually(() -> assertEquals(format("expected %d entries in map %d/%d (iteration %d)",
                             ENTRY_COUNT, finalMapIndex, MAP_COUNT, iteration),
-                    ENTRY_COUNT, map.size()));
+                    ENTRY_COUNT, map.size()),10);
 
             for (int key = 0; key < ENTRY_COUNT; key++) {
                 int value = map.get(key);
