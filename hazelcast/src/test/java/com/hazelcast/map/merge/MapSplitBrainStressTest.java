@@ -100,7 +100,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
     @Override
     protected void onBeforeSplitBrainCreated(HazelcastInstance[] instances) {
-        LOGGER.info("Starting iteration " + iteration);
+        System.err.println("-----> Starting iteration " + iteration);
 
         if (iteration == 1) {
             for (int mapIndex = 0; mapIndex < MAP_COUNT; mapIndex++) {
@@ -118,6 +118,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
     @Override
     protected void onAfterSplitBrainCreated(HazelcastInstance[] firstBrain, HazelcastInstance[] secondBrain) {
+        System.err.println("-----> onAfterSplitBrainCreated iteration " + iteration);
         mergeLifecycleListener = new MergeLifecycleListener(secondBrain.length);
         for (HazelcastInstance instance : secondBrain) {
             UUID listener = instance.getLifecycleService().addLifecycleListener(mergeLifecycleListener);
