@@ -37,6 +37,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
@@ -98,6 +101,9 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
         super.testSplitBrain();
     }
 
+    ExecutorService executors = Executors.newCachedThreadPool();
+    AtomicBoolean stop = new AtomicBoolean();
+
     @Override
     protected void onBeforeSplitBrainCreated(HazelcastInstance[] instances) {
         System.err.println("-----> Starting iteration " + iteration);
@@ -113,6 +119,24 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
                     mapOnFirstBrain.put(key, key);
                 }
             }
+
+            Runnable getter = () -> {
+                while (!stop.get()) {
+                    for (HazelcastInstance instance : instances) {
+
+                        for (String mapName : mapNames.values()) {
+                            for (int key = 0; key < ENTRY_COUNT; key++) {
+                                instance.getMap(mapName).get(key);
+                            }
+                        }
+                    }
+                }
+            };
+
+            for (int i = 0; i < 10; i++) {
+                executors.execute(getter);
+            }
+
         }
     }
 
@@ -131,6 +155,8 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
     @Override
     protected void onAfterSplitBrainHealed(HazelcastInstance[] instances) {
+        stop.set(true);
+
         System.err.println("-----> onAfterSplitBrainHealed iteration " + iteration);
         // wait until merge completes
         mergeLifecycleListener.await();
