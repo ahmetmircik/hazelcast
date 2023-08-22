@@ -23,7 +23,7 @@ import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.IMap;
-import com.hazelcast.spi.merge.PassThroughMergePolicy;
+import com.hazelcast.spi.merge.PutIfAbsentMergePolicy;
 import com.hazelcast.test.ChangeLoggingRule;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.SplitBrainTestSupport;
@@ -62,9 +62,9 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
     static final int ITERATION_COUNT = 50;
     static final int MAP_COUNT = 1;
     static final int ENTRY_COUNT = 500_000;
-    static final int FIRST_BRAIN_SIZE = 1;
-    static final int SECOND_BRAIN_SIZE = 1;
-    static final Class<PassThroughMergePolicy> MERGE_POLICY = PassThroughMergePolicy.class;
+    static final int FIRST_BRAIN_SIZE = 2;
+    static final int SECOND_BRAIN_SIZE = 3;
+    static final Class<PutIfAbsentMergePolicy> MERGE_POLICY = PutIfAbsentMergePolicy.class;
 
     static final int TEST_TIMEOUT_IN_MILLIS = 15 * 60 * 1000;
     static final String MAP_NAME_PREFIX = "map";
@@ -81,7 +81,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
         Config config = super.config();
         config.getMapConfig(MAP_NAME_PREFIX + "*")
                 .getMergePolicyConfig()
-                .setPolicy(MERGE_POLICY.getName());
+                .setPolicy(MERGE_POLICY.getName()).setBatchSize(20_000);
         return config;
     }
 

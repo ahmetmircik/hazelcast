@@ -129,14 +129,21 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
                     store.getName(), store.getPartitionId(), store.size()));
         }
 
+        store.beforeOperation();
         ((DefaultRecordStore) store).destroyStorageAfterClear(false, true);
+        store.afterOperation();
     }
 
     @Override
     protected boolean hasEntries(RecordStore store) {
         assertRunningOnPartitionThread();
 
-        return !store.isEmpty();
+        store.beforeOperation();
+        try {
+            return !store.isEmpty();
+        } finally {
+            store.afterOperation();
+        }
     }
 
     @Override
