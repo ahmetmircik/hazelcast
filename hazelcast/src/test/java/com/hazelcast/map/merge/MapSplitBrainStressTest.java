@@ -61,7 +61,7 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
     static final int ITERATION_COUNT = 50;
     static final int MAP_COUNT = 1;
-    static final int ENTRY_COUNT = 100_000;
+    static final int ENTRY_COUNT = 500_000;
     static final int FIRST_BRAIN_SIZE = 1;
     static final int SECOND_BRAIN_SIZE = 1;
     static final Class<PassThroughMergePolicy> MERGE_POLICY = PassThroughMergePolicy.class;
