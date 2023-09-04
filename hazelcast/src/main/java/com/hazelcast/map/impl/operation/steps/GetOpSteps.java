@@ -43,11 +43,6 @@ public enum GetOpSteps implements IMapOpStep {
         public Step nextStep(State state) {
             return state.getOldValue() == null ? GetOpSteps.LOAD : GetOpSteps.RESPONSE;
         }
-
-        @Override
-        public boolean isOffloadStep(State state) {
-            return state.getOperation().isTieredStoreOffloadEnabled();
-        }
     },
 
     LOAD() {

@@ -34,6 +34,11 @@ public enum PutOpSteps implements IMapOpStep {
     READ() {
         @Override
         public void runStep(State state) {
+            if (!state.getStaticParams().isLoad()
+                    && state.getRecordStore().getMapContainer()
+                    .getMapConfig().getTieredStoreConfig().isEnabled()) {
+                return;
+            }
             GetOpSteps.READ.runStep(state);
         }
 
