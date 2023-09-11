@@ -1078,8 +1078,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     @Override
     @SuppressWarnings("unchecked")
     public MapMergeResponse merge(MapMergeTypes<Object, Object> mergingEntry,
-                               SplitBrainMergePolicy<Object, MapMergeTypes<Object, Object>, Object> mergePolicy,
-                               CallerProvenance provenance) {
+                                  SplitBrainMergePolicy<Object, MapMergeTypes<Object, Object>, Object> mergePolicy,
+                                  CallerProvenance provenance) {
         checkIfLoaded();
         long now = getNow();
 
@@ -1510,8 +1510,17 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         } finally {
             mapDataStore.reset();
             expirySystem.clear();
-            storage.clear(false);
+//            storage.clear(false);
+            clearStorage2();
             stats.reset();
+        }
+    }
+
+    private void clearStorage2() {
+        Iterator<Map.Entry<Data, Record>> entryIterator = storage.mutationTolerantIterator();
+        while (entryIterator.hasNext()) {
+            Map.Entry<Data, Record> entry = entryIterator.next();
+            storage.removeRecord(entry.getKey(), entry.getValue());
         }
     }
 
@@ -1572,7 +1581,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
             mutationObserver.onClear();
         } finally {
             expirySystem.clear();
-            storage.clear(isDuringShutdown);
+//            storage.clear(isDuringShutdown);
+            clearStorage2();
         }
     }
 
