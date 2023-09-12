@@ -29,11 +29,8 @@ import com.hazelcast.spi.impl.operationservice.OperationFactory;
 import com.hazelcast.spi.merge.SplitBrainMergePolicy;
 import com.hazelcast.spi.merge.SplitBrainMergeTypes.MapMergeTypes;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiConsumer;
 
 import static com.hazelcast.spi.impl.merge.MergingValueFactory.createMergingEntry;
@@ -55,45 +52,21 @@ class MapMergeRunnable extends AbstractMergeRunnable<Object, Object, RecordStore
     protected void mergeStore(RecordStore store, BiConsumer<Integer, MapMergeTypes<Object, Object>> consumer) {
         int partitionId = store.getPartitionId();
 
-
-        ArrayList<MapMergeTypes> objects = new ArrayList<>();
-
         store.beforeOperation();
-        Iterator<Map.Entry<Data, Record>> iterator = store.iterator();
-        store.afterOperation();
-
-        while (true) {
-            objects.clear();
-            store.beforeOperation();
-            try {
-                while (iterator.hasNext()) {
-                    Map.Entry<Data, Record> entry = iterator.next();
-                    Data dataKey = toHeapData(entry.getKey());
-                    Record record = entry.getValue();
-                    Data dataValue = toHeapData(record.getValue());
-                    ExpiryMetadata expiryMetadata = store.getExpirySystem().getExpiryMetadata(dataKey);
-
-                    MapMergeTypes<Object, Object> mergingEntry = createMergingEntry(getSerializationService(), dataKey, dataValue,
-                            record, expiryMetadata);
-
-                    objects.add(mergingEntry);
-
-                    if (objects.size() == 100) {
-                        break;
-                    }
-                }
-
-            } finally {
+        try {
+            store.forEach((BiConsumer<Data, Record>) (key, record) -> {
+                Data dataKey = toHeapData(key);
+                Data dataValue = toHeapData(record.getValue());
+                ExpiryMetadata expiryMetadata = store.getExpirySystem().getExpiryMetadata(dataKey);
+                MapMergeTypes<Object, Object> mergingEntry = createMergingEntry(getSerializationService(),
+                        dataKey, dataValue, record, expiryMetadata);
                 store.afterOperation();
-            }
-
-            for (MapMergeTypes mapMergeTypes : objects) {
-                consumer.accept(partitionId, mapMergeTypes);
-            }
-
-            if (objects.isEmpty()) {
-                break;
-            }
+                consumer.accept(partitionId,
+                        mergingEntry);
+                store.beforeOperation();
+            }, false);
+        } finally {
+            store.afterOperation();
         }
     }
 
