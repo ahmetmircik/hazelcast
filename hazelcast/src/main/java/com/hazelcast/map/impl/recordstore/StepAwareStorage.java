@@ -17,6 +17,7 @@
 package com.hazelcast.map.impl.recordstore;
 
 import com.hazelcast.map.impl.operation.steps.engine.Step;
+import com.hazelcast.spi.impl.operationservice.Operation;
 
 import java.util.List;
 
@@ -36,6 +37,6 @@ public interface StepAwareStorage {
      *
      * @return list of steps to be appended to head of existing step chain
      */
-    List<Step> headSteps();
+    List<Step> headSteps(Operation operation);
 
 }

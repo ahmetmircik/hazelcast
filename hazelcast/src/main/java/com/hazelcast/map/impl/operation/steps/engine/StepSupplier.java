@@ -60,7 +60,7 @@ public class StepSupplier implements Supplier<Runnable> {
     public StepSupplier(MapOperation operation, boolean checkCurrentThread) {
         this(operation,
             operation.getRecordStore().getStorage() instanceof StepAwareStorage
-                ? ((StepAwareStorage) (operation.getRecordStore().getStorage())).headSteps()
+                ? ((StepAwareStorage) (operation.getRecordStore().getStorage())).headSteps(operation)
                 : List.of(),
             checkCurrentThread);
     }
