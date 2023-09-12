@@ -74,6 +74,7 @@ public class BackoffIdleStrategy implements IdleStrategy {
     public boolean idle(long n) {
         if (n < yieldThreshold) {
             // TODO: Think to call Thread.onSpinWait which is introduced in java 9.
+            Thread.onSpinWait();
             return false;
         }
         if (n < parkThreshold) {
