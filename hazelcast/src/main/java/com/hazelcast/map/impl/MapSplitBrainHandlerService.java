@@ -140,7 +140,8 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
     protected boolean hasEntries(RecordStore store) {
         assertRunningOnPartitionThread();
 
-        return !store.isEmpty();
+//        return !store.isEmpty();
+        return true;
     }
 
     @Override
