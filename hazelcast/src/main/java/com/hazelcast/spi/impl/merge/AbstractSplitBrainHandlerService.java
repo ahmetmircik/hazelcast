@@ -122,7 +122,7 @@ public abstract class AbstractSplitBrainHandlerService<Store> implements SplitBr
             @Override
             public void run() {
                 for (Store store : stores) {
-                    //destroyStore(store);
+                    destroyStore(store);
                 }
             }
 

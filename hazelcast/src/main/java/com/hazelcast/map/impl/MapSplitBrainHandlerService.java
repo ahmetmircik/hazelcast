@@ -129,10 +129,15 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
                     store.getName(), store.getPartitionId(), store.size()));
         }
 
-        if (store.getMapContainer().getMapConfig().getTieredStoreConfig().isEnabled()) {
-            ((DefaultRecordStore) store).destroyStorageImmediate(false, true);
-        } else {
-            ((DefaultRecordStore) store).destroyStorageAfterClear(false, true);
+        store.beforeOperation();
+        try {
+            if (store.getMapContainer().getMapConfig().getTieredStoreConfig().isEnabled()) {
+                ((DefaultRecordStore) store).destroyStorageImmediate(false, true);
+            } else {
+                ((DefaultRecordStore) store).destroyStorageAfterClear(false, true);
+            }
+        } finally {
+            store.afterOperation();
         }
     }
 
@@ -140,8 +145,12 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
     protected boolean hasEntries(RecordStore store) {
         assertRunningOnPartitionThread();
 
-//        return !store.isEmpty();
-        return true;
+        store.beforeOperation();
+        try {
+            return !store.isEmpty();
+        } finally {
+            store.afterOperation();
+        }
     }
 
     @Override
