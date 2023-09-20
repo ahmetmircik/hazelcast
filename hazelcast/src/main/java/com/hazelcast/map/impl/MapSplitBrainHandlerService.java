@@ -64,9 +64,14 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
     protected void onStoreCollection(RecordStore recordStore) {
         assertRunningOnPartitionThread();
 
-        DefaultRecordStore defaultRecordStore = (DefaultRecordStore) recordStore;
-        defaultRecordStore.getMapDataStore().reset();
-        defaultRecordStore.getIndexingObserver().onDestroy(false, true);
+        recordStore.beforeOperation();
+        try {
+            DefaultRecordStore defaultRecordStore = (DefaultRecordStore) recordStore;
+            defaultRecordStore.getMapDataStore().reset();
+            defaultRecordStore.getIndexingObserver().onDestroy(false, true);
+        } finally {
+            recordStore.afterOperation();
+        }
 
         // Removal of old mapContainer is required not to leak old
         // state into merged cluster. An example old state that we
