@@ -110,7 +110,11 @@ public abstract class AbstractSplitBrainHandlerService<Store> implements SplitBr
                     onStoreCollection(store);
                     iterator.remove();
                 }
-                asyncDestroyStores(storesToDestroy, partitionId);
+                
+                for (Store store : storesToDestroy) {
+                    destroyStore(store);
+                }
+//                asyncDestroyStores(storesToDestroy, partitionId);
             } finally {
                 latch.countDown();
             }
