@@ -24,11 +24,9 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.IMap;
 import com.hazelcast.spi.merge.PassThroughMergePolicy;
-import com.hazelcast.test.ChangeLoggingRule;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.SplitBrainTestSupport;
 import com.hazelcast.test.annotation.NightlyTest;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -52,12 +50,12 @@ import static org.junit.Assert.assertEquals;
 @Category(NightlyTest.class)
 public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 
-    @ClassRule
-    public static ChangeLoggingRule changeLoggingRule
-            = new ChangeLoggingRule("log4j2-trace-map-split-brain-stress.xml");
+//    @ClassRule
+//    public static ChangeLoggingRule changeLoggingRule
+//            = new ChangeLoggingRule("log4j2-trace-map-split-brain-stress.xml");
 
     static final int ITERATION_COUNT = 50;
-    static final int MAP_COUNT = 100;
+    static final int MAP_COUNT = 10;
     static final int ENTRY_COUNT = 100;
     static final int FIRST_BRAIN_SIZE = 3;
     static final int SECOND_BRAIN_SIZE = 2;

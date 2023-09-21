@@ -68,7 +68,7 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
         try {
             DefaultRecordStore defaultRecordStore = (DefaultRecordStore) recordStore;
             defaultRecordStore.getMapDataStore().reset();
-            defaultRecordStore.getIndexingObserver().onDestroy(false, true);
+            defaultRecordStore.getIndexingObserver().onDestroy(false, true, false);
         } finally {
             recordStore.afterOperation();
         }
@@ -136,7 +136,8 @@ class MapSplitBrainHandlerService extends AbstractSplitBrainHandlerService<Recor
 
         store.beforeOperation();
         try {
-            ((DefaultRecordStore) store).destroyStorageAfterClear(false, true);
+            ((DefaultRecordStore) store).destroyStorageAfterClear(false,
+                    true, true);
         } finally {
             store.afterOperation();
         }
