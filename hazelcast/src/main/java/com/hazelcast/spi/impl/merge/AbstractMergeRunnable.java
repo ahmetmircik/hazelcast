@@ -130,8 +130,7 @@ public abstract class AbstractMergeRunnable<K, V, Store, MergingItem extends Mer
                     mergeStore(store, consumer);
                     consumer.consumeRemaining();
                 } finally {
-//                    asyncDestroyStores(singleton(store));
-                    splitBrainHandlerService.destroyStore(store);
+                    asyncDestroyStores(singleton(store));
                 }
             }
             mergedCount += consumer.mergedCount;
