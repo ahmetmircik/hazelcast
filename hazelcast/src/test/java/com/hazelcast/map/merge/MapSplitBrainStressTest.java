@@ -54,8 +54,8 @@ public class MapSplitBrainStressTest extends SplitBrainTestSupport {
 //    public static ChangeLoggingRule changeLoggingRule
 //            = new ChangeLoggingRule("log4j2-trace-map-split-brain-stress.xml");
 
-    static final int ITERATION_COUNT = 50;
-    static final int MAP_COUNT = 10;
+    static final int ITERATION_COUNT = 5;
+    static final int MAP_COUNT = 100;
     static final int ENTRY_COUNT = 100;
     static final int FIRST_BRAIN_SIZE = 3;
     static final int SECOND_BRAIN_SIZE = 2;
