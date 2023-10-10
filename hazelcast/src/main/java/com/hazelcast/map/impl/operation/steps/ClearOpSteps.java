@@ -22,6 +22,8 @@ import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+import com.hazelcast.map.impl.recordstore.StepAwareStorage;
+import com.hazelcast.map.impl.recordstore.Storage;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,6 +31,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
+import static com.hazelcast.map.impl.operation.steps.engine.AppendAsNewHeadStep.appendAsNewHeadStep;
 
 public enum ClearOpSteps implements IMapOpStep {
 
@@ -50,6 +53,10 @@ public enum ClearOpSteps implements IMapOpStep {
 
                 @Override
                 public void accept(Data dataKey, Record record) {
+                    if (keys.size() >= 1000) {
+                        return;
+                    }
+
                     if (lockedKeySet != null && !lockedKeySet.contains(dataKey)) {
                         keys.add(recordStore.isTieredStorageEnabled() ? toHeapData(dataKey) : dataKey);
                         records.add(record);
@@ -57,6 +64,8 @@ public enum ClearOpSteps implements IMapOpStep {
 
                 }
             }, false);
+
+            System.err.println(recordStore.getPartitionId() + "==> recordStore=" + recordStore.size() + ", keys=" + keys.size());
 
             state.setKeys(keys);
             state.setRecords(records);
@@ -102,6 +111,14 @@ public enum ClearOpSteps implements IMapOpStep {
 
         @Override
         public Step nextStep(State state) {
+            Storage storage = state.getRecordStore().getStorage();
+            if (!storage.isEmpty() && storage instanceof StepAwareStorage) {
+                Step[] currentStep = {CLEAR_MEMORY};
+                ((StepAwareStorage) storage)
+                        .addAsHeadStep(step
+                                -> currentStep[0] = appendAsNewHeadStep(currentStep[0], step));
+                return currentStep[0];
+            }
             return UtilSteps.FINAL_STEP;
         }
     };
