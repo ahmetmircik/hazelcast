@@ -52,6 +52,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     private final byte[] prefixByteArray;
 
     private EntryCostEstimator entryCostEstimator;
+    private long size = 0;
 
     public RocksDBStorage(RocksDB rocksDB, InternalSerializationService ss,
                           InMemoryFormat inMemoryFormat,
@@ -70,6 +71,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     public void put(Data key, R record) {
         try {
             rocksDB.put(toKeyWithPrefix(key), recordToByteArray(record));
+            size++;
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
@@ -109,6 +111,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     public void removeRecord(Data key, R record) {
         try {
             rocksDB.delete(toKeyWithPrefix(key));
+            size--;
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
@@ -163,13 +166,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
 
     @Override
     public int size() {
-        int count = 0;
-        Iterator<Map.Entry<Data, R>> iterator = mutationTolerantIterator();
-        while (iterator.hasNext()) {
-            iterator.next();
-            count++;
-        }
-        return count;
+        return (int) size;
     }
 
     @Override
@@ -185,10 +182,12 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
             Map.Entry<Data, R> next = iterator.next();
             try {
                 rocksDB.delete(toKeyWithPrefix(next.getKey()));
+                size--;
             } catch (RocksDBException e) {
                 throw new RuntimeException(e);
             }
         }
+
     }
 
     @Override
@@ -196,6 +195,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
         try {
             rocksDB.syncWal();
             rocksDB.close();
+            size = 0;
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
