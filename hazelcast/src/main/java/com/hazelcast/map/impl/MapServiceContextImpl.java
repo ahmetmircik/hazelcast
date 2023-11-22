@@ -36,6 +36,7 @@ import com.hazelcast.internal.util.collection.PartitionIdSet;
 import com.hazelcast.internal.util.comparators.ValueComparator;
 import com.hazelcast.internal.util.comparators.ValueComparatorUtil;
 import com.hazelcast.internal.util.executor.ManagedExecutorService;
+import com.hazelcast.jet.impl.util.ConcurrentMemoizingSupplier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.MapInterceptor;
 import com.hazelcast.map.impl.event.MapEventPublisher;
@@ -82,8 +83,14 @@ import com.hazelcast.spi.impl.eventservice.EventFilter;
 import com.hazelcast.spi.impl.eventservice.EventRegistration;
 import com.hazelcast.spi.impl.eventservice.EventService;
 import com.hazelcast.spi.impl.operationservice.Operation;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 
 import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -97,6 +104,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static com.hazelcast.internal.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.internal.util.Preconditions.checkPositive;
@@ -149,6 +157,9 @@ class MapServiceContextImpl implements MapServiceContext {
     private final ConcurrentMap<String, MapContainer> mapContainers = new ConcurrentHashMap<>();
     private final ExecutorStats offloadedExecutorStats = new ExecutorStats();
     private final AtomicReference<PartitionIdSet> cachedOwnedPartitions = new AtomicReference<>();
+    private final Supplier<RocksDB> dbSupplier = () -> createDB();
+    private final ConcurrentMemoizingSupplier<RocksDB> concurrentMemoizingSupplier
+            = new ConcurrentMemoizingSupplier<>(dbSupplier);
 
     /**
      * @see {@link MapKeyLoader#DEFAULT_LOADED_KEY_LIMIT_PER_NODE}
@@ -195,6 +206,33 @@ class MapServiceContextImpl implements MapServiceContext {
                     + "The intended usage for this flag is testing purposes.");
         }
     }
+
+    @Override
+    public RocksDB getRocksDB() {
+        return concurrentMemoizingSupplier.get();
+    }
+
+    private RocksDB createDB() {
+        RocksDB.loadLibrary();
+        final Options options = new Options();
+        options.setCreateIfMissing(true);
+
+        File parent = new File("hz/rocksDb");
+        File dbDir = new File(parent, "maps");
+        try {
+            Files.createDirectories(dbDir.getParentFile().toPath());
+            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+            RocksDB rocksDB = RocksDB.open(options, dbDir.getAbsolutePath());
+            logger.info("RocksDB initialized and ready to use");
+            return rocksDB;
+        } catch (IOException | RocksDBException ex) {
+            logger.severe(String.format("Error initializing RocksDB, check configurations and permissions, "
+                            + "exception: %s, message: %s, stackTrace: %s",
+                    ex.getCause(), ex.getMessage(), ex.getStackTrace()));
+            throw new RuntimeException(ex);
+        }
+    }
+
 
     @Override
     public boolean isForceOffloadEnabled() {

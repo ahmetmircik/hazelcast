@@ -29,7 +29,6 @@ import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.comparators.ValueComparator;
-import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.JsonMetadataInitializer;
 import com.hazelcast.map.impl.MapContainer;
@@ -46,6 +45,7 @@ import com.hazelcast.map.impl.record.RecordReaderWriter;
 import com.hazelcast.map.impl.recordstore.rocks.RocksDBStorage;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.wan.impl.CallerProvenance;
+import org.rocksdb.RocksDB;
 
 import javax.annotation.Nonnull;
 
@@ -180,8 +180,9 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
 
     public Storage createStorage(RecordFactory recordFactory, InMemoryFormat memoryFormat) {
         if (ROCKS) {
-            ILogger logger = mapContainer.getMapServiceContext().getNodeEngine().getLogger(getClass());
-            return new RocksDBStorage(serializationService, inMemoryFormat, mapContainer.getName(), partitionId, logger);
+            MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
+            RocksDB rocksDB = mapServiceContext.getRocksDB();
+            return new RocksDBStorage(rocksDB, serializationService, inMemoryFormat, mapContainer.getName(), partitionId);
         }
         return new StorageImpl(memoryFormat, getExpirySystem(), serializationService);
     }

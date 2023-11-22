@@ -24,7 +24,6 @@ import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.impl.HeapData;
 import com.hazelcast.internal.serialization.impl.ObjectDataInputStream;
 import com.hazelcast.internal.serialization.impl.ObjectDataOutputStream;
-import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.iterator.MapEntriesWithCursor;
 import com.hazelcast.map.impl.iterator.MapKeysWithCursor;
@@ -32,16 +31,13 @@ import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.Records;
 import com.hazelcast.map.impl.recordstore.LazyEvictableEntryView;
 import com.hazelcast.map.impl.recordstore.Storage;
-import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -53,56 +49,27 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     private final RocksDB rocksDB;
     private final InternalSerializationService ss;
     private final InMemoryFormat inMemoryFormat;
-    private final String mapName;
-    private final int partitionId;
-    private final ILogger logger;
-    private final String partitionFileName;
+    private final byte[] prefixByteArray;
 
     private EntryCostEstimator entryCostEstimator;
 
-    public RocksDBStorage(InternalSerializationService ss,
+    public RocksDBStorage(RocksDB rocksDB, InternalSerializationService ss,
                           InMemoryFormat inMemoryFormat,
-                          String mapName, int partitionId, ILogger logger) {
+                          String mapName, int partitionId) {
         this.ss = ss;
         this.inMemoryFormat = inMemoryFormat;
-        this.mapName = mapName;
-        this.partitionId = partitionId;
-        this.logger = logger;
         // TODO not supported for now
         this.entryCostEstimator = ZERO_SIZE_ESTIMATOR;
-        this.partitionFileName = PaddingUtil.leftPadUpToTenWithZero(partitionId);
+        String partitionFileName = partitionId + "_" + mapName;
+        this.prefixByteArray = partitionFileName.getBytes();
 
-        this.rocksDB = createDB();
-    }
-
-    private RocksDB createDB() {
-        RocksDB.loadLibrary();
-        final Options options = new Options();
-        options.setCreateIfMissing(true);
-
-        File parent = new File("hz");
-        String fileName = mapName + "_" + PaddingUtil.leftPadUpToTenWithZero(partitionId) + "_" + System.nanoTime();
-        File dbDir = new File(parent, fileName);
-        try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-
-            RocksDB rocksDB = RocksDB.open(options, dbDir.getAbsolutePath());
-            rocksDB.deleteFile(fileName);
-            logger.info("RocksDB initialized and ready to use");
-            return rocksDB;
-        } catch (IOException | RocksDBException ex) {
-            logger.severe(String.format("Error initializing RocksDB, check configurations and permissions, "
-                            + "exception: %s, message: %s, stackTrace: %s",
-                    ex.getCause(), ex.getMessage(), ex.getStackTrace()));
-            throw new RuntimeException(ex);
-        }
+        this.rocksDB = rocksDB;
     }
 
     @Override
     public void put(Data key, R record) {
         try {
-            rocksDB.put(key.toByteArray(), recordToByteArray(record));
+            rocksDB.put(toKeyWithPrefix(key), recordToByteArray(record));
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
@@ -113,7 +80,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
         record.setValue(inMemoryFormat == BINARY
                 ? ss.toData(value) : ss.toObject(value));
         try {
-            rocksDB.put(key.toByteArray(), recordToByteArray(record));
+            rocksDB.put(toKeyWithPrefix(key), recordToByteArray(record));
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
@@ -123,7 +90,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     @Override
     public R get(Data key) {
         try {
-            byte[] bytes = rocksDB.get(key.toByteArray());
+            byte[] bytes = rocksDB.get(toKeyWithPrefix(key));
             if (bytes == null) {
                 return null;
             }
@@ -139,9 +106,9 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
     }
 
     @Override
-    public void removeRecord(Data dataKey, R record) {
+    public void removeRecord(Data key, R record) {
         try {
-            rocksDB.delete(dataKey.toByteArray());
+            rocksDB.delete(toKeyWithPrefix(key));
         } catch (RocksDBException e) {
             throw new RuntimeException(e);
         }
@@ -149,13 +116,13 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
 
     @Override
     public boolean containsKey(Data key) {
-        return rocksDB.keyMayExist(key.toByteArray(), null);
+        return rocksDB.keyMayExist(toKeyWithPrefix(key), null);
     }
 
     @Override
     public Iterator<Map.Entry<Data, R>> mutationTolerantIterator() {
         RocksIterator rocksIterator = rocksDB.newIterator();
-        rocksIterator.seekToFirst();
+        rocksIterator.seek(prefixByteArray);
 
         return new Iterator<>() {
 
@@ -166,7 +133,7 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
 
             @Override
             public Map.Entry<Data, R> next() {
-                byte[] key = rocksIterator.key();
+                byte[] key = fromKeyWithPrefix(rocksIterator.key());
                 byte[] value = rocksIterator.value();
 
                 Data dataKey = new HeapData(key);
@@ -201,7 +168,6 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
         while (iterator.hasNext()) {
             iterator.next();
             count++;
-
         }
         return count;
     }
@@ -214,10 +180,14 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
 
     @Override
     public void clear(boolean isDuringShutdown) {
-        try {
-            rocksDB.deleteFile(partitionFileName);
-        } catch (RocksDBException e) {
-            throw new RuntimeException(e);
+        Iterator<Map.Entry<Data, R>> iterator = mutationTolerantIterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Data, R> next = iterator.next();
+            try {
+                rocksDB.delete(toKeyWithPrefix(next.getKey()));
+            } catch (RocksDBException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -287,5 +257,22 @@ public class RocksDBStorage<R extends Record> implements Storage<Data, R> {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private byte[] toKeyWithPrefix(Data key) {
+        byte[] keyByteArray = key.toByteArray();
+        byte[] concatenated = new byte[prefixByteArray.length + keyByteArray.length];
+        System.arraycopy(prefixByteArray, 0, concatenated, 0, prefixByteArray.length);
+        System.arraycopy(keyByteArray, 0, concatenated, prefixByteArray.length, keyByteArray.length);
+
+        return concatenated;
+    }
+
+    private byte[] fromKeyWithPrefix(byte[] response) {
+        int originalKeyLen = response.length - prefixByteArray.length;
+        byte[] extractedKey = new byte[originalKeyLen];
+        System.arraycopy(response, prefixByteArray.length, extractedKey, 0, originalKeyLen);
+
+        return extractedKey;
     }
 }

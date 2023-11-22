@@ -45,6 +45,7 @@ import com.hazelcast.query.impl.predicates.QueryOptimizer;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.spi.impl.eventservice.EventFilter;
 import com.hazelcast.spi.properties.HazelcastProperty;
+import org.rocksdb.RocksDB;
 
 import java.util.List;
 import java.util.Map;
@@ -274,5 +275,9 @@ public interface MapServiceContext extends MapServiceContextInterceptorSupport,
      */
     default boolean shouldEnableMerkleTree(MapConfig mapConfig, boolean log) {
         return false;
+    }
+
+    default RocksDB getRocksDB() {
+        throw new UnsupportedOperationException();
     }
 }
