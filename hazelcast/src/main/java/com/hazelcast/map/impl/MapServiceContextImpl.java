@@ -130,6 +130,8 @@ import static java.lang.Thread.currentThread;
 class MapServiceContextImpl implements MapServiceContext {
 
     private static final long DESTROY_TIMEOUT_SECONDS = 30;
+    private static final String ROCKS_PATH = System.getProperty("hz.use.rocks.path",
+            "/data/tiered-store");
 
     protected final ILogger logger;
     private final NodeEngine nodeEngine;
@@ -217,7 +219,7 @@ class MapServiceContextImpl implements MapServiceContext {
         final Options options = new Options();
         options.setCreateIfMissing(true);
 
-        File parent = new File("/data/tiered-store");
+        File parent = new File(ROCKS_PATH);
         File dbDir = new File(parent, "maps");
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());
