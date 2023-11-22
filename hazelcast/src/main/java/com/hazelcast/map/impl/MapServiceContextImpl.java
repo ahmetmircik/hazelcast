@@ -217,7 +217,7 @@ class MapServiceContextImpl implements MapServiceContext {
         final Options options = new Options();
         options.setCreateIfMissing(true);
 
-        File parent = new File("hz/rocksDb");
+        File parent = new File("/data/tiered-store");
         File dbDir = new File(parent, "maps");
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());
