@@ -134,6 +134,7 @@ public class BasicMapTest extends HazelcastTestSupport {
 
     @Before
     public void init() {
+        System.setProperty("hz.use.rocks", "true");
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(INSTANCE_COUNT);
         instances = factory.newInstances(() -> getConfig(), INSTANCE_COUNT);
     }
@@ -1646,6 +1647,8 @@ public class BasicMapTest extends HazelcastTestSupport {
         node1.shutdown();
 
         IMap<Integer, Integer> map3 = node2.getMap(mapName);
+
+        int size = map3.size();
 
         for (int i = 0; i < mapSize; i++) {
             EntryView<Integer, Integer> entryView = map3.getEntryView(i);

@@ -26,9 +26,10 @@ import com.hazelcast.internal.locksupport.LockSupportService;
 import com.hazelcast.internal.monitor.LocalRecordStoreStats;
 import com.hazelcast.internal.monitor.impl.LocalRecordStoreStatsImpl;
 import com.hazelcast.internal.serialization.Data;
-import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.Clock;
 import com.hazelcast.internal.util.comparators.ValueComparator;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.impl.EntryCostEstimator;
 import com.hazelcast.map.impl.JsonMetadataInitializer;
 import com.hazelcast.map.impl.MapContainer;
@@ -42,6 +43,7 @@ import com.hazelcast.map.impl.record.ObjectRecordFactory;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.record.RecordFactory;
 import com.hazelcast.map.impl.record.RecordReaderWriter;
+import com.hazelcast.map.impl.recordstore.rocks.RocksDBStorage;
 import com.hazelcast.spi.impl.NodeEngine;
 import com.hazelcast.wan.impl.CallerProvenance;
 
@@ -52,6 +54,8 @@ import javax.annotation.Nonnull;
  */
 abstract class AbstractRecordStore implements RecordStore<Record> {
 
+    private static final boolean ROCKS = Boolean.getBoolean("hz.use.rocks");
+
     protected final int partitionId;
     protected final String name;
     protected final LockStore lockStore;
@@ -61,7 +65,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     protected final ValueComparator valueComparator;
     protected final MapServiceContext mapServiceContext;
     protected final MapDataStore<Data, Object> mapDataStore;
-    protected final SerializationService serializationService;
+    protected final InternalSerializationService serializationService;
     protected final CompositeMutationObserver<Record> mutationObserver;
     protected final LocalRecordStoreStatsImpl stats = new LocalRecordStoreStatsImpl();
 
@@ -75,7 +79,7 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
         this.partitionId = partitionId;
         this.mapServiceContext = mapContainer.getMapServiceContext();
         NodeEngine nodeEngine = mapServiceContext.getNodeEngine();
-        this.serializationService = nodeEngine.getSerializationService();
+        this.serializationService = ((InternalSerializationService) nodeEngine.getSerializationService());
         this.inMemoryFormat = mapContainer.getMapConfig().getInMemoryFormat();
         this.valueComparator = mapServiceContext.getValueComparatorOf(inMemoryFormat);
         this.mapStoreContext = mapContainer.getMapStoreContext();
@@ -175,6 +179,10 @@ abstract class AbstractRecordStore implements RecordStore<Record> {
     }
 
     public Storage createStorage(RecordFactory recordFactory, InMemoryFormat memoryFormat) {
+        if (ROCKS) {
+            ILogger logger = mapContainer.getMapServiceContext().getNodeEngine().getLogger(getClass());
+            return new RocksDBStorage(serializationService, inMemoryFormat, mapContainer.getName(), partitionId, logger);
+        }
         return new StorageImpl(memoryFormat, getExpirySystem(), serializationService);
     }
 
