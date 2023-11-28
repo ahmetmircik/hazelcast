@@ -43,7 +43,6 @@ import javax.annotation.Nullable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -248,12 +247,11 @@ public abstract class SimpleTestInClusterSupport extends JetTestSupport {
     }
 
     @AfterClass
-    public static void supportAfterClass() throws Exception {
+    public static void supportAfterClass() {
         try {
             if (factory != null) {
                 SUPPORT_LOGGER.info("Terminating instance factory in SimpleTestInClusterSupport.@AfterClass");
-                spawn(() -> factory.terminateAll())
-                        .get(1, TimeUnit.MINUTES);
+                factory.terminateAll();
             }
         } catch (Exception e) {
             // Shutdown failed, get thread dump for debugging
