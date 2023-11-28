@@ -261,10 +261,6 @@ public abstract class SimpleTestInClusterSupport extends JetTestSupport {
             // otherwise it is only visible in surefire test report
             SUPPORT_LOGGER.warning("Terminating instance factory failed", e);
             throw e;
-        } finally {
-            factory = null;
-            instances = null;
-            client = null;
         }
     }
 
