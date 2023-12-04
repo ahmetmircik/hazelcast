@@ -48,6 +48,8 @@ public enum ClearOpSteps implements IMapOpStep {
             ArrayList<Data> keys = new ArrayList<>();
             ArrayList<Record> records = new ArrayList<>();
 
+            boolean tieredStorageEnabled = recordStore.isTieredStorageEnabled();
+
             // we don't remove locked keys. These are clearable records.
             final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
             Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
@@ -56,7 +58,7 @@ public enum ClearOpSteps implements IMapOpStep {
                 Data dataKey = entry.getKey();
                 Record record = entry.getValue();
                 if (isEmpty(lockedKeySet) || !lockedKeySet.contains(dataKey)) {
-                    keys.add(recordStore.isTieredStorageEnabled() ? toHeapData(dataKey) : dataKey);
+                    keys.add(tieredStorageEnabled ? toHeapData(dataKey) : dataKey);
                     records.add(record);
                 }
 
@@ -68,7 +70,10 @@ public enum ClearOpSteps implements IMapOpStep {
             }
 
             state.setKeys(keys);
-            state.setRecords(records);
+
+            if (!tieredStorageEnabled) {
+                state.setRecords(records);
+            }
         }
 
         @Override
