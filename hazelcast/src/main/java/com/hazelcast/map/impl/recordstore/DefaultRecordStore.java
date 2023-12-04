@@ -46,8 +46,6 @@ import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindQueue;
 import com.hazelcast.map.impl.mapstore.writebehind.WriteBehindStore;
 import com.hazelcast.map.impl.mapstore.writebehind.entry.DelayedEntry;
 import com.hazelcast.map.impl.operation.MapOperation;
-import com.hazelcast.map.impl.operation.steps.ClearOpSteps;
-import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.querycache.QueryCacheContext;
 import com.hazelcast.map.impl.querycache.publisher.MapPublisherRegistry;
 import com.hazelcast.map.impl.querycache.publisher.PublisherContext;
@@ -1644,9 +1642,5 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     @Override
     public boolean isTieredStorageEnabled() {
         return mapContainer.getMapConfig().getTieredStoreConfig().isEnabled();
-    }
-
-    public Step getClearOpStartingStep() {
-        return ClearOpSteps.CLEAR_MEMORY;
     }
 }

@@ -21,7 +21,6 @@ import com.hazelcast.map.impl.MapDataSerializerHook;
 import com.hazelcast.map.impl.operation.steps.ClearOpSteps;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
-import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.spi.impl.operationservice.BackupAwareOperation;
 import com.hazelcast.spi.impl.operationservice.MutatingOperation;
 import com.hazelcast.spi.impl.operationservice.Operation;
@@ -56,11 +55,7 @@ public class ClearOperation extends MapOperation
 
     @Override
     public Step getStartingStep() {
-        if (recordStore == null) {
-            return ClearOpSteps.CLEAR_MEMORY;
-        }
-
-        return ((DefaultRecordStore) recordStore).getClearOpStartingStep();
+        return ClearOpSteps.CLEAR_MEMORY;
     }
 
     @Override

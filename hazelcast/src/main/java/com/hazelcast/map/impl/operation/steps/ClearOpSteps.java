@@ -22,12 +22,15 @@ import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.record.Record;
 import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
+import com.hazelcast.map.impl.recordstore.RecordStore;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 
+import static com.hazelcast.internal.util.CollectionUtil.isEmpty;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 
 public enum ClearOpSteps implements IMapOpStep {
@@ -44,19 +47,25 @@ public enum ClearOpSteps implements IMapOpStep {
 
             ArrayList<Data> keys = new ArrayList<>();
             ArrayList<Record> records = new ArrayList<>();
+
             // we don't remove locked keys. These are clearable records.
-            recordStore.forEach(new BiConsumer<>() {
-                final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
-
-                @Override
-                public void accept(Data dataKey, Record record) {
-                    if (lockedKeySet != null && !lockedKeySet.contains(dataKey)) {
-                        keys.add(recordStore.isTieredStorageEnabled() ? toHeapData(dataKey) : dataKey);
-                        records.add(record);
-                    }
-
+            final Set<Data> lockedKeySet = recordStore.getLockStore().getLockedKeys();
+            Iterator<Map.Entry<Data, Record>> iterator = recordStore.iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Data, Record> entry = iterator.next();
+                Data dataKey = entry.getKey();
+                Record record = entry.getValue();
+                if (isEmpty(lockedKeySet) || !lockedKeySet.contains(dataKey)) {
+                    keys.add(recordStore.isTieredStorageEnabled() ? toHeapData(dataKey) : dataKey);
+                    records.add(record);
                 }
-            }, false);
+
+                if (records.size() == BATCH_SIZE) {
+                    // break at here after reaching batch, remaining
+                    // entries will be processed in next round
+                    break;
+                }
+            }
 
             state.setKeys(keys);
             state.setRecords(records);
@@ -102,6 +111,14 @@ public enum ClearOpSteps implements IMapOpStep {
 
         @Override
         public Step nextStep(State state) {
+            RecordStore recordStore = state.getRecordStore();
+            int currentSize = recordStore.size();
+            Set<Data> lockedKeySet = ((DefaultRecordStore) recordStore).getLockStore().getLockedKeys();
+            int lockedSize = lockedKeySet.size();
+            if (currentSize - lockedSize > 0) {
+                // we still have entries to process
+                return CLEAR_MEMORY;
+            }
             return UtilSteps.FINAL_STEP;
         }
     };
