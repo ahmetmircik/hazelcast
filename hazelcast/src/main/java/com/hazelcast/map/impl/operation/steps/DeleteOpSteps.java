@@ -38,10 +38,12 @@ public enum DeleteOpSteps implements IMapOpStep {
             state.setRecordExistsInMemory(record != null);
 
             if (record != null) {
-                Object oldValue = record.getValue();
-                oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
-                if (oldValue != null) {
-                    state.setOldValue(oldValue);
+                if(!mapContainer.getInterceptorRegistry().getInterceptors().isEmpty()){
+                    Object oldValue = mapServiceContext.toObject(record.getValue());
+                    oldValue = mapServiceContext.interceptRemove(mapContainer.getInterceptorRegistry(), oldValue);
+                    if (oldValue != null) {
+                        state.setOldValue(oldValue);
+                    }
                 }
             }
         }

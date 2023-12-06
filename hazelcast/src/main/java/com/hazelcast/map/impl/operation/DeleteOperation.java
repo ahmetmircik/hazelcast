@@ -53,7 +53,7 @@ public class DeleteOperation extends BaseRemoveOperation {
     @Override
     public void applyState(State state) {
         super.applyState(state);
-        success = state.getOldValue() != null;
+        success = state.isRecordExistsInMemory();
     }
 
     @Override
