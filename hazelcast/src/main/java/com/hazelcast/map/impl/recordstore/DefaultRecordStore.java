@@ -396,7 +396,7 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                 ? serializationService.toObject(value)
                 : serializationService.toData(value);
 
-        Iterator<Map.Entry<Data, Record>> entryIterator = storage.mutationTolerantIterator();
+        Iterator<Map.Entry<Data, Record>> entryIterator = iteratorForContainsValue();
         while (entryIterator.hasNext()) {
             Map.Entry<Data, Record> entry = entryIterator.next();
 
@@ -412,6 +412,10 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         }
 
         return false;
+    }
+
+    protected Iterator<Map.Entry<Data, Record>> iteratorForContainsValue() {
+        return storage.mutationTolerantIterator();
     }
 
     @Override

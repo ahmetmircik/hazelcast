@@ -155,7 +155,8 @@ public class State {
     }
 
     public State setOldValue(Object oldValue) {
-        this.oldValue = oldValue;
+        this.oldValue = operation.isTieredStoreOffloadEnabled()
+                ? operation.getMapContainer().getMapServiceContext().toData(oldValue) : oldValue;
         return this;
     }
 
