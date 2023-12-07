@@ -118,7 +118,7 @@ public enum MultipleEntryOpSteps implements IMapOpStep {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            RecordStore recordStore = state.getRecordStore();
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
 
             List<State> toStore = new ArrayList<>();
             List<State> toRemove = new ArrayList<>();
@@ -137,7 +137,7 @@ public enum MultipleEntryOpSteps implements IMapOpStep {
                 State singleKeyState = new State(state);
                 singleKeyState
                         .setKey(key)
-                        .setOldValue(record == null ? null : record.getValue())
+                        .setOldValue(record == null ? null : recordStore.copyToHeapForTS(record.getValue()))
                         .setEntryOperator(operator(state.getOperation(),
                                 state.getEntryProcessor(), state.getPredicate()));
 

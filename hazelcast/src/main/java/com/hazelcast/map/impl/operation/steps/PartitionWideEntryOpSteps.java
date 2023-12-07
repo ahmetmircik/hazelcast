@@ -26,6 +26,7 @@ import com.hazelcast.map.impl.operation.EntryOperator;
 import com.hazelcast.map.impl.operation.steps.engine.Step;
 import com.hazelcast.map.impl.operation.steps.engine.State;
 import com.hazelcast.map.impl.record.Record;
+import com.hazelcast.map.impl.recordstore.DefaultRecordStore;
 import com.hazelcast.map.impl.recordstore.RecordStore;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.IndexRegistry;
@@ -129,9 +130,10 @@ public enum PartitionWideEntryOpSteps implements IMapOpStep {
         }
 
         private void processInternal(State state, Data key, Record record) {
+            DefaultRecordStore recordStore = (DefaultRecordStore) state.getRecordStore();
             State singleKeyState = new State(state);
             singleKeyState
-                    .setKey(key)
+                    .setKey(((Data) recordStore.copyToHeapForTS(key)))
                     .setOldValue(record == null ? null : record.getValue())
                     .setEntryOperator(operator(state.getOperation(),
                             state.getEntryProcessor(), state.getPredicate()));
