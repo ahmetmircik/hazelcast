@@ -130,7 +130,7 @@ public enum PutAllOpSteps implements IMapOpStep {
     PROCESS() {
         @Override
         public void runStep(State state) {
-            RecordStore recordStore = state.getRecordStore();
+            DefaultRecordStore recordStore = ((DefaultRecordStore) state.getRecordStore());
             MapContainer mapContainer = recordStore.getMapContainer();
             MapServiceContext mapServiceContext = mapContainer.getMapServiceContext();
             boolean triggerMapLoader = state.isTriggerMapLoader();
@@ -153,7 +153,7 @@ public enum PutAllOpSteps implements IMapOpStep {
                 if (oldValue == null) {
                     Record record = recordStore.getRecord(entry.getKey());
                     if (record != null) {
-                        oldValue = record.getValue();
+                        oldValue = recordStore.copyToHeapForTS(record.getValue());
                     }
                 }
 

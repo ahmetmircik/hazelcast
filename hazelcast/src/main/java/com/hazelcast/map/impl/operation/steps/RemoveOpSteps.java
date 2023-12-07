@@ -106,8 +106,8 @@ public enum RemoveOpSteps implements IMapOpStep {
             if (record == null) {
                 return;
             }
-            recordStore.removeRecord0(state.getKey(), record, false);
             recordStore.onStore(record);
+            recordStore.removeRecord0(state.getKey(), record, false);
         }
 
         @Override
