@@ -355,29 +355,38 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void removeRecordStoresFromPartitionMatchingWith(Predicate<RecordStore> predicate,
-                                                            int partitionId,
-                                                            boolean onShutdown,
-                                                            boolean onRecordStoreDestroy) {
+    public final void removeRecordStoresFromPartitionMatchingWith(Predicate<RecordStore> predicate,
+                                                                  int partitionId,
+                                                                  boolean onShutdown,
+                                                                  boolean onRecordStoreDestroy) {
 
         PartitionContainer container = partitionContainers[partitionId];
         if (container == null) {
             return;
         }
 
-        Iterator<RecordStore> partitionIterator = container.getMaps().values().iterator();
-        while (partitionIterator.hasNext()) {
-            RecordStore partition = partitionIterator.next();
-            if (predicate.test(partition)) {
-                partition.beforeOperation();
+        List<RecordStore> removedRecordStores = new ArrayList<>();
+        Iterator<RecordStore> recordStoreIterator = container.getMaps().values().iterator();
+        while (recordStoreIterator.hasNext()) {
+            RecordStore recordStore = recordStoreIterator.next();
+            if (predicate.test(recordStore)) {
+                recordStore.beforeOperation();
                 try {
-                    partition.clearPartition(onShutdown, onRecordStoreDestroy);
+                    recordStore.clearPartition(onShutdown, onRecordStoreDestroy);
+                    removedRecordStores.add(recordStore);
                 } finally {
-                    partition.afterOperation();
+                    recordStore.afterOperation();
                 }
-                partitionIterator.remove();
+                recordStoreIterator.remove();
             }
         }
+
+        postProcessRemovedRecordStores(removedRecordStores, partitionId, onShutdown);
+    }
+
+    protected void postProcessRemovedRecordStores(List<RecordStore> removedRecordStores,
+                                                  int partitionId, boolean onShutdown) {
+        // NOP
     }
 
     @Override
