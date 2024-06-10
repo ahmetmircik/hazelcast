@@ -355,31 +355,44 @@ class MapServiceContextImpl implements MapServiceContext {
     }
 
     @Override
-    public void removeRecordStoresFromPartitionMatchingWith(Predicate<RecordStore> predicate,
-                                                            int partitionId,
-                                                            boolean onShutdown,
-                                                            boolean onRecordStoreDestroy) {
+    public final void removeRecordStoresFromPartitionMatchingWith(Predicate<RecordStore> predicate,
+                                                                  int partitionId,
+                                                                  boolean onShutdown,
+                                                                  boolean onRecordStoreDestroy) {
 
         PartitionContainer container = partitionContainers[partitionId];
         if (container == null) {
             return;
         }
 
-        Iterator<RecordStore> partitionIterator = container.getMaps().values().iterator();
-        while (partitionIterator.hasNext()) {
-            RecordStore partition = partitionIterator.next();
-            if (predicate.test(partition)) {
-                partition.beforeOperation();
+        List<RecordStore> removedRecordStores = new ArrayList<>();
+        Iterator<RecordStore> recordStoreIterator = container.getMaps().values().iterator();
+        while (recordStoreIterator.hasNext()) {
+            RecordStore recordStore = recordStoreIterator.next();
+            if (predicate.test(recordStore)) {
+                recordStore.beforeOperation();
                 try {
-                    partition.clearPartition(onShutdown, onRecordStoreDestroy);
+                    boolean empty = recordStore.isEmpty();
+
+                    recordStore.clearPartition(onShutdown, onRecordStoreDestroy);
+
+                    if (!empty) {
+                        removedRecordStores.add(recordStore);
+                    }
                 } finally {
-                    partition.afterOperation();
+                    recordStore.afterOperation();
                 }
-                partitionIterator.remove();
+                recordStoreIterator.remove();
             }
         }
+
+        postProcessNonEmptyRemovedRecordStores(removedRecordStores, partitionId, onShutdown);
     }
 
+    protected void postProcessNonEmptyRemovedRecordStores(List<RecordStore> removedRecordStores,
+                                                          int partitionId, boolean onShutdown) {
+        // NOP
+    }
     @Override
     public void removeWbqCountersFromMatchingPartitionsWith(Predicate<RecordStore> predicate,
                                                             int partitionId) {
