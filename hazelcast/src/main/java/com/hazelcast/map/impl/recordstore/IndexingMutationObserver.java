@@ -159,7 +159,7 @@ public class IndexingMutationObserver<R extends Record> implements MutationObser
             Object value = getValueOrCachedValue(record, ss);
             entry.init(dataKey, value);
             indexes.removeEntry(entry, Index.OperationSource.SYSTEM);
-        }, false);
+        }, false, true);
 
         Indexes.markPartitionAsUnindexed(partitionId, indexesSnapshot);
     }

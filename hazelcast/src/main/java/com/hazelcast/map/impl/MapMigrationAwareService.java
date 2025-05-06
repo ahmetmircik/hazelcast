@@ -337,7 +337,7 @@ class MapMigrationAwareService
                         QueryableEntry queryEntry = mapContainer.newQueryEntry(key, value);
                         queryEntry.setRecord(record);
                         CachedQueryEntry<?, ?> newEntry =
-                            cachedEntry == null ? (CachedQueryEntry<?, ?>) queryEntry : cachedEntry.init(key, value);
+                                cachedEntry == null ? (CachedQueryEntry<?, ?>) queryEntry : cachedEntry.init(key, value);
                         indexes.putEntry(newEntry, null, queryEntry, Index.OperationSource.SYSTEM);
                     }
                 }, false);
@@ -382,7 +382,7 @@ class MapMigrationAwareService
                     Object value = Records.getValueOrCachedValue(record, serializationService);
                     entry.init(key, value);
                     indexes.removeEntry(entry, Index.OperationSource.SYSTEM);
-                }, false);
+                }, false, true);
             } finally {
                 recordStore.afterOperation();
             }
