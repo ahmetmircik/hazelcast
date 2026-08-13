@@ -1,0 +1,483 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — OPTION E:
+ETCD-INFORMED DESIGN
+Design Document (companion to raft-async-snapshot-design.txt,
+raft-incremental-snapshot-design.txt, raft-snapshot-rqlite-informed-design.txt,
+raft-sqlite-state-store-design.txt)
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Date: 2026-08-12
+Status: Design (no implementation in this deliverable)
+
+Source basis (verified by reading the code of https://github.com/etcd-io/etcd,
+main branch at the time of writing; the classic v3.x model is used where main
+is mid-refactor):
+  - server/storage/backend/backend.go      (backend.Snapshot = bbolt read tx)
+  - server/etcdserver/server.go            (trigger/snapshot/compactRaftLog)
+  - server/etcdserver/snapshot_merge.go    (createMergedSnapshotMessage)
+  - server/etcdserver/api/rafthttp/http.go (snapshot receive handler)
+  - server/etcdserver/api/snap/snapshotter.go
+All line anchors in Appendix A were read from those files.
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary and verdict
+  1.  How etcd does it (verified)
+  2.  Comparison with my designs (Options A/B/C/D)
+  3.  Verdict: what to adopt
+  4.  Refined design (Option E — etcd-informed additions)
+  5.  API changes delta
+  6.  Tests and benchmarks delta
+  7.  Risks and open questions
+  8.  Appendix A — verified source anchors
+
+================================================================================
+0. EXECUTIVE SUMMARY AND VERDICT
+================================================================================
+
+etcd's snapshot design is the strongest real-world demonstration of the
+"capture a point-in-time view in O(1), then move the O(size) copy off the
+hot path" pattern — and it is the ONLY one of the three systems examined
+(rqlite/hashicorp, etcd) that puts the follower-side snapshot disk write
+off the Raft loop.
+
+The core mechanism (verified): the mvcc state machine is a BoltDB (bbolt)
+B-tree over an mmap'd file. Taking a snapshot is `db.Begin(false)` — a
+read-only transaction that references the current pages for free (mmap +
+page-level COW by the engine). The heavy `tx.WriteTo` page-copy happens
+elsewhere:
+  - on the leader's SEND path: inside a goroutine streaming through an
+    io.Pipe (bounded memory);
+  - on the follower's RECEIVE path: inside the HTTP snapshot handler
+    (off the Raft loop), then a small apply on the Raft loop.
+
+Three etcd ideas are advantageous beyond what Options A/C already have and
+should be adopted:
+
+  1. The two-tier snapshot split: a frequent, cheap in-memory raft-log
+     snapshot (every ~100 applied entries) that drives log compaction and
+     catch-up metadata, plus a rarer disk snapshot (every SnapshotCount).
+  2. The explicit "don't compact while a snapshot transfer is in flight"
+     rule with a catch-up-entry window (DefaultSnapshotCatchUpEntries = 5000),
+     so a slow follower is never starved of the entries right after the
+     snapshot it needs to resume.
+  3. The transfer-liveness monitor ("snapshotting taking too long to
+     transfer") — a cheap warning/metric when a snapshot view outlives its
+     budget.
+
+Two etcd behaviors must NOT be adopted:
+  - classic etcd's local disk-snapshot write ran ON the raft goroutine
+    (the known latency spike; main is removing it, cf. the v3.7 TODO) — my
+    off-thread persistence is strictly better;
+  - etcd streams the whole DB as one HTTP body (no per-chunk resumability);
+    Hazelcast's chunked one-per-RTT protocol stays.
+
+The single most important lesson to model: **an engine-level O(1) read
+transaction is the gold standard for the point-in-time capture** (etcd gets
+it from bbolt). Hazelcast's in-memory CPMap has no engine, so Option A's COW
+freeze and Option B's delta stream are the substitutes — and the two-tier
+split is exactly how to make the cheap tier (memory snapshot index) advance
+independently of the expensive tier (durable disk snapshot).
+
+================================================================================
+1. HOW ETCD DOES IT (VERIFIED)
+================================================================================
+
+1.1 The O(1) capture: a bbolt read transaction (backend.go:359-401)
+------------------------------------------------------------------
+  func (b *backend) Snapshot() Snapshot {
+      b.batchTx.Commit()            // flush the write buffer first
+      b.mu.RLock()
+      tx, err := b.db.Begin(false)  // bbolt READ-ONLY tx over mmap = O(1)
+      ...
+      return &snapshot{tx, stopc, donec}
+  }
+  - bbolt is an mmap'd B-tree; a read-only Tx references the current pages
+    with page-level copy-on-write, so capture is O(1) and needs no data
+    copy. Writers proceed concurrently; the read Tx keeps its own consistent
+    view for as long as it lives.
+  - The wrapper spawns a monitor goroutine that computes a warning timeout
+    from the DB size and a 100 MB/s assumed transfer rate, and warns if the
+    snapshot view lives longer ("snapshotting taking too long to transfer").
+    This bounds silent view pinning.
+
+1.2 Two-tier trigger (server.go:1204-1221, 112)
+-----------------------------------------------
+  - Disk snapshot: appliedi - diskSnapshotIndex > SnapshotCount (default
+    100,000) OR forceDiskSnapshot.
+  - Memory snapshot: appliedi - memorySnapshotIndex > memorySnapshotCount
+    (= 100) — the raft-log-level snapshot fires ~1000x more often, purely to
+    compact the in-memory log and refresh catch-up metadata. The disk
+    snapshot carries the DB payload; the memory snapshot does not.
+
+1.3 Raft-log-level snapshot + WAL truncation + catch-up window
+    (server.go:2072-2159)
+----------------------------------------------------------------
+  snapshot(ep, toDisk):
+    1. s.KV().Commit()                // make consistent_index durable FIRST
+    2. raftStorage.CreateSnapshot(appliedi, confState, membership) — O(1)
+       metadata snapshot (no mvcc payload)
+    3. if toDisk: SaveSnap (snap dir + WAL entry), Release (truncate WAL)
+  compactRaftLog(snapi):
+    - if inflightSnapshots != 0: SKIP compaction ("Pausing compaction
+      avoids triggering a snapshot sending cycle").
+    - else compact to snapi - SnapshotCatchUpEntries (default 5000):
+      keep a window of entries after the snapshot for slow followers.
+
+1.4 Send path (leader): O(1) capture + goroutine streaming (snapshot_merge.go)
+------------------------------------------------------------------------------
+  createMergedSnapshotMessage:
+    1. s.KV().Commit()
+    2. dbsnap := s.be.Snapshot()      // O(1) bbolt read tx
+    3. rc := newSnapshotReaderCloser(lg, dbsnap):
+         pr, pw := io.Pipe()
+         go func() { n, err := snapshot.WriteTo(pw); pw.CloseWithError(err) }()
+       -- the O(DB size) page copy streams in a GOROUTINE, bounded memory
+          (pipe backpressure), never on the raft loop.
+    4. the raft snapshot message carries raft metadata (limit: 64MB
+       snapshotLimitByte) and the DB stream as the request body.
+
+1.5 Receive path (follower): disk write OFF the raft loop (rafthttp/http.go:
+    208-311)
+---------------------------------------------------------------------------
+  snapshotHandler.ServeHTTP (HTTP handler goroutine, NOT the raft loop):
+    1. decode the metadata message (limit snapshotLimitByte = 64MB)
+    2. h.snapshotter.SaveDBFrom(r.Body, index)  -- streams the DB to a file
+       ON THE HTTP HANDLER GOROUTINE (O(DB size) disk I/O off the raft loop)
+    3. h.r.Process(m)  -- hands the snapshot to raft; the raft loop applies
+       it (swap backend via OpenSnapshotBackend) — small, bounded work.
+  This is the key contrast with hashicorp/raft (installSnapshot io.Copy on
+  the main loop) and it matches my design's off-thread follower persistence.
+
+1.6 Backpressure: pause compaction during an in-flight transfer
+    (server.go:2131-2139)
+----------------------------------------------------------------
+  While a snapshot is being sent, log compaction is suppressed so the
+  lagging follower can resume with AppendEntries right after the snapshot
+  instead of triggering another snapshot cycle. Combined with the
+  SnapshotCatchUpEntries window, this bounds both the retained log and the
+  transfer churn.
+
+1.7 Integrity and retention
+---------------------------
+  - Commit-before-capture (KV().Commit()) guarantees the backend's
+    consistent_index >= snapshot index before the snapshot is taken.
+  - verifyConsistentIndexIsLatest checks the snapshot's consistent index
+    before persisting.
+  - Retention: MaxSnapFiles + background purge goroutines (server.go:601-611);
+    startup cleanup of orphaned db.tmp files (snapshotter.go:241-245).
+
+================================================================================
+2. COMPARISON WITH MY DESIGNS (OPTIONS A/B/C/D)
+================================================================================
+
+  Aspect                     etcd                             My designs (A/B/C/D)
+  -------------------------  ------------------------------  ---------------------------
+  O(1) capture               bbolt read tx (mmap COW)        COW freeze handle (A),
+                             engine-guaranteed               delta stream (B)
+  Capture on hot path        raft loop: Begin(false) O(1)    raft thread: freeze O(1) /
+                                                             delta emit O(1)
+  Heavy copy off hot path    SEND: goroutine + io.Pipe;      worker thread (A, C);
+                             RECEIVE: HTTP handler goroutine writer (B)
+  Follower install off-      YES (HTTP handler)              YES (async store)
+  raft loop
+  Local disk snapshot on     classic v3.x: ON raft goroutine main moving it off
+  raft loop                  (known latency spike;           (v3.7 TODO drops it)
+                             my A/C strictly better)
+  Snapshot tiers             memory (x1000 frequent) +       single tier in A;
+                             disk (SnapshotCount)            B's durable S = the
+                                                             cheap tier advanced
+  Log truncation             after memory snapshot; keep     after durable publish (A);
+  ordering                   5000 catch-up entries; pause    incremental truncateUpTo (B);
+                             while snapshot inflight         keepAfter window (A 5.1)
+  Transfer                   single HTTP stream, no chunk   chunked one-per-RTT (A 3.6)
+                             resumability; 64MB metadata
+                             cap
+  Transfer progress          monitor goroutine + warning     none (add: 4.4)
+  monitoring
+  Integrity                  Commit-before-capture +         monotonicity + manifest (C);
+                             consistent-index check          checksums (B)
+  Backpressure               pause compaction on inflight   lag cap rejects appends (A 6)
+
+2.1 Where etcd is clearly better (adopt)
+----------------------------------------
+  E1 Two-tier snapshot split (1.2, 4.2): the cheap memory-snapshot index
+     advances frequently and independently of the expensive disk tier. This
+     is the natural fit for Hazelcast's ringbuffer: the memory tier (raft-log
+     snapshot metadata + ringbuffer truncation) need not wait for the durable
+     disk tier. Option B's durable S already is a two-tier split; Option A
+     can gain the cheap tier.
+  E2 Don't-compact-while-inflight + catch-up window (1.6, 4.3): an explicit
+     liveness rule my design had implicitly (keepAfter window) but did not
+     state as a transfer-coupled invariant.
+  E3 Transfer-liveness monitor (1.1, 4.4): cheap operational visibility for
+     pinned snapshot views.
+  E4 Integrity ordering: Commit/consistent-index BEFORE capture (4.5).
+  E5 Engine-agnostic proof that O(1) capture + off-thread copy is the
+     correct decomposition; and that the follower side CAN be off-thread
+     (1.5) — validating the part of my design that is strictly better than
+     hashicorp/raft.
+
+2.2 Where my designs are clearly better (do NOT adopt etcd's way)
+-----------------------------------------------------------------
+  A1 Off-thread LOCAL disk persistence (classic etcd blocked the raft
+     goroutine with SaveDB; my A/C never block it). Keep.
+  A2 Chunked, resumable transfer (etcd streams one HTTP body; a broken
+     transfer restarts the whole DB). Keep.
+  A3 Append backpressure via lag cap (etcd has none; a stalled store grows
+     the log unboundedly). Keep.
+  A4 Point-in-time isolation is explicit (etcd gets it free from bbolt;
+     CPMap has no engine). Keep the freeze/delta.
+
+================================================================================
+3. VERDICT: WHAT TO ADOPT
+================================================================================
+
+Adopt (cheap, high value, composes with Options A/B/C/D):
+  1. Two-tier snapshot split (memory tier vs disk tier), Section 4.2.
+  2. Inflight-snapshot compaction pause + catch-up window rule, Section 4.3.
+  3. Transfer-liveness monitor, Section 4.4.
+  4. Consistent-index-before-capture integrity ordering, Section 4.5.
+
+Do NOT adopt:
+  5. Blocking local SaveDB on the hot path (classic etcd; being removed).
+  6. Single-body un-chunked transfer.
+
+================================================================================
+4. REFINED DESIGN (OPTION E — ETCD-INFORMED ADDITIONS)
+================================================================================
+
+Option E is an additive refinement over Option A (async) / B (incremental) /
+C (rqlite-informed). It does not change the constant-time guarantees; it adds
+the two-tier cadence, the transfer-coupled truncation rule, and the liveness
+monitor.
+
+4.1 The capture contract, made structural (mirror bbolt semantics)
+------------------------------------------------------------------
+  The coordinator and services adopt the "read transaction" framing:
+      interface SnapshotView extends AutoCloseable {
+          long index();
+          // O(1) by contract: must only pin references/pages/generations.
+          // A violation (measured capture time over budget) is logged.
+          void close();
+      }
+  - Capture (Option A freeze / Option B delta) is the bbolt Begin(false)
+    analogue: it must not touch data, only pin the current generation.
+  - The coordinator enforces a capture budget metric
+    (raft.snapshot.capture.ms) and logs when it is exceeded (the observable
+    analogue of etcd's "return quickly" + the monitor warning).
+  - The pinned view's lifetime is bounded by the transfer-liveness monitor
+    (4.4).
+
+4.2 Two-tier snapshot split (the main etcd adoption)
+----------------------------------------------------
+  Two independent indexes, as etcd does:
+    - memorySnapshotIndex (cheap tier): advances frequently. On advance, the
+      Raft thread does bounded work ONLY: ringbuffer truncation +
+      SnapshotEntry metadata swap (index/term/members) — no payload, no disk.
+      Drives log compaction and catch-up metadata.
+    - diskSnapshotIndex (expensive tier): advances when a durable
+      publication completes (Option A publish / Option B durable S).
+  Cadence (etcd-informed): cheap tier every `snapshotMemoryAdvanceCount`
+    applied entries (etcd uses 100 vs 100,000 disk); disk tier every
+    commitIndexAdvanceCountToSnapshot (unchanged default 10,000) or on
+    backlog trigger (Option C 4.4).
+  Mapping to Hazelcast:
+    - The cheap tier replaces "no truncation until durable publish" with
+      "truncate the ringbuffer up to memorySnapshotIndex - keepAfter, but
+      keep the chunk payload (or a store ref) for the disk tier". This is
+      safe because Raft log truncation only needs index/term/members
+      consistency, which the memory tier has.
+    - Followers that need the PAYLOAD are served from the disk tier
+      (published snapshot or store view) — the memory tier never serves
+      payloads (same as etcd: the raft metadata snapshot carries no DB
+      payload; lagging followers get the DB from the disk snapshot).
+    - On restart, only the disk tier matters (load published snapshot +
+      WAL tail); the memory tier is rebuilt.
+  Interaction with Option B: durable S already advances per batch; make S
+  the cheap tier and add a rarer "disk consolidation" (reap/checkpoint) as
+  the disk tier — B's S + C's reaping = E's two tiers.
+
+4.3 Inflight-snapshot compaction pause + catch-up window
+--------------------------------------------------------
+  Rule (etcd server.go:2131-2139, 2142-2145), adopted explicitly:
+    - while a snapshot transfer is in flight (any follower's matchIndex <
+      served snapshot index), do NOT truncate the ringbuffer below
+      (servedSnapshotIndex + 1); the lagging follower must be able to resume
+      with AppendEntries right after the snapshot it received.
+    - after a snapshot at index S, retain at least
+      snapshotCatchUpEntries (new config, default = keepAfter window, etcd
+      uses 5000) entries after S for slow followers.
+  This replaces the implicit keepAfter rule with a transfer-coupled
+  invariant and prevents the "snapshot sending cycle" churn etcd observed.
+
+4.4 Transfer-liveness monitor
+-----------------------------
+  For every pinned SnapshotView (captured for a transfer) and every in-flight
+  generation, compute a budget from (estimated size / assumed transfer rate,
+  etcd uses 100 MB/s, floor 30 s) and:
+    - emit raft.snapshot.view.lifetime.ms / .pinned metrics;
+    - log a warning when the budget is exceeded ("snapshot view pinned for
+      too long"), and optionally abort the transfer (follower re-requests).
+  Runs on the worker; never on the Raft thread. Mirrors etcd's
+  "snapshotting taking too long to transfer" monitor (backend.go:369-398).
+
+4.5 Integrity ordering: consistent index before capture
+-------------------------------------------------------
+  etcd does KV().Commit() before Begin(false) so the snapshot's
+  consistent_index >= snapshot index, then verifies it
+  (verifyConsistentIndexIsLatest). Adopt:
+    - Option A: capture the committed index/term/members on the Raft thread
+      (already done); verify in the completion callback that the published
+      index == the captured committed index (monotonicity check becomes an
+      equality+monotonicity check).
+    - Option B: each delta batch carries its max op index; the durable S
+      record carries the same index; on publish, verify S == the last
+      committed delta index before the Raft thread advances.
+  This is a cheap belt-and-braces on top of Option C's manifest checksums.
+
+4.6 What stays (unchanged from A/B/C/D)
+---------------------------------------
+  - Off-thread generation, chunking, disk I/O, fsync, publication.
+  - Log truncation only after the relevant tier's durability (memory tier:
+    after capture; disk tier: after publish).
+  - Chunked one-per-RTT transfer; follower install off-thread; ack after
+    durable.
+  - Lag-cap append backpressure; bounded queue; bounded retained log.
+  - SQLite (Option D) composes unchanged: the disk tier maps to the
+    publication COMMIT; the cheap tier is pure memory.
+
+================================================================================
+5. API CHANGES DELTA
+================================================================================
+
+  - SnapshotCoordinator: two independent indexes (memorySnapshotIndex,
+    diskSnapshotIndex); inflight-pause rule (4.3); liveness monitor (4.4);
+    consistent-index verification (4.5).
+  - SnapshotView interface (4.1) + capture-budget metric.
+  - RaftLog: truncateUpTo already exists for the memory tier (Option B 4.2);
+    no new API.
+  - RaftAlgorithmConfig / properties:
+      snapshotMemoryAdvanceCount (cheap-tier cadence; default e.g. 100,
+        aligned with etcd's ratio to the disk tier)
+      snapshotCatchUpEntries (window after a snapshot; default = keepAfter
+        window, i.e. 0.1 * commitIndexAdvanceCountToSnapshot)
+      snapshotViewLifetimeBudgetSeconds (monitor; default off/derived)
+  - No wire-protocol changes; no service-level changes beyond A/B.
+
+================================================================================
+6. TESTS AND BENCHMARKS DELTA
+================================================================================
+
+  E1 memoryTierAdvancesWhileDiskStalls: disk publish stalled; assert
+     ringbuffer truncation advances with the memory tier up to the lag cap,
+     and Raft-op p99 stays flat (etcd two-tier regression test).
+  E2 inflightPausePreventsSnapshotCycle: follower being served a snapshot;
+     assert no compaction below (servedIndex + 1), and the follower resumes
+     via AppendEntries after install without re-triggering a snapshot.
+  E3 catchUpWindowRetained: after a snapshot, at least snapshotCatchUpEntries
+     entries remain for a slow follower; a follower lagging by <= the window
+     catches up without a second snapshot.
+  E4 viewLifetimeMonitor: pin a view past the budget; assert the warning +
+     metric are emitted and (optionally) the transfer aborts and the follower
+     re-requests.
+  E5 consistentIndexVerified: a fabricated snapshot with a mismatched
+     consistent index is rejected before publish.
+  E6 captureBudgetMetric: a service whose freeze violates the budget triggers
+     the metric/log (structural enforcement of the O(1) contract).
+  Benchmark: extend the Option C matrix with a "slow follower present" row;
+     assert the leader's memory-tier advance rate and disk-tier rate are
+     independent, and that probe-op p50/p95/p99/max are flat across
+     snapshot sizes and storage delays (unchanged acceptance criterion).
+
+================================================================================
+7. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 Two-tier truncation safety: truncating the ringbuffer on the memory
+     tier while the payload lives only in the disk tier requires that every
+     reader of log entries (AppendEntries, catch-up, getPreviousEntryTerm)
+     never needs entries <= memorySnapshotIndex. This is already true (the
+     snapshot entry carries term/index/members); must be asserted in tests
+     E1/E2.
+  R2 The cheap tier creates a window where the in-memory snapshot metadata is
+     ahead of the durable payload; a crash in that window loses only the
+     cheap tier (memory) — recovery falls back to the disk tier + WAL tail
+     (unchanged). Document this explicitly.
+  R3 The inflight pause could, in a pathological slow-follower case, grow the
+     retained log up to the lag cap; the existing cap still bounds it
+     (E2 asserts the bound).
+  OQ1 Ratio between memory and disk tier cadence: etcd uses ~1000x; for
+       Hazelcast, snapshotMemoryAdvanceCount=100 vs 10,000 default is the
+       same ratio — validate with the benchmark (too aggressive = ringbuffer
+       churn; too conservative = no benefit).
+  OQ2 Should the memory tier also update the SnapshotEntry payload when the
+       chunk list is already in memory (no disk yet)? Recommendation: no —
+       keep the memory tier metadata-only (matches etcd; avoids a second
+       "in-memory payload" retention path).
+  OQ3 Should the liveness monitor abort the transfer (strong) or only warn
+       (etcd behavior)? Recommend warn-first, abort as a config option.
+
+================================================================================
+8. APPENDIX A — VERIFIED SOURCE ANCHORS
+================================================================================
+
+etcd main (verified by reading the code):
+  - backend.Snapshot() = bbolt read-only tx, O(1):
+      server/storage/backend/backend.go:359-401
+      (db.Begin(false) at :364; monitor goroutine at :369-398)
+  - two-tier trigger:
+      shouldSnapshotToDisk (SnapshotCount) / shouldSnapshotToMemory
+      (memorySnapshotCount): server/etcdserver/server.go:1204-1221
+      memorySnapshotCount = 100: server.go:112
+      DefaultSnapshotCatchUpEntries = 5000: server.go:80-85
+  - snapshot(ep, toDisk): Commit -> CreateSnapshot -> SaveSnap -> Release:
+      server.go:2072-2126
+  - compactRaftLog: skip while inflightSnapshots != 0; compact to
+      snapi - SnapshotCatchUpEntries: server.go:2128-2159
+  - send path: createMergedSnapshotMessage + newSnapshotReaderCloser
+      (io.Pipe + goroutine WriteTo): server/etcdserver/snapshot_merge.go
+  - receive path: snapshotHandler.ServeHTTP -> SaveDBFrom(r.Body, index)
+      on the HTTP handler goroutine -> r.Process(m):
+      server/etcdserver/api/rafthttp/http.go:208-311
+      snapshotLimitByte = 64MB (metadata message cap): http.go:47-55
+  - retention: MaxSnapFiles purge (server.go:601-611); db.tmp orphan
+      cleanup (server/etcdserver/api/snap/snapshotter.go:241-245)
+
+Hazelcast anchors (this workspace):
+  - takeSnapshotIfCommitIndexAdvanced (the current single-tier trigger):
+      RaftNodeImpl.java:1128-1215
+  - ringbuffer truncation mechanics: RaftLog.java:322-353
+  - keepAfter window / log capacity: RaftNodeImpl.java:112, 161, 192
+  - chunked transfer / per-follower flow control:
+      RaftNodeImpl.java:762-822; ChunkedSnapshotInstaller.java
+  - consistent-index/committed-index capture at handle time:
+      Option A design (raft-async-snapshot-design.txt Section 3.3)
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  bbolt  BoltDB — Go embedded mmap'd B-tree KV store (etcd's engine); a read
+         transaction is an O(1) point-in-time view.
+  catch-up window The retained log entries after a snapshot that slow
+         followers still need (etcd's SnapshotCatchUpEntries).
+  COW    Copy-On-Write — page-level COW in mmap'd engines.
+  CPMap  A linearizable map in the CP subsystem (Hazelcast).
+  fsync  Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  inflight snapshot A snapshot transfer currently being served to a follower.
+  KV     Key-Value (etcd's data model).
+  memory tier / disk tier The two snapshot cadences (cheap in-memory index
+         vs rarer durable disk snapshot).
+  mmap   Memory-mapped file I/O (basis of read-transaction snapshots).
+  ms/MB  Millisecond / megabyte (metrics and sizes).
+  O(1)   Big O notation — per-step complexity claims.
+  p50/p95/p99/max Latency percentiles and maximum (benchmark acceptance).
+  RTT    Round-Trip Time — one chunk per RTT is the transfer flow control.
+  ringbuffer The ArrayRingbuffer backing RaftLog (in-memory log).
+  S      The durable snapshot index (Option B notation).
+  tx     Transaction (bbolt read/write transaction).
+  WAL    Write-Ahead Log — the durable mutation log.
+  E* / R* / OQ* Test, risk, and open-question ids (cross-referenced).
+
+================================================================================
+END OF DESIGN (OPTION E)
+================================================================================

@@ -1,0 +1,497 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — OPTION D:
+SQLITE-BASED RAFT STATE STORE?
+Design Document (companion to raft-async-snapshot-design.txt,
+raft-incremental-snapshot-design.txt, raft-snapshot-rqlite-informed-design.txt)
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Date: 2026-08-12
+Status: Design exploration (no implementation in this deliverable)
+
+Question being answered: "what if the RaftStateStore implementation were based
+on SQLite?" — i.e., does Hazelcast get the rqlite-style constant-time /
+incremental-snapshot benefits by building the persistence layer on an embedded
+SQL database, and what would that design look like?
+
+Verified source facts used below:
+  - rqlite store/log/log.go imports go.etcd.io/bbolt + rqlite/raft-boltdb:
+    the Raft LOG store is BoltDB; SQLite is the FSM (state machine), NOT the
+    log store.
+  - rqlite's incremental snapshots are SQLite-WAL checkpoints (snapshot/
+    DESIGN.md; store/store.go fsmSnapshot). The engine's WAL is what makes
+    O(recent-writes) snapshots possible.
+  - Hazelcast CP (this workspace) has no embedded-DB dependency; the
+    RaftStateStore interface is file-oriented (raftlog-<hex> files, snapshot
+    chunk files, members/term files).
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary and verdict
+  1.  Disambiguation: SQLite where? (rqlite = BoltDB log + SQLite FSM)
+  2.  Branch A — SQLite as the Raft log + metadata store
+  3.  Branch B — SQLite as the snapshot / incremental store
+  4.  Branch C — SQLite as the FSM (rqlite-style) — rejected
+  5.  What SQLite does NOT buy (the latency question)
+  6.  Concrete design: SQLite-backed RaftStateStore (hybrid A+B)
+  7.  Interaction with Options A/B/C
+  8.  Tests and benchmarks
+  9.  Risks and open questions
+ 10.  Appendix A — anchors
+
+================================================================================
+0. EXECUTIVE SUMMARY AND VERDICT
+================================================================================
+
+"SQLite-based RaftStateStore" can mean three very different things, and the
+answer differs for each:
+
+  A. SQLite as the LOG + METADATA store (persistEntry/deleteEntriesFrom/
+     persistTerm/persistInitialMembers/flushLogs on SQLite).
+     Viable but marginal: SQLite's transactionality helps metadata, but the
+     log hot path is where append-only files beat a B-tree, and a row insert
+     per entry adds cost. rqlite itself does NOT use SQLite here — it uses
+     BoltDB (verified).
+
+  B. SQLite as the SNAPSHOT / INCREMENTAL store (AsyncSnapshotStore and the
+     Option B incremental store on SQLite).
+     THIS is the compelling branch. SQLite's single atomic COMMIT replaces
+     the staging -> rename -> dir-fsync machinery with a transaction, makes
+     orphan cleanup and reaping trivial (rollback / DELETE), provides group
+     commit and WAL-mode read/write concurrency, and gives the incremental
+     store a natural durable index (last committed transaction = snapshot
+     index S). The FSM stays in-memory; nothing about the latency guarantee
+     depends on the engine.
+
+  C. SQLite as the FSM (state machine) — the actual rqlite design.
+     Rejected for Hazelcast CP. It is what makes rqlite's incremental
+     snapshots "free" (the engine maintains its own WAL), but the Hazelcast CP
+     datastructures (CPMap with Data keys and purge timestamps, fair
+     locks/semaphores with pending-request queues, session-based ownership)
+     are not a SQL workload; determinism across nodes would depend on SQLite
+     version/query-plan equality; and per-op throughput on in-memory state
+     would drop by orders of magnitude. The Hazelcast substitute for the
+     "engine WAL" is Option B's DeltaSink delta stream.
+
+The direct answer to the latency question: a SQLite store does NOT, by
+itself, make Raft-thread snapshot work constant-time. If generation and
+persistence still run synchronously on the Raft thread, SQLite just makes the
+fsync part of the stall. The async design (Option A) is what guarantees
+bounded Raft-thread work; SQLite only changes the durability mechanics
+(and can make them simpler and more crash-safe).
+
+Recommendation: adopt Branch B (SQLite as the snapshot/incremental store
+backend) behind the AsyncSnapshotStore/IncrementalSnapshotStore interfaces;
+keep Branch A to metadata only (or skip entirely — keep append-only log
+files); reject Branch C. All three coexist with Option C (rqlite-informed)
+unchanged.
+
+================================================================================
+1. DISAMBIGUATION: SQLITE WHERE?
+================================================================================
+
+rqlite is NOT "SQLite-based Raft". Its durable state has two halves:
+
+  - Raft LOG store: BoltDB (store/log/log.go imports go.etcd.io/bbolt and
+    rqlite/raft-boltdb). A B-tree keyed by log index — the classic
+    hashicorp/raft log store.
+  - FSM: SQLite. The state machine IS a SQLite database file. This is what
+    gives rqlite file-level consistency, a native WAL, checkpointing, and
+    O(recent-writes) incremental snapshots — properties that exist because
+    the DATABASE ENGINE maintains them, not because of Raft.
+
+Hazelcast CP has a different shape: the Raft log and the snapshot chunks are
+persisted by the platform (RaftStateStore: raftlog-<hex> files, snapshot
+chunk files, members/term files), and the STATE MACHINE (CPMap, AtomicLong,
+locks, semaphores, ...) is pure in-memory state owned by the services. There
+is no engine behind the FSM. So "SQLite-based RaftStateStore" in Hazelcast
+cannot mean "SQLite FSM" (there is no SQLite FSM) — it can only mean using
+SQLite as the persistence engine for the log/snapshot/metadata layer, unless
+we rebuild the state machine on SQLite (Branch C).
+
+The three branches below map exactly to this.
+
+================================================================================
+2. BRANCH A — SQLITE AS THE RAFT LOG + METADATA STORE
+================================================================================
+
+Mapping (RaftStateStore -> SQLite):
+  persistInitialMembers / persistTerm   -> rows in a metadata table; term +
+                                           votedFor updated in ONE transaction
+                                           (today they are separate files).
+  persistEntry(entry)                   -> INSERT INTO log(index, term,
+                                           payload) — a row per entry.
+  deleteEntriesFrom(start)              -> DELETE WHERE index >= start (one
+                                           transaction; gaps allowed by design).
+  flushLogs()                           -> SQLite commit (WAL mode; fsync is
+                                           SQLite's own, matching FlushTask
+                                           batching / flushedLogIndex gating).
+  open()/close()                        -> open DB, integrity_check, close.
+
+What SQLite gives here:
+  - Atomic metadata: term+votedFor can never be half-written (today they are
+    two files with a rename-order hazard).
+  - Crash consistency via SQLite's WAL/journal: no torn log entries, no
+    manual partial-record truncation on open (Section 6 of Option B).
+  - Deletion is a transaction: conflict-truncation and reaping cannot leave
+    partial state.
+
+What it costs:
+  - Per-entry row insert into a B-tree vs appending to a file: more CPU and
+    write amplification. The log hot path is exactly where append-only files
+    win; rqlite chose a B-tree (BoltDB) here, but BoltDB is a memory-mapped
+    B-tree tuned for this, and hashicorp/raft batches appends.
+  - Single-writer: SQLite allows one writer at a time. Hazelcast has many
+    partition threads; per-group DBs (one SQLite file per Raft group) are
+    required, otherwise writers from different groups contend on one file.
+  - New dependency + SQLite WAL/journal files alongside existing files; the
+    snapshot chunk payloads are NOT in this branch (they stay as files).
+
+Verdict: marginal net benefit. The only clearly positive piece is atomic
+metadata. A sensible middle ground: keep append-only files for log entries
+and chunk payloads, use SQLite only for the metadata + publication records
+(Branch B's bookkeeping). That is the hybrid in Section 6.
+
+================================================================================
+3. BRANCH B — SQLITE AS THE SNAPSHOT / INCREMENTAL STORE (THE COMPELLING ONE)
+================================================================================
+
+This branch uses SQLite for the durable snapshot layer — exactly the
+AsyncSnapshotStore (Option A) and the IncrementalSnapshotStore (Option B) —
+without touching the FSM.
+
+3.1 What it replaces (Option A)
+  Current (or designed) mechanics:
+    staging dir -> write chunks -> fsync -> atomic rename -> parent-dir fsync
+    + startup orphan sweep + reaping plan-file (rqlite's plan-execute).
+  With SQLite:
+    beginSnapshot   -> BEGIN (deferred)
+    persistChunk    -> INSERT chunk row (or external file + index row)
+    publishSnapshot -> COMMIT  = the atomic publication record
+                       (term, index, chunk list, checksums) is one row or a
+                       single transaction; COMMIT is atomic and durable.
+    abortSnapshot   -> ROLLBACK (nothing on disk — no orphaned staging)
+    deleteSnapshot  -> DELETE in a transaction (retention/reaping becomes
+                       trivial and inherently idempotent — no plan-execute
+                       machinery needed)
+    openSnapshot    -> SELECT metadata; stream payload rows/files
+  Consequences:
+    - The staging -> rename -> dir-fsync machinery (and its crash windows)
+      disappears. SQLite's commit protocol is the publication record.
+    - Orphan cleanup on open: nothing to sweep (uncommitted work is gone).
+    - Reaping: a DELETE transaction, crash-safe by construction.
+    - Group commit: SQLite WAL mode batches fsync; maps directly onto the
+      snapshot writer's group-commit design (Option B Section 3.4).
+
+3.2 What it replaces (Option B incremental store)
+    DeltaRecord        -> row in a deltas table
+    durable S          -> the index of the last committed transaction
+    bucket blocks      -> either BLOB columns (small buckets) or external
+                          block files with SQLite-managed metadata
+    compaction         -> background transaction that merges rows/rewrites
+                          blocks; crash mid-compaction = transaction rollback
+                          (the old data is intact — no REAP_PLAN file needed)
+    index checkpoints  -> the committed table state IS the checkpoint
+
+3.3 Payload storage: BLOB vs file
+    - 250 MB chunk BLOBs are awkward (SQLite large-BLOB inserts lock the
+      writer and defeat streaming). Recommended: keep chunk/block PAYLOADS
+      as external files (existing chunk framing, existing staging->rename for
+      the payload), and put ONLY the bookkeeping in SQLite: one row per
+      snapshot (term, index, chunk list + per-chunk checksums + file refs).
+      Publication = the row's COMMIT; payload files are referenced by it.
+      This is "SQLite for metadata and publication, files for bytes" — the
+      best of both: transactional atomic publish + zero BLOB-size problems.
+    - For the incremental store's small delta records, rows are natural.
+
+3.4 Concurrency
+    - SQLite WAL mode: one writer + concurrent readers. The snapshot writer
+      is the only writer per group; transfer re-reads (openSnapshot) are
+      readers. The MRSW concern from Option C largely disappears: SQLite's
+      WAL gives reader/writer concurrency for free.
+    - One SQLite file per Raft group (avoid cross-group writer contention).
+    - The Raft thread never touches the DB: begin/persist/publish all run on
+      the snapshot writer; the Raft thread only sees bounded callbacks.
+
+Verdict: adopt. This is the branch where SQLite genuinely simplifies and
+hardens the design, and it composes with everything in Options A/B/C.
+
+================================================================================
+4. BRANCH C — SQLITE AS THE FSM (RQLITE-STYLE) — REJECTED
+================================================================================
+
+This is the only branch that would give rqlite's actual benefit: the engine
+maintains its own WAL, so "snapshot" = "checkpoint the engine WAL" = O(recent
+writes), and incremental snapshots come almost for free. It is rejected for
+Hazelcast CP, with these reasons:
+
+  C1 The CP datastructures are not a SQL workload.
+     - CPMap: Data keys/values with purge timestamps, per-map config, atomic
+       per-key semantics — a table with (map, key, value, ts) rows works
+       mechanically, but every put/delete becomes a SQL statement.
+     - FencedLock / ISemaphore / ICountDownLatch: fair queues of pending
+       requests, session-based ownership, timeouts, raft-group scoping. These
+       have ordering/queue semantics that map poorly to SQL rows; they would
+       degrade into "serialize the whole registry as one BLOB per object" —
+       which is just Option B's block store, with extra layers.
+     - Raft group membership / leader terms are already handled by Raft, not
+       the FSM; no SQL benefit there.
+  C2 Determinism across nodes.
+     - Raft requires identical apply on all members. A SQLite FSM makes
+       determinism depend on identical SQLite versions, identical statement
+       plans, and identical vacuum/page behavior across the cluster. rqlite
+       accepts this (and pins versions) for a SQL workload; Hazelcast CP has
+       a stricter deterministic-replay contract and no user SQL, so this is
+       pure risk with no payoff.
+  C3 Throughput.
+     - In-memory ConcurrentHashMap per-op vs a SQL statement per op (even
+       prepared, with serialization) is an order-of-magnitude regression on
+       hot single-key CP maps and on every commit path.
+  C4 Format and restore compatibility.
+     - The current snapshot format is a logical chunk list of restore ops
+       (RestoreSnapshotOps with Data payloads). An SQLite FSM changes the
+       format and the restore path (SQL replay), complicating rolling
+       upgrades and cross-version restore.
+  C5 The FSM's in-memory model is load-bearing.
+     - applyLogEntries, restoreSnapshot, restoreSnapshotChunk, and the
+       datastructure services all assume in-memory registries with O(1)
+       point access. Rebuilding that on SQL breaks the CP subsystem's
+       core invariants for no latency benefit: the async design already keeps
+       the Raft thread constant-time; an SQLite FSM would not improve on it.
+
+The Hazelcast substitute for SQLite's engine WAL is Option B's DeltaSink
+delta stream: it is exactly the "incremental materialization source" that
+rqlite gets from the engine. Option B + Branch B (SQLite backend for the
+incremental store) is the Hazelcast analogue of "rqlite with SQLite" — without
+moving the state machine into the database.
+
+================================================================================
+5. WHAT SQLITE DOES NOT BUY (THE LATENCY QUESTION)
+================================================================================
+
+The acceptance criterion is: Raft-thread work in the snapshot lifecycle is
+bounded and independent of snapshot size and disk latency. SQLite changes
+WHERE durability is enforced, not WHO does the snapshot work:
+
+  - If generation + persist run synchronously on the Raft thread (today's
+    code), a SQLite store just moves the stall into SQLite's fsync/COMMIT.
+    Nothing is fixed.
+  - The async design (Option A) is what guarantees the property: capture
+    handles on the Raft thread (O(1)), persist on the worker, publish via a
+    bounded callback. This holds for ANY storage engine, SQLite or files.
+  - SQLite's contribution to latency is indirect and real but secondary:
+    group commit (batched fsync in the writer pipeline), WAL-mode
+    reader/writer concurrency (slow follower reads don't block new snapshot
+    writes), and a transactionally atomic publication record (no rename
+    stall windows). It improves the WRITER pipeline's throughput and crash
+    behavior; it does not create the constant-time guarantee.
+
+================================================================================
+6. CONCRETE DESIGN: SQLITE-BACKED RAFT STATE STORE (HYBRID A+B)
+================================================================================
+
+Scope: FSM stays in-memory (reject Branch C). The RaftStateStore and
+AsyncSnapshotStore/IncrementalSnapshotStore are implemented on one SQLite
+database per Raft group. Payload bytes stay in files; SQLite owns metadata,
+durability ordering, and atomic publication.
+
+6.1 Layout (per group directory)
+    - <group>/raft.db            SQLite database (metadata + publication +
+                                 delta records)
+    - <group>/raftlog-<hex>      append-only log entry files (UNCHANGED
+                                 from today; the log hot path stays append-
+                                 only — Branch A minimal)
+    - <group>/snap-<index>-<gen>.staging / .published   chunk payload files
+                                 (UNCHANGED staging->rename for payloads)
+    - SQLite WAL: raft.db-wal / raft.db-shm (SQLite-managed)
+
+6.2 Schema (illustrative)
+    metadata(term INT, voted_for BLOB, members BLOB, local_member BLOB) -- 1 row
+    publication(snap_index INT PRIMARY KEY, snap_term INT, generation INT,
+                 chunk_count INT, group_members BLOB, members_log_index INT,
+                 total_bytes INT, published_at INT)
+    snapshot_chunk(snap_index INT, chunk_number INT, term INT,
+                   file_ref TEXT, size INT, crc32 INT,
+                   PRIMARY KEY (snap_index, chunk_number))
+    -- Option B incremental:
+    delta_seq(seq INT PRIMARY KEY, op_index INT, service TEXT, object TEXT,
+              key BLOB, value BLOB, ts INT, kind INT)
+    durable_s(seq INT)                                     -- 1 row, S
+
+6.3 Durability mapping
+    - Log entries: unchanged append-only files; flushLogs via FlushTask as
+      today (SQLite not on the commit path for entries).
+    - Publication: the snapshot writer runs BEGIN; INSERT chunks (file refs +
+      checksums); COMMIT. COMMIT = durable publication record. The Raft
+      thread's completion callback fires only after COMMIT returns.
+    - Incremental deltas: writer batches DeltaRecords; COMMIT advances
+      durable_s; S = max(op_index) of the committed batch (Option B D5.x).
+    - synchronous=FULL for publication/delta commits; the log path keeps its
+      own file fsync cadence (unchanged).
+
+6.4 Concurrency and threads
+    - One DB per group; the snapshot writer is the only DB writer; WAL mode
+      lets openSnapshot (transfer reads) run concurrently.
+    - The Raft thread performs NO SQLite calls (bounded callbacks only).
+    - Cross-group: independent DBs -> no shared-writer contention.
+
+6.5 Atomic publication and retention
+    - publishSnapshot = COMMIT of the publication row; abortSnapshot =
+      ROLLBACK (no orphaned staging in SQLite; payload staging files still
+      use rename for the bytes and are swept on open as before, but the
+      authoritative record is the committed row).
+    - deleteSnapshot / reaping = DELETE transactions; inherently idempotent
+      (no plan-execute file needed — Section 4.2 of Option C).
+
+6.6 Failure model
+    - SQLITE_FULL (disk full) / I/O error during COMMIT -> publish future
+      fails -> abort + backoff retry (Option A Section 7 unchanged).
+    - SQLITE_BUSY: only if two writers race; per-group single-writer design
+      prevents it; a busy_timeout is set as a belt-and-braces.
+    - Corruption: SQLite integrity_check + foreign-key checks on open;
+      corruption -> store rebuilt from WAL (Option B Section 6) or from the
+      last valid publication.
+    - Crash mid-COMMIT: SQLite WAL recovery on open; either the old or the
+      new publication is visible — exactly the atomic-publish guarantee.
+
+6.7 Compatibility and migration
+    - On-disk format changes: snapshot metadata moves into SQLite; payload
+      files keep the existing chunk framing (format-compatible for restore).
+    - Migration on first open with the feature on: import the last valid
+      publication + chunk file refs into SQLite from the existing layout;
+      verify checksums; then run in SQLite mode.
+    - Rolling upgrade: flag-gated (cp.snapshot.store.sqlite.enabled); old
+      store reads the old layout; new store reads SQLite or migrates.
+    - Wire protocol: unchanged.
+
+6.8 Option C (rqlite-informed) interactions
+    - MRSW: SQLite WAL gives reader/writer concurrency natively; the read
+      lock in the store can become a WAL snapshot read. Simpler than the
+      custom MRSW.
+    - Manifest / fast restart: the publication row IS the manifest.
+    - Staging reuse on failure: ROLLBACK retains nothing — for payload files
+      the staged bytes can still be reused (chunk files are written before
+      the COMMIT; a failed COMMIT can re-COMMIT the same file refs).
+
+================================================================================
+7. INTERACTION WITH OPTIONS A/B/C (SUMMARY)
+================================================================================
+
+  Option A (async full snapshot): unchanged; AsyncSnapshotStore may be backed
+    by SQLite (Branch B). The constant-time guarantee is engine-independent.
+  Option B (incremental): unchanged; the incremental store may be backed by
+    SQLite (Branch B) — deltas as rows, S = committed transaction. The
+    DeltaSink SPI stays (it is the Hazelcast substitute for the engine WAL).
+  Option C (rqlite-informed): all five adoptions compose with a SQLite
+    backend; SQLite replaces the rename/plan-execute/MRSW machinery with
+    transactions and WAL-mode concurrency (Sections 4.2-4.3 of Option C
+    become simpler).
+  Option D (this doc): the storage engine choice for B; the FSM stays
+    in-memory.
+
+================================================================================
+8. TESTS AND BENCHMARKS
+================================================================================
+
+  D1 atomicPublicationViaCommit: kill the process between chunk writes and
+     COMMIT -> no publication row, no orphan payload state, old publication
+     intact; between COMMIT and callback -> publication durable, callback
+     fires on restart-completion path.
+  D2 sqliteBusyNeverOnRaftThread: openSnapshot streaming while the writer
+     commits; assert no SQLite call appears on the Raft thread and probe-op
+     p99 is flat.
+  D3 groupCommitBatching: N deltas -> fewer fsyncs than N (SQLite WAL group
+     commit); assert writer throughput and durable S advancement.
+  D4 reapingIsIdempotent: crash mid-reap (DELETE transaction) -> on open the
+     reaping completes or is a no-op; no partial snapshot list.
+  D5 corruptionRebuild: corrupt raft.db -> integrity_check fails -> store
+     rebuilt from WAL/publication; state machine unaffected (D5.3).
+  D6 migrationOnOpen: old layout -> SQLite layout migration preserves the
+     last valid snapshot and log tail; checksums verified.
+  Benchmark: reuse the Option C matrix; add a "SQLite backend vs file
+    backend" column for the same storage conditions; assert the Raft-op
+    p50/p95/p99/max curves are identical (engine must not change the
+    latency profile).
+
+================================================================================
+9. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 New dependency (SQLite JDBC + native lib) for the CP path: licensing
+     (SQLite is public domain; xerial JDBC is Apache-2.0), packaging
+     (native library per platform), and enterprise/OSS split (the store is
+     enterprise; OSS keeps NopRaftStateStore — the interface must not leak
+     SQLite).
+  R2 SQLite write amplification vs append-only files for chunk payloads:
+     mitigated by keeping payloads as files (Section 3.3) and SQLite for
+     bookkeeping only.
+  R3 WAL file growth: SQLite WAL grows until a checkpoint; the snapshot
+     writer should run wal_checkpoint after each publication to bound
+     raft.db-wal size.
+  R4 Single-writer is per group, but a node with hundreds of groups has
+     hundreds of DB files — file-descriptor and open cost; mitigate with
+     open-on-demand and a small LRU of DB handles.
+  R5 SQLite on a RAM-disk/network filesystem (NFS): SQLite assumes POSIX
+     locking + mmap semantics; document unsupported configs (same class of
+     caveat as the current file store).
+  OQ1 Should log entries move into SQLite too (Branch A full), or stay as
+       append-only files (recommended)? Recommend files; revisit only if
+       transactional conflict-truncation becomes a real pain point.
+  OQ2 Keep payload staging->rename, or switch payload writes to SQLite
+       incremental blob I/O? Recommend files (3.3); blobs only for the
+       small delta records of Option B.
+  OQ3 Should the publication row carry a full chunk-checksum list so the
+       manifest/restore verifies without re-reading payloads (Option C 4.5)?
+       Recommend yes; it doubles as the fast-restart manifest.
+
+================================================================================
+10. APPENDIX A — ANCHORS
+================================================================================
+
+  rqlite (verified):
+    - store/log/log.go: BoltDB log store (imports go.etcd.io/bbolt and
+      rqlite/raft-boltdb) — the log is NOT SQLite.
+    - store/store.go:2560-2736 fsmSnapshot (SQLite WAL checkpoint = full or
+      incremental snapshot); snapshot/DESIGN.md (MRSW, chains, reaping,
+      fingerprint).
+  Hazelcast (this workspace):
+    - RaftStateStore interface (log/metadata/snapshot contract):
+      RaftStateStore.java:33-175 (persistEntry 95, persistSnapshotChunk 136,
+      deleteSnapshotChunks 147, deleteEntriesFrom 164, flushLogs 173).
+    - Log file naming: RaftStateStore.java:35-41 (raftlog-, hex radix).
+    - RaftNodeImpl.flushTask / flushedLogIndex gating: RaftNodeImpl.java:
+      1687-1703, 1464.
+    - CP datastructures are in-memory: CPMapService.java (mapRegistries,
+      ConcurrentHashMap-backed), HeapCPMapStore.java (CHM + timestamps),
+      AbstractBlockingService.java (registry.cloneForSnapshot).
+  Related designs: raft-async-snapshot-design.txt (Option A),
+    raft-incremental-snapshot-design.txt (Option B, DeltaSink SPI),
+    raft-snapshot-rqlite-informed-design.txt (Option C adoptions).
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  bbolt  BoltDB — Go embedded mmap'd B-tree KV store (etcd's engine).
+  CHM    ConcurrentHashMap — the live CPMap store.
+  CP     Hazelcast's Raft-based linearizable "CP subsystem" (CAP theorem).
+  CPMap  A linearizable map in the CP subsystem.
+  Data   Hazelcast's binary serialized key/value type (immutable).
+  FSM    In the Go raft/rqlite ecosystem: the replicated state machine that
+         applies the log (SQLite in rqlite). Not "finite state machine".
+  fsync  Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  JDBC   Java Database Connectivity (the SQLite driver).
+  mmap   Memory-mapped file I/O (basis of read-transaction snapshots).
+  MRSW   Multi-Reader Single-Writer — rqlite's snapshot-store lock model.
+  NFS    Network File System (POSIX-locking caveat for embedded DBs).
+  O(1)   Big O notation — per-step complexity claims.
+  p50/p95/p99/max Latency percentiles and maximum (benchmark acceptance).
+  POSIX  Portable Operating System Interface (rename/fsync semantics).
+  S      The durable snapshot index of the incremental store.
+  seq    Sequence (delta-batch ordering in the SQLite schema).
+  SPI    Service Provider Interface — a pluggable extension contract.
+  SQL    Structured Query Language; SQLite = the embedded SQL database.
+  tx     Transaction (SQLite transaction = the atomic publication record).
+  WAL    Write-Ahead Log — the Raft log already IS the WAL in Hazelcast CP.
+  T*/D* / R* / OQ* Test, risk, and open-question ids (cross-referenced).
+
+================================================================================
+END OF DESIGN (OPTION D)
+================================================================================

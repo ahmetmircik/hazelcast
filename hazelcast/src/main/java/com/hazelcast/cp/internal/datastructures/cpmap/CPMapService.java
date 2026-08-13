@@ -25,9 +25,11 @@ import com.hazelcast.cp.internal.datastructures.cpmap.operation.CPMapOperationPr
 import com.hazelcast.cp.internal.datastructures.cpmap.operation.CPMapOperationProviderImpl;
 import com.hazelcast.cp.internal.datastructures.cpmap.proxy.CPMapProxy;
 import com.hazelcast.cp.internal.datastructures.cpmap.store.CPMapStore;
+import com.hazelcast.cp.internal.datastructures.cpmap.store.DeltaEmittingCPMapStore;
 import com.hazelcast.cp.internal.datastructures.snapshot.ChunkUtil;
 import com.hazelcast.cp.internal.datastructures.snapshot.DataChunkGroup;
 import com.hazelcast.cp.internal.datastructures.snapshot.KeyValueDataChunk;
+import com.hazelcast.cp.internal.datastructures.snapshot.SnapshotPipelineConfig;
 import com.hazelcast.cp.internal.datastructures.spi.RaftManagedService;
 import com.hazelcast.cp.internal.datastructures.spi.RaftRemoteService;
 import com.hazelcast.cp.internal.raft.ChunkedSnapshotAwareService;
@@ -64,6 +66,20 @@ public class CPMapService implements RaftManagedService, RaftRemoteService,
      */
     public static final String SERVICE_NAME = CPMapServiceUtil.SERVICE_NAME;
 
+    /**
+     * System property gate for the delta snapshot pipeline (redesign Option
+     * F): when enabled, every CP map store is wrapped with
+     * {@link DeltaEmittingCPMapStore}. Emission only happens when a
+     * {@link com.hazelcast.cp.internal.datastructures.snapshot.DeltaContext}
+     * is active on the applying thread, so the wrapping alone never changes
+     * behavior — the pipeline becomes active once the platform wires a
+     * {@link com.hazelcast.cp.internal.raft.impl.SnapshotPipeline} into
+     * {@code RaftIntegration.getSnapshotPipeline}.
+     */
+    private static boolean isDeltaSnapshotEnabled() {
+        return SnapshotPipelineConfig.isSnapshotEnabled();
+    }
+
     protected final NodeEngine nodeEngine;
 
     protected volatile RaftService raftService;
@@ -92,7 +108,32 @@ public class CPMapService implements RaftManagedService, RaftRemoteService,
                     r -> createCPMapRegistry(groupId));
         }
 
-        return registry.getMapStore(nodeEngine, objectName, cpSubsystemConfig);
+        CPMapStore store = registry.getMapStore(nodeEngine, objectName, cpSubsystemConfig);
+        if (isDeltaSnapshotEnabled()) {
+            // the overlay enables the async chunked snapshot generation: while
+            // captured, mutations are redirected to the registry overlay and
+            // the real store stays frozen for the off-thread scan
+            store = new DeltaEmittingCPMapStore(CPMapServiceUtil.SERVICE_NAME, objectName, store,
+                    registry.snapshotOverlay());
+        }
+        return store;
+    }
+
+    @Override
+    public Object captureSnapshot(@Nonnull CPGroupId groupId, long commitIndex) {
+        CPMapRegistry registry = mapRegistries.get(groupId);
+        if (registry == null || !registry.captureSnapshot()) {
+            return null;
+        }
+        return registry;
+    }
+
+    @Override
+    public void finishSnapshotCapture(@Nonnull CPGroupId groupId) {
+        CPMapRegistry registry = mapRegistries.get(groupId);
+        if (registry != null) {
+            registry.finishSnapshotCapture();
+        }
     }
 
     protected CPMapRegistry createCPMapRegistry(@Nonnull CPGroupId groupId) {

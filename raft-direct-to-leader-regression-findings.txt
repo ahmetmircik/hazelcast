@@ -1,0 +1,345 @@
+================================================================================
+INVESTIGATION REPORT
+Raft client-side direct-to-leader routing: stale known-leader cache never invalidated
+Repository: /Users/ahmet.mircik/ai_cp/hazelcast
+Date: 2026-08-11
+================================================================================
+
+TABLE OF CONTENTS
+  1. Summary
+  2. Relevant execution flow and cache lifecycle
+  3. The behavioral change that introduced the regression
+  4. Concrete reproduction scenario
+  5. Root cause
+  6. Alternatives evaluated
+  7. Recommended fix (implemented)
+  8. Tests added and verification results
+  9. Changed files
+
+================================================================================
+1. SUMMARY
+================================================================================
+
+A leader cached in CPGroupViewTracker is never invalidated when that leader
+shuts down or is removed from the CP group. All Raft invocations keep being
+routed to the same unavailable endpoint instead of falling back to round-robin
+routing across the remaining group members. The regression was introduced when
+the direct-to-leader routing refactor replaced the OSS response-based leader
+learning/failure-based invalidation with a view-publication model that is not
+functional in this codebase. The fix restores the two OSS mechanisms:
+(1) reset the cached leader when a CPSubsystemException arrives without a
+usable leader UUID, and (2) learn the leader from every successful response.
+
+================================================================================
+2. RELEVANT EXECUTION FLOW AND CACHE LIFECYCLE
+================================================================================
+
+The cache (CPGroupViewTracker)
+-----------------------------
+CPGroupViewTracker holds a ConcurrentHashMap<CPGroupId, GroupState>; GroupState
+stores {leader, followers, term}. Only 'leader' is used for routing. Lifecycle:
+
+  Operation                     Trigger                                      Effect
+  ----------------------------  -------------------------------------------  ------------------------
+  setLastKnownLeader(id, ldr)   RaftInvocationContext.setKnownLeaderIfPresent Upserts a temp entry
+                                (called from failure handling)                (term=-1, empty followers)
+  setLastKnownLeader(id, null)  RaftInvocationContext.resetKnownLeader(...)   Removes the entry
+  getLastKnownLeader(id)        RaftInvocation.getTargetEndpoint()            Returns cached leader or
+                                                                              null -> round-robin
+  onCPMemberRemoved(member)     local RaftService.removeCPMember(...)         Clears entries whose
+                                                                              leader == removed member
+  onCPGroupDestroyed(id)/reset  group destroy / RaftService.reset()           Removes entry / clears map
+
+The routing loop (RaftInvocation)
+---------------------------------
+1. getTargetEndpoint():
+     - if getLastKnownLeader(groupId) != null -> ALWAYS send to the cached leader
+     - otherwise advance a per-invocation MemberCursor (round-robin over the
+       membersContainer member list)
+2. On failure, onException(t) -> RaftInvocationContext.updateKnownLeaderOnFailure(groupId, t):
+     - CPSubsystemException with a leader UUID          -> cache that leader
+     - TargetNotMemberException/MemberLeftException/
+       RetryableIOException                             -> reset cache
+     - any OTHER CPSubsystemException (leader UUID unknown) -> NOTHING  <-- the bug
+3. On success, notifyNormalResponse(...) -> in the current code, NOTHING   <-- second gap
+4. If the invocation gets no response at all, InvocationMonitor heartbeat/call
+   timeout -> complete(HEARTBEAT_TIMEOUT) -> cache is never touched, no retry
+   (non-blocking ops) or handleRetry re-invokes the same cached dead endpoint
+   (blocking ops).
+
+Therefore, in the current code the cache is populated ONLY by failures that
+carry a leader UUID, and invalidated ONLY by member-left / not-member /
+write-failure errors, the local removeCPMember callback, group destroy, and
+RaftService.reset(). Nothing refreshes or invalidates it when the leader
+becomes unavailable or is removed.
+
+================================================================================
+3. THE BEHAVIORAL CHANGE THAT INTRODUCED THE REGRESSION
+================================================================================
+
+The local git history is a shallow snapshot of an integrated OSS+enterprise
+workspace, so there is no recoverable commit SHA here. The change is
+identifiable by diffing against the last OSS baseline: commit f2fa6ae842
+(parent of f778999d3e, "Move CP subsystem from Open Source to Enterprise
+Repository [HZ-4060] (#1178)", 2024-04-03). The OSS baseline (battle-tested
+since 2018) had BOTH mechanisms that the enterprise direct-to-leader refactor
+removed:
+
+    // OSS RaftInvocation.notifyNormalResponse
+    super.notifyNormalResponse(value, expectedBackups);
+    raftInvocationContext.setKnownLeader(groupId, lastInvocationEndpoint);   // response-based learning
+
+    // OSS RaftInvocationContext.updateKnownLeaderOnFailure
+    if (cause instanceof CPSubsystemException) {
+        if (!setKnownLeader(groupId, getCPMember(e.getLeaderUuid()))) {
+            resetKnownLeader(groupId);   // reset when the leader UUID is unknown
+        }
+    }
+
+The enterprise direct-to-leader work (which introduced CPGroupViewTracker,
+ClientCPGroupViewService, CPClientProxy, CPGroupViewListenerService) replaced
+this with a view-publication model - receiveUpdateForLedGroups on the client
+side, and (on the member side) CPGroupsSnapshot publications consumed via
+RaftService.receivePreJoinSnapshot(...). During that refactor:
+
+  1. notifyNormalResponse lost its setKnownLeader(groupId, lastInvocationEndpoint) call.
+  2. updateKnownLeaderOnFailure deliberately stopped resetting on
+     unknown-leader failures ("do not reset the known leader, only overwrite
+     if we know who the new leader is").
+  3. The view-publication path that was supposed to keep the tracker fresh is
+     not wired in this workspace: RaftService.currentGroupsSnapshot() returns
+     CPGroupsSnapshot.EMPTY and receivePreJoinSnapshot(...) is an empty no-op.
+
+Result: no mechanism refreshes or invalidates the cache when the leader
+becomes unavailable or is removed, so the cache goes stale indefinitely.
+
+================================================================================
+4. CONCRETE REPRODUCTION SCENARIO
+================================================================================
+
+CP-member removal (cleanest; reproduced in the integration test):
+  1. Cluster of 5 CP members; a "test" group of 3.
+  2. Member M (a CP member, reachable, but not in the "test" group) is cached
+     as the known leader in the tracker of another member via
+     setLastKnownLeader(groupId, M).
+  3. removeCPMember(M.uuid) - M is removed from the CP subsystem but stays
+     alive as a cluster member; its raft nodes are terminated.
+  4. Invocation for "test" -> routed to M -> RaftReplicateOp.run() ->
+     getOrInitRaftNode(groupId) == null -> NotLeaderException(groupId, local, null)
+     - NO leader UUID.
+  5. updateKnownLeaderOnFailure: CPSubsystemException branch ->
+     setKnownLeaderIfPresent(groupId, getCPMember(null)) -> no-op -> cache keeps M.
+  6. Retry -> getTargetEndpoint() -> M again -> same NotLeaderException -> ...
+     up to 250 retries (DEFAULT_TRY_COUNT) with progressive pauses, then the
+     invocation fails; the NEXT invocation repeats the whole cycle.
+
+Leader shutdown behaves similarly in the stale-connection window (packet
+written into a half-open connection, no response -> heartbeat timeout -> cache
+untouched -> next invocation re-targets the dead leader until the member-list
+update finally produces TargetNotMemberException / MemberLeftException).
+
+Leader shutdown/election (old leader alive but not leader) converges today only
+when the old leader knows the successor (NotLeaderException with a UUID);
+during an election or on a stepped-down node the response carries no UUID and
+the cache sticks.
+
+Can it retry indefinitely?
+--------------------------
+Per-invocation retries are capped (250 retries, ~500 ms max pause), but there
+is no cross-invocation bound: every new invocation re-targets the stale
+leader, so the outage persists until an unrelated event (member-list change,
+connection-close write failure) happens to reset the cache.
+
+================================================================================
+5. ROOT CAUSE
+================================================================================
+
+RaftInvocationContext.updateKnownLeaderOnFailure no longer resets the known
+leader when a CPSubsystemException arrives WITHOUT a usable leader UUID,
+combined with the removal of response-based leader learning from
+RaftInvocation.notifyNormalResponse.
+
+A NotLeaderException / LeaderDemotedException / StaleAppendRequestException /
+CPLeaderSteppingDownException with getLeaderUuid() == null is the NORMAL
+response from any member that is not (or no longer) the leader and does not
+yet know the successor - exactly the signal that "my cached leader is wrong /
+unavailable, fall back to round-robin." The current code treats it as "keep
+hammering the cached endpoint", and the intended replacement (view publication
+via receiveUpdateForLedGroups / receivePreJoinSnapshot) is not functional in
+this codebase.
+
+Where NotLeaderException(null) comes from:
+  - RaftReplicateOp.run(): raft node null (member not in group / node
+    terminated, e.g. after CP-member removal) -> NotLeaderException(groupId, local, null)
+  - RaftReplicateOp.run(): raft node STEPPED_DOWN -> NotLeaderException(groupId, local, null)
+  - Election in progress (leader unknown)
+  - Metadata-group check path (sendResponseAfterMetadataCheck)
+
+================================================================================
+6. ALTERNATIVES EVALUATED
+================================================================================
+
+A) Clear the cached leader when an invocation to it fails in a way that
+   indicates it is unavailable or no longer the leader.
+   - Correct invalidation, but loses the direct-to-leader benefit: after every
+     reset the cache stays empty and every invocation round-robins until a
+     failure re-learns the leader. Needs B to converge to "direct" again.
+
+B) Restore known-leader updates in notifyNormalResponse (response-based
+   learning).
+   - Correct learning but does not fix invalidation: a dead cached leader
+     never responds, so nothing ever resets it. Must be combined with A.
+
+C) Clear the cached leader when a group view shows the endpoint is no longer a
+   group member.
+   - onCPMemberRemoved already covers the LOCAL removeCPMember caller; other
+     members only get the stale view. View publications are event-driven with
+     lag, and in this workspace currentGroupsSnapshot()/receivePreJoinSnapshot()
+     are empty/no-op, so this cannot be the primary mechanism today. Keep as a
+     complementary, future enhancement.
+
+D) Rely on / restore leader information published through
+   receiveUpdateForLedGroups.
+   - This is the enterprise design intent, but it is not functional in this
+     codebase, and publications are not real-time (a leader change is reflected
+     only on the next view event). Response/failure signals are immediate and
+     per-invocation.
+
+E) Combine response-based leader discovery with explicit invalidation on
+   failures and membership changes (RECOMMENDED).
+   - Converges on the first failure response; re-learns on the first success;
+     bounded retries; term/staleness safe because a successful response can
+     only come from the current leader, and an unknown-leader failure is
+     exactly "leader unknown". Compatible with rolling upgrades: restores the
+     pre-existing OSS behavior, changes no wire protocol, keeps the
+     CPGroupViewTracker API intact (term-aware view updates can later
+     supersede it).
+
+Design note for real enterprise code: if/when view publications populate the
+tracker with real {leader, followers, term}, setLastKnownLeader (temp term=-1)
+should not downgrade a higher-term published state - worth guarding in
+CPGroupViewTracker when the publication path is restored. Not needed in this
+workspace (nothing publishes), left untouched per surgical-change discipline.
+
+================================================================================
+7. RECOMMENDED FIX (IMPLEMENTED)
+================================================================================
+
+A. Failure-based invalidation - RaftInvocationContext.updateKnownLeaderOnFailure:
+
+   boolean setKnownLeaderIfPresent(CPGroupId groupId, CPMember leader) {
+       if (leader != null) {
+           logger.fine("Setting known leader for raft: %s to %s", groupId, leader);
+           raftService.getGroupViewTracker().setLastKnownLeader(groupId, leader);
+           return true;
+       }
+       return false;
+   }
+
+   void updateKnownLeaderOnFailure(CPGroupId groupId, Throwable cause) {
+       if (cause instanceof CPSubsystemException e) {
+           // If the failure tells us who the new leader is, update the known leader.
+           // Otherwise, the current leader is unknown, e.g. an election is in progress,
+           // the previous leader has left the group, or the responding node is a
+           // stepped-down leader that does not yet know its successor. In that case the
+           // cached leader is stale or unavailable, so we must reset it and let
+           // invocations fall back to round-robin routing across the group members until
+           // the new leader is discovered.
+           if (!setKnownLeaderIfPresent(groupId, getCPMember(e.getLeaderUuid()))) {
+               resetKnownLeader(groupId);
+           }
+       } else if (cause instanceof TargetNotMemberException
+               || cause instanceof MemberLeftException
+               || cause instanceof RetryableIOException) {
+           resetKnownLeader(groupId);
+       }
+   }
+
+   An unknown leader is by definition an unusable cache entry; resetting forces
+   round-robin until the new leader is discovered.
+
+B. Response-based learning - RaftInvocation.notifyNormalResponse:
+
+   @Override
+   void notifyNormalResponse(Object value, int expectedBackups) {
+       assert !(value instanceof Throwable) : "Throwable value " + value + " not allowed";
+
+       super.notifyNormalResponse(value, expectedBackups);
+       // A successful response can only come from the leader of the group, so learn
+       // it as the known leader for direct-to-leader routing. This keeps the cache
+       // fresh after leadership changes and re-populates it after a cache reset.
+       raftInvocationContext.setKnownLeaderIfPresent(groupId, lastInvocationEndpoint);
+   }
+
+   Only the group leader can respond successfully to a Raft replicate/query op,
+   so the responder is always a valid leader. This re-populates the cache after
+   a reset and keeps it fresh across leadership changes, preserving the
+   direct-to-leader performance benefit.
+
+================================================================================
+8. TESTS ADDED AND VERIFICATION RESULTS
+================================================================================
+
+Unit tests
+----------
+- CPGroupViewTrackerTest (7 tests) - cache lifecycle: set/get/replace, null
+  reset, onCPMemberRemoved (leader vs non-leader), onCPGroupDestroyed, reset.
+- RaftInvocationContextKnownLeaderTest (6 tests) - updateKnownLeaderOnFailure
+  semantics: leader UUID present -> update; NULL leader UUID -> reset; unknown
+  UUID -> reset; MemberLeftException / TargetNotMemberException /
+  RetryableIOException -> reset.
+  (The two reset-on-unknown tests FAIL without the fix.)
+
+Integration tests - RaftInvocationKnownLeaderTest (4 tests, real 5-member
+clusters):
+  1. when_invocationSucceeds_then_knownLeaderIsLearned
+     - response-based learning (covers the notifyNormalResponse restore).
+  2. when_cachedLeaderIsStale_then_invocationDiscoversNewLeader
+     - stale reachable non-leader cached -> NotLeaderException -> recovery and
+       tracker converges to the real leader (leadership change / old-leader-alive).
+  3. when_cachedLeaderShutsDown_then_invocationRecoversViaNewLeader
+     - leader terminated -> cache invalidated -> invocations recover via the
+       newly elected leader (leader shutdown).
+  4. when_cachedLeaderIsRemovedFromCPGroup_then_invocationRecovers
+     - alive member removed from the CP subsystem -> responds NotLeaderException
+       with NO leader UUID -> WITHOUT the fix this test FAILS with
+       "NotLeaderException ... Known leader is: N/A" after exhausting retries;
+       WITH the fix the cache resets and invocations recover (CP-member removal /
+       the regression).
+
+Verification results
+--------------------
+- With fix: 17/17 new tests pass (13 unit + 4 integration); related suites
+  RaftInvocationManagerTest (3), RaftInvocationManagerQueryTest (6),
+  CPGroupViewClientTest (1) all pass. (CPMemberAddRemoveTest is
+  @Category(SlowTest) and excluded by the default surefire config - unrelated
+  to this change.)
+- Without fix (temporary revert): the CP-member-removal integration test fails
+  with the exact reported symptom; the two unknown-leader unit tests fail.
+
+================================================================================
+9. CHANGED FILES
+================================================================================
+
+Modified:
+  hazelcast/src/main/java/com/hazelcast/spi/impl/operationservice/impl/RaftInvocationContext.java
+    - updateKnownLeaderOnFailure: reset-on-unknown-leader restored
+    - setKnownLeaderIfPresent now returns boolean
+  hazelcast/src/main/java/com/hazelcast/spi/impl/operationservice/impl/RaftInvocation.java
+    - notifyNormalResponse: leader learning restored
+
+New:
+  hazelcast/src/test/java/com/hazelcast/cp/internal/CPGroupViewTrackerTest.java
+  hazelcast/src/test/java/com/hazelcast/spi/impl/operationservice/impl/RaftInvocationContextKnownLeaderTest.java
+  hazelcast/src/test/java/com/hazelcast/cp/internal/RaftInvocationKnownLeaderTest.java
+
+Scope caveat: the same stale-cache pattern exists on the Java-client side
+(CPClientProxy -> ClientCPGroupViewService.getLastKnownLeader, whose real
+implementation is enterprise code not present in this workspace). The same
+recommendation applies there: invalidate the client-side cached leader on
+failure responses that indicate the endpoint is unavailable or no longer the
+leader, and let the receiveUpdateForLedGroups view publications handle
+membership-driven invalidation.
+================================================================================
+END OF REPORT
+================================================================================

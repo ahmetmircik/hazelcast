@@ -1,0 +1,836 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — OPTION B:
+WAL-BACKED INCREMENTAL SNAPSHOTTING
+Design Document (companion to raft-async-snapshot-design.txt)
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Date: 2026-08-11
+Status: Design (no implementation in this deliverable)
+
+Relation to the primary design:
+  raft-async-snapshot-design.txt ("the async design") moves ALL snapshot work
+  off the Raft thread but keeps the periodic full-snapshot model: at
+  commitIndex - snapshotIndex >= commitIndexAdvanceCountToSnapshot a full
+  snapshot is generated and persisted asynchronously. This document explores a
+  different model: maintain the durable snapshot INCREMENTALLY from the Raft
+  log (WAL) stream, so there is no periodic full generation at all and the
+  snapshot index advances with the commit index. The two designs share the
+  same latency goal; this one additionally targets work-amplification and
+  transfer frequency. Section 12 compares them and Section 13 gives the
+  recommended hybrid.
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary and honest verdict
+  1.  Terminology: what "WAL" already means in Hazelcast CP
+  2.  Core idea and architecture
+  3.  The delta model (service SPI, CPMap delta design, persistent store)
+  4.  Snapshot-index advancement and incremental log truncation
+  5.  Durability model (WAL authoritative, snapshot is a lagging checkpoint)
+  6.  Crash recovery and store rebuild
+  7.  Bounds and backpressure (reuse of the async design)
+  8.  Failure, cancellation, cleanup behavior
+  9.  Follower catch-up and transfer (the biggest win)
+ 10.  Required API changes
+ 11.  Compatibility implications
+ 12.  Comparison: async full snapshot vs WAL+incremental
+ 13.  Hybrid recommendation and phased rollout
+ 14.  Tests and benchmarks
+ 15.  Risks and open questions
+ 16.  Appendix A — code anchors
+
+================================================================================
+0. EXECUTIVE SUMMARY AND HONEST VERDICT
+================================================================================
+
+Proposal
+--------
+Hazelcast CP already has a WAL: the Raft log. Every committed entry is
+durably persisted (RaftLog.persistEntry + batched flush via FlushTask, gated
+by LeaderState.flushedLogIndex) and crash recovery replays the log after the
+last snapshot. The current cost profile is caused by the second half of the
+story: a FULL snapshot is materialized every commitIndexAdvanceCountToSnapshot
+entries (default 10,000), which is O(state-machine size) work each time.
+
+The proposed design replaces the periodic full snapshot with an INCREMENTAL
+snapshot: a durable, derived materialization of the state machine that is
+updated entry-by-entry from the committed WAL stream, off the Raft thread.
+The durable snapshot index S advances continuously; Raft log entries <= S can
+be truncated continuously, so the retained-log bound shrinks and follower
+catch-up mostly happens over ordinary AppendEntries instead of snapshot
+transfers.
+
+What this buys over the async design
+------------------------------------
+  - No periodic O(snapshot) generation event at all — peak work disappears
+    (not just moves off-thread). The work is spread over per-entry deltas and
+    amortized background compaction.
+  - The snapshot is always close to the commit point, so restart replay and
+    follower catch-up windows are tiny in the common case.
+  - Log truncation is incremental, so retained-log memory/disk stay small even
+    when persistence is temporarily slow.
+
+What this costs
+---------------
+  - A per-entry persistence overhead (one small delta write, group-committed)
+    on top of the existing WAL write.
+  - A NEW on-disk persistence format (block/segment store) for the derived
+    snapshot, requiring a migration path and a service-level delta SPI.
+  - Higher implementation complexity and a new consistency surface (the
+    derived store must match the in-memory state machine; it is made safe by
+    treating the store as REBUILDABLE from the WAL — divergence is recoverable,
+    not fatal).
+
+Honest verdict
+--------------
+Yes, this design is viable and is the standard database architecture (WAL +
+checkpoint/compaction). It is a worthwhile SECOND-GENERATION improvement for
+large CP maps, and it is fully compatible with the async design — the async
+coordinator is still needed as the cold path (seeding, far-behind followers,
+store rebuild). The recommended target is the hybrid in Section 13, NOT a
+replacement of the async design. Do not introduce a second, application-level
+WAL: the Raft log already plays that role, and a second WAL would duplicate
+durability work (see Section 1).
+
+================================================================================
+1. TERMINOLOGY: WHAT "WAL" ALREADY MEANS IN HAZELCAST CP
+================================================================================
+
+Current durable-state layering (as of the codebase):
+  - RaftLog (in-memory ringbuffer, capacity = commitIndexAdvanceCountToSnapshot
+    + maxUncommittedEntryCount + maxNumberOfLogsToKeepAfterSnapshot,
+    RaftNodeImpl.java:161) — the Raft log.
+  - RaftStateStore — the WAL on disk: log entries are persisted one-by-one
+    (RaftStateStore.persistEntry; LogEntry -> raftlog-<hex> log files,
+    RAFT_LOG_PREFIX = "raftlog-", RAFT_LOG_FILE_NAME_RADIX = 16) and flushed in
+    batches by the FlushTask (RaftNodeImpl.java:1687-1703) which advances
+    LeaderState.flushedLogIndex (LeaderState.java:37,98-104). Commit of an
+    entry requires its durability (flushedLogIndex gates quorum match index,
+    RaftNodeImpl.java:1464).
+  - Snapshot: a full materialization at index I, written synchronously today
+    (persistSnapshotChunk + flushLogs on the Raft thread), or asynchronously
+    under the async design. Restart loads the snapshot and replays the WAL
+    from I+1 (RestoredRaftState / RaftStateLoader).
+
+Therefore: "adding WAL logging" is a misunderstanding of the current code —
+the WAL exists and is the commit/durability authority. What is missing is a
+snapshot that ADVANCES WITH the WAL instead of being re-derived periodically.
+This document is about exactly that: making the on-disk snapshot a
+continuously maintained, derived index of the WAL.
+
+================================================================================
+2. CORE IDEA AND ARCHITECTURE
+================================================================================
+
+2.1 Invariant
+-------------
+For every committed log index I, the durable snapshot (incremental store) has
+a durable snapshot index S(I) <= I such that the store's contents at S(I)
+equal the state machine after applying entries up to S(I). S advances
+monotonically and catches up to the commit point as fast as the store can
+group-commit delta batches. Raft log entries <= S(I) - keepAfter are eligible
+for truncation.
+
+2.2 Components
+--------------
+  RaftLog (existing)                 — the WAL: durable mutation source,
+                                       commit/durability authority.
+  DeltaSink (new, per group)         — bounded channel between the Raft thread
+                                       and the snapshot writer; O(1) offer per
+                                       applied entry; never blocks the Raft
+                                       thread (skip/backpressure per Section 7).
+  IncrementalSnapshotStore (new)     — persistent key-value materialization
+                                       (Section 3): buckets/blocks + index +
+                                       group commit + frozen views + compaction.
+  SnapshotCoordinator (new, per      — state machine on the Raft thread:
+    group, shared with the async        IDLE <-> INCORPORATING (deltas flowing),
+    design)                             schedules compaction/dumps off-thread,
+                                       publishes the advancing snapshot index,
+                                       drives truncation.
+  Cold-path dumper (new, worker)     — one-time full view generation for:
+                                       seeding, far-behind followers, rebuild.
+                                       Reuses the async design's pipeline.
+
+2.3 Data flow (hot path)
+------------------------
+  Raft thread (per committed entry):
+    applyLogEntry(entry);                                  // as today
+    // during runOperation(op, index) the coordinator holds a DeltaContext;
+    // the store decorator emits the resulting mutations into it (Section 3.3),
+    // O(1) per op. ctx.close() ends the batch.
+
+  Snapshot writer (dedicated bounded executor, off-thread):
+    batch = drain(deltaQueue, upTo batchSize);             // deltas, not entries
+    store.commitBatch(lastOpIndexInBatch);                 // group-commit fsync
+    if (durable) coordinator.onSnapshotAdvanced(S);        // Raft-thread callback
+
+  Raft thread (completion callback, O(1) + bounded truncation):
+    onSnapshotAdvanced(S): if S > lastTruncatedS + keepAfter:
+        raftLog.truncateUpTo(S - keepAfter);               // ringbuffer + eviction
+    (the callback is identical in shape to the async design's completion
+     callback — bounded, queued, happens-before-preserving)
+
+2.4 Ownership
+-------------
+  - WAL files: owned by RaftStateStore (unchanged).
+  - Incremental store blocks/segments + index: owned by the
+    IncrementalSnapshotStore (new backend, may be a sibling of RaftStateStore).
+  - In-memory state machine: owned by the services (unchanged, authoritative).
+  - The incremental store is DERIVED state: it may lag and may be rebuilt from
+    the WAL at any time. This property is what makes its new consistency
+    surface safe (Section 6).
+
+================================================================================
+3. THE DELTA MODEL
+================================================================================
+
+3.1 Generalization: every CP datastructure is a key-value set
+-------------------------------------------------------------
+  - CPMap:        (mapName, entryKey) -> entryValue (+ optional timestamp)
+  - AtomicRef:    refName -> serialized value
+  - AtomicLong:   counterName -> long value
+  - Lock/CSemaphore/CLatch: objectName -> serialized state
+  - destroyed objects: (serviceName, objectName) -> tombstone
+This lets ONE persistent store serve every datastructure.
+
+3.2 Delta SPI: generic shape (context-based, mutation-point emission)
+---------------------------------------------------------------------
+  Two-part contract:
+
+      // (a) Sink: a bounded batch accumulator owned by the snapshot writer.
+      //     Implemented by the coordinator; drained off-thread.
+      public interface DeltaSink {
+          void put(String serviceName, String objectName,
+                   Data key, Data value, long timestampOrZero);
+          void delete(String serviceName, String objectName, Data key);
+          void removeAll(String serviceName, String objectName);   // destroyed
+      }
+
+      // (b) Context: scoped to ONE applyLogEntry invocation on the Raft
+      //     thread. Set by the coordinator before runOperation(op, index),
+      //     closed after. Services/stores emit only when a context is active.
+      public interface DeltaContext extends AutoCloseable {
+          DeltaSink sink();
+          long index();
+      }
+
+  Rules:
+    - Emission happens at the MUTATION POINT (inside the service/store method
+      that actually changes the in-memory state), NOT by inspecting the RaftOp
+      after the fact. Rationale: conditional ops (putIfAbsent, compareAndSet)
+      mutate only on success; the outcome is known exactly where the mutation
+      is applied, so emission there is correct by construction and needs no
+      result re-derivation.
+    - A context is active ONLY during applyLogEntry (committed entries). It is
+      NOT active during snapshot install/restore (there the incremental store
+      is seeded directly from the received chunks), during queries, or during
+      background service work. Deltas therefore equal exactly the mutations
+      caused by committed WAL entries, in order, single-threaded.
+    - Per-entry Raft-thread cost: O(1) — set/close the context and append to
+      the bounded batch buffer. A full buffer is skipped (Section 7), never
+      blocked on.
+    - Services that do not opt in never see a context; the store is seeded
+      from a full snapshot instead (Section 11).
+
+3.3 CPMap delta SPI — concrete design
+-------------------------------------
+  Emitter: a STORE DECORATOR, not a per-op switch. All in-memory CPMap
+  mutations flow through CPMapStore methods (stores are created via
+  CPMapService.getOrInitMapStore, CPMapService.java:87) plus
+  CPMapRegistry.destroyMapStore for destruction. The service wraps every store
+  it creates in a DeltaEmittingCPMapStore that delegates to the real store and
+  emits deltas from the ACTUAL outcome of each call:
+
+      class DeltaEmittingCPMapStore implements CPMapStore {
+          private final CPMapStore delegate;
+          private final String objectName;                 // map name
+          private final DeltaContextProvider ctxProvider;  // ThreadLocal
+
+          Data put(Data key, Data value, long timestamp) {
+              Data prev = delegate.put(key, value, timestamp);
+              emitPut(key, value, timestamp);              // unconditional
+              return prev;
+          }
+          Data putIfAbsent(Data key, Data value, long timestamp) {
+              Data prev = delegate.putIfAbsent(key, value, timestamp);
+              if (prev == null) emitPut(key, value, timestamp); // put happened
+              return prev;
+          }
+          boolean compareAndSet(Data key, Data expected, Data newValue, long ts) {
+              boolean changed = delegate.compareAndSet(key, expected, newValue, ts);
+              if (changed) emitPut(key, newValue, ts);
+              return changed;
+          }
+          Data remove(Data key) {
+              Data removed = delegate.remove(key);
+              if (removed != null) emitDelete(key);        // key existed
+              return removed;
+          }
+          Object purge(long ageMillis, long timestamp) {
+              // contract: purge must return the removed keys (or enumerate
+              // them via a callback) so the decorator can emit one delete
+              // per purged entry (see 3.3 "Purge").
+          }
+          // iterator()/size()/get()/metrics: delegate untouched (read-only).
+      }
+
+  Op-to-delta mapping (all mutations go through the store, so the decorator
+  covers them; no per-op code is needed):
+      RaftOp                        Store call                        Delta
+      ----------------------------  --------------------------------  --------------
+      CPMapPutOp         (run:42-44) put(key, value, ts)              put
+      CPMapSetOp         (extends PutOp, op class line 23)
+                                    put(key, value, ts)               put
+      CPMapPutIfAbsentOp (run:42-44) putIfAbsent(key, value, ts)      put only if
+                                                                       prev == null
+      CPMapCompareAndSetOp (run:44)  compareAndSet(key, exp, new, ts) put only if
+                                                                       changed
+      CPMapRemoveOp      (run:40-42) remove(key)                      delete only if
+                                                                       removed != null
+      CPMapDeleteOp      (extends RemoveOp, op class line 23)
+                                    remove(key)                       delete only if
+                                                                       removed != null
+      CPMapPurgeOp       (enterprise) purge(ageMillis, ts)            delete per
+                                                                       purged key
+      destroyRaftObject  (CPMapService.java:141-144)
+                                    registry.destroyMapStore(name)    removeAll(name)
+      -- destroy is emitted by the SERVICE itself (it knows objectName +
+         groupId) through the same context, since it does not go through
+         CPMapStore.
+
+  Context plumbing:
+    - Coordinator (SnapshotCoordinator, raft impl): in applyLogEntry, before
+      raftIntegration.runOperation(op, index):
+          ctx = beginDeltaBatch(groupId, index);
+      and after: ctx.close(). ctx lives in a ThreadLocal read by the
+      decorator. apply is strictly serialized per task on the Raft thread, so
+      set/close per entry is safe even when several groups share one partition
+      thread.
+    - The decorator captures objectName/groupId at wrap time
+      (getOrInitMapStore(groupId, objectName)) — zero per-call overhead.
+
+  Timestamps:
+    - put/putIfAbsent/compareAndSet receive the leader timestamp from
+      CPMapRaftOp.getLeaderTimestamp (CPMapRaftOp.java:62). It is carried into
+      DeltaRecord so the derived store honors purge semantics on rebuild and
+      compaction. Non-purge maps pass NO_TIMESTAMP (CPMapStore.java:47).
+
+  Restore/install non-emission:
+    - restoreSnapshotChunk (CPMapService.java:175-213) also calls
+      cpMapStore.put(...), but NO context is active during install (the
+      coordinator never begins a batch there) -> no deltas. The install seeds
+      the incremental store directly from the received chunks (applyView), so
+      there is no double-write.
+
+  Double-emission is impossible by construction:
+    - the decorator delegates to the REAL store, so the internal put() calls
+      made by HeapCPMapStore.putIfAbsent/compareAndSet (HeapCPMapStore.java:
+      111-115, 133-140) hit the delegate, never the decorator. Each top-level
+      store call emits exactly once.
+
+  Purge contract:
+    - purge(ageMillis, ts) removes all entries older than ageMillis in one
+      Raft op (enterprise CPMapPurgeOp). The derived store must drop exactly
+      those keys, so purge MUST return (or enumerate via a callback) the
+      removed keys; the decorator emits one delete per key. Without this, the
+      derived store would retain purged entries and diverge (recoverable by
+      rebuild, but avoidable).
+
+  DeltaRecord (on-disk record, IdentifiedDataSerializable, versioned):
+      (serviceName = "cpmap", objectName = mapName, key, valueOrNull,
+       timestampOrZero, opIndex, kind = {PUT | DELETE | REMOVE_ALL})
+
+  Bucket routing (Section 3.4): hash(objectName, key) -> bucket for PUT /
+  DELETE; REMOVE_ALL records go to a dedicated meta stream; compaction drops
+  all keys of a tombstoned object.
+
+  No point-in-time freeze needed for CPMap in incremental mode:
+    - the delta stream IS the point-in-time capture (the entry was applied at
+      index, deltas emitted at that instant). The async design's COW freeze
+      remains only for the full-snapshot fallback/cold path.
+
+3.4 Persistent key-value store (recommended variant: COW block store)
+---------------------------------------------------------------------
+  Layout:
+    - Keys hash (objectName, key) into B buckets (B config, e.g. 256).
+    - Each bucket has a block file; a block holds (key, value, timestamp,
+      opIndex) records for its bucket. Blocks are append-delta + rewritten:
+      on mutation, the changed records are appended to the CURRENT bucket
+      block (append-only, batched) and the in-memory bucket index is updated.
+    - Bucket index (in memory + periodic index checkpoints): bucket -> block
+      version + block file offset range; key -> latest record location.
+    - Group commit: mutations are appended to block files and fsync'd in
+      batches; the durable snapshot index S is the max opIndex of the last
+      fsync'd batch (persisted in a small metadata record, atomic write).
+  Operations:
+    - put/delete/tombstone: append + update index (O(1) amortized).
+    - Background compaction (off-thread, amortized): merges overwritten
+      records and tombstones into fresh blocks, frees old block files. Runs on
+      volume/time triggers, never on the Raft thread. Transient disk usage
+      bounded (Section 7).
+    - Frozen view: taking a view at index V is a COW snapshot of the bucket
+      INDEX (O(B), cheap) + block reference; used for transfer/restore
+      (Section 9) and for the cold dump.
+    - Point lookup (used by transfer, not by the Raft hot path): bucket index
+      -> block read.
+
+3.5 Why not an LSM?
+-------------------
+An LSM (memtable + tiered segments + range compaction) is the standard choice
+for sorted/range access. CPMap needs point access only; the block store gives
+point lookups with less machinery. If range scans are ever needed (e.g.,
+ordered CPMap), the block store can be swapped for an LSM behind the same
+interface — the interface, not the implementation, is the contract.
+
+================================================================================
+4. SNAPSHOT-INDEX ADVANCEMENT AND INCREMENTAL LOG TRUNCATION
+================================================================================
+
+4.1 Advancement
+---------------
+  - The writer advances S on every durable group commit.
+  - The Raft thread learns S via the bounded onSnapshotAdvanced callback.
+  - No more takeSnapshotIfCommitIndexAdvanced() in the hot path; the
+    commitIndexAdvanceCountToSnapshot threshold becomes irrelevant for
+    persistence (it may remain as a hint for cold dumps).
+
+4.2 Truncation
+--------------
+  - New RaftLog.truncateUpTo(long upTo): trims the in-memory ringbuffer slots
+    <= upTo (same mechanics as RaftLog.setSnapshot's truncation, RaftLog.java:
+    333-343) and marks the store for WAL-file eviction (delete raftlog-<hex>
+    files <= upTo). Disk eviction is executed by the store off-thread.
+  - Truncation is batched: only when S - lastTruncated >= truncateBatchSize
+    (config, default aligned with maxNumberOfLogsToKeepAfterSnapshot), so the
+    Raft thread truncates at most truncateBatchSize slots per callback — a
+    config-bounded constant, not proportional to snapshot size.
+  - SnapshotEntry replacement: the Raft log's snapshot() still returns a
+    SnapshotEntry, but its operation payload is an IncrementalSnapshotRef
+    (store handle + index S + members) instead of a chunk list. Far-behind
+    followers are served a frozen view of the store via the existing chunked
+    protocol (Section 9); the ref is valid as long as the store retains the
+    view (retention governed by matchIndex, as in the async design Section 5.4).
+
+4.3 Retention bound
+-------------------
+Because S tracks the commit point, the retained-log window shrinks from
+"threshold + keepAfter" to "max store lag + keepAfter + truncateBatch". Under
+a stalled store, the lag cap (Section 7) bounds it exactly like the async
+design's maxSnapshotLag.
+
+================================================================================
+5. DURABILITY MODEL
+================================================================================
+
+D5.1 WAL is authoritative. Commit still requires WAL durability
+     (flushedLogIndex), exactly as today. The incremental store is NOT on the
+     commit path; it is a derived checkpoint that may lag by a bounded amount.
+
+D5.2 Snapshot index is always <= the last durably incorporated entry index,
+     and the store contents at S equal the state machine at S by construction
+     (deltas are extracted by the service that applied the entries, in order,
+     single-threaded).
+
+D5.3 A lagging or even corrupted incremental store is never a safety issue:
+     the authoritative recovery path is WAL replay. If the store's index and
+     contents disagree (checksum/sequence validation on load), the store is
+     rebuilt from the WAL (Section 6). This is the key de-risking property
+     that a "second WAL" would NOT have (a second WAL would be authoritative
+     and thus a second consistency surface with no recovery story).
+
+D5.4 No new fsync on the commit path: the per-entry delta write shares the
+     existing flush cadence (group commit by the writer); it never makes the
+     Raft thread wait.
+
+================================================================================
+6. CRASH RECOVERY AND STORE REBUILD
+================================================================================
+
+Recovery (restart):
+  1. Load WAL state (term, votedFor, log files) — as today.
+  2. Load the incremental store: bucket index checkpoints + block files +
+     metadata (durable S). Validate: block sequence continuity, checksums,
+     metadata atomicity.
+  3. If valid: in-memory state machine is rebuilt by replaying WAL entries
+     (S, commitIndex] — bounded by the lag cap (Section 7). If the gap is
+     larger than the retained WAL (should not happen if bounds hold; can
+     happen after a restore from backup), fall back to a full snapshot load
+     (async design's restore path).
+  4. If invalid (checksum failure, torn metadata): delete the store for the
+     group, seed a fresh one from the WAL (full replay from the oldest
+     retained entry) or from the last full snapshot; continue.
+
+Rebuild on divergence (runtime):
+  - The coordinator periodically validates (cheap spot-check or index-vs-WAL
+    watermark check). On divergence, mark the store stale, rebuild from WAL in
+    the background, resume deltas. No Raft-thread impact beyond the O(1)
+    callback.
+
+Torn writes / partial batches:
+  - Block appends are length-prefixed + checksummed; the writer truncates a
+    partial trailing record on open. Group-commit metadata (durable S) is a
+    single atomic record (write + fsync); a torn metadata record is detected
+    and the store is rebuilt from WAL (S falls back to the previous durable
+    metadata, which is still <= actual incorporated state — safe).
+
+================================================================================
+7. BOUNDS AND BACKPRESSURE
+================================================================================
+
+Reuses the async design's machinery (raft-async-snapshot-design.txt Sections
+5-6) with these deltas:
+
+  - Delta queue: bounded (snapshotQueueCapacity); a full queue makes the Raft
+    thread SKIP the offer (snapshot index falls behind) — never blocks.
+  - Store lag cap: commitIndex - S >= maxSnapshotLag (= threshold *
+    snapshotLagMultiplier, default 4) -> existing canReplicateNewEntry()
+    backpressure rejects new appends (RaftNodeImpl.java:564-594). Bounds
+    retained-log memory/disk and restart replay time.
+  - Disk budget: bucket blocks (live + in-flight compaction) + retained WAL +
+    one full-snapshot seed/dump <= snapshotDiskBudgetBytes; when exceeded,
+    compaction is paused and (if still exceeded) delta group-commit is
+    throttled (writer-side), then appends are rejected via the lag cap. The
+    Raft thread never performs I/O and never waits.
+  - Concurrency: one writer per group; a node-wide semaphore caps concurrent
+    writers/compactors across groups (snapshotMaxConcurrentGenerations).
+  - Compaction transient disk: bounded to one bucket-generation of old+new
+    blocks; old blocks freed after the new index checkpoint is durable.
+
+================================================================================
+8. FAILURE, CANCELLATION, CLEANUP BEHAVIOR
+================================================================================
+
+  Delta-write failure (disk full / I/O error):
+    The writer stalls; S stops advancing; backpressure Level 3 (lag cap) takes
+    over. Retry with bounded backoff (writer-side). The Raft thread observes
+    only the O(1) callback and the append-rejection gate. No Raft-thread I/O.
+
+  Compaction failure:
+    Abort the compaction generation; old blocks remain valid; retry later.
+
+  Process crash:
+    - Mid-group-commit: durable S stays at the last committed batch; the
+      partial trailing block record is truncated on open (6).
+    - Mid-compaction: orphaned new block files are detected by version markers
+      in file names and deleted on open (like the async design's staging
+      sweep).
+    - No crash window ever exposes a snapshot with index > the last durable
+      metadata (6).
+
+  Leadership change:
+    Deltas are extracted from COMMITTED entries, which remain valid after
+    step-down; the store keeps advancing as a follower. A leader-installed
+    snapshot at a higher index (follower case) supersedes: the coordinator
+    drops pending deltas with index <= installed index (generation/watermark
+    guard) and re-seeds the store from the installed snapshot.
+
+  Node shutdown / group destruction:
+    Writer drained or aborted; in-flight group commits completed or rolled
+    back to the last durable S; block files released; store closed. Same
+    closeStateStore() path as today.
+
+  Orphaned blocks / index checkpoints:
+    Versioned file names + startup scan + periodic age-based sweep (off-thread).
+
+================================================================================
+9. FOLLOWER CATCH-UP AND TRANSFER (THE BIGGEST WIN)
+================================================================================
+
+With the durable snapshot index S close to the commit point:
+
+  Case A — follower within the WAL window (nextIndex > S):
+    Normal AppendEntries catch-up. NO snapshot RPC at all. This becomes the
+    common case: after an outage/restart, a member re-joins and replays a
+    short WAL tail instead of receiving a full snapshot.
+
+  Case B — follower behind the retained log (nextIndex <= S):
+    Cold path, unchanged protocol: the leader serves a FROZEN VIEW of the
+    incremental store at index S (COW of the bucket index, O(B)) through the
+    existing chunked InstallSnapshot protocol. Chunks are bucket/block ranges
+    streamed by the worker (not serialized on the Raft thread), flow control
+    unchanged, wire format unchanged.
+    The frozen view is retained until the follower's matchIndex >= S, then
+    released (same retention rule as the async design Section 5.4).
+
+  Case C — seeding/rebuild:
+    The leader (or a rebuilt member) generates a full dump from the store
+    (streamed blocks) or from the services (async design's full pipeline),
+    once.
+
+  Follower install:
+    1. Chunks stream into a staging generation of the follower's own
+       IncrementalSnapshotStore (off-thread).
+    2. Durable -> O(1) Raft-thread callback: assemble the SnapshotEntry
+       (ref + index), swap.
+    3. In-memory state machine: staged restore off-thread (async design
+       Section 3.4) so install completion on the Raft thread stays O(1);
+       ack sent only after durability (unchanged semantics).
+
+  Net effect: snapshot transfers drop by orders of magnitude in steady state;
+  the chunked protocol remains as the cold path and is UNCHANGED on the wire.
+
+================================================================================
+10. REQUIRED API CHANGES
+================================================================================
+
+Service level:
+  - New optional context-based delta SPI: DeltaSink + DeltaContext
+    (Section 3.2), with a store-decorator emitter for CPMap
+    (DeltaEmittingCPMapStore, Section 3.3). Services without an emitter:
+    no behavior change (store seeded from full snapshots only). Migrate
+    CPMap first (highest data volume), then the small datastructures
+    (mechanical).
+  - SnapshotAwareService/ChunkedSnapshotAwareService: unchanged from the
+    async design (handles remain the cold-path interface).
+
+Persistence:
+  - New IncrementalSnapshotStore (implemented by the platform, sibling of
+    RaftStateStore):
+      void open() throws IOException;                 // loads index, sweeps orphans
+      void appendBatch(List<DeltaRecord> batch, long lastOpIndex);
+                                                      // worker-side, group commit
+      long durableSnapshotIndex();                    // after fsync
+      FrozenSnapshotView freezeView(long atIndex);    // COW bucket index, O(B)
+      void applyView(long atIndex, Iterator<byte[]> blockData);  // install side
+      void compact();                                 // off-thread
+      void delete();                                  // group destroy / rebuild
+      void close();
+  - DeltaRecord: (serviceName, objectName, key, valueOrNull, timestamp,
+    opIndex, kind={PUT|DELETE|REMOVE_ALL}) — IdentifiedDataSerializable,
+    versioned (rolling upgrade).
+  - RaftStateStore: gains WAL-file eviction hooks for truncateUpTo (may be
+    internal to the enterprise store).
+
+Raft impl:
+  - RaftLog.truncateUpTo(long) (Section 4.2).
+  - SnapshotEntry operation payload may be an IncrementalSnapshotRef (store
+    handle + index + members) instead of a chunk list.
+  - RaftNodeImpl.applyLogEntry: delta extraction + bounded offer after apply.
+  - SnapshotCoordinator: extended states for the incremental mode.
+  - NodeEngineRaftIntegration: exposes the store and the delta SPI wiring.
+
+Config (additive; defaults preserve current behavior when the feature is
+off):
+  - cp.snapshot.incremental.enabled (default false; gate for the feature)
+  - snapshotLagMultiplier, snapshotQueueCapacity, snapshotMaxConcurrentGenerations,
+    snapshotDiskBudgetBytes (shared with the async design)
+  - snapshot.block.count (bucket count, default 256)
+  - snapshot.truncate.batch.size (default = maxNumberOfLogsToKeepAfterSnapshot)
+  - snapshot.compact.interval / compact.threshold (volume/age triggers)
+
+================================================================================
+11. COMPATIBILITY IMPLICATIONS
+================================================================================
+
+Wire protocol: UNCHANGED. AppendEntries/InstallSnapshot/flow control intact;
+chunks in the cold path are block ranges wrapped in the existing SnapshotChunk
+framing. A member running incremental mode interoperates with a member on the
+async/full-snapshot path (they exchange full snapshots in mixed mode).
+
+Persistence format: NEW for the incremental store (block files + index
+checkpoints + metadata). Migration path:
+  - First boot with the feature on: seed the store from the last full
+    snapshot (if any) or an empty store + WAL replay.
+  - Old format remains readable on restart (the full-snapshot files from the
+    previous design stay as the cold-path dump format and the seeding source).
+  - Rolling downgrade: feature flag off -> store ignored, full-snapshot path
+    resumes; the incremental store's blocks are deleted or orphaned
+    (swept on next open).
+
+Rolling upgrade: additive interface with opt-in services, additive config,
+flag-gated; behavior-neutral defaults. Snapshot content equality across
+members is preserved because deltas are derived from the same committed WAL
+(Log Matching Property), so the store contents at the same index are identical
+across members even though the physical layout is new.
+
+Restart compatibility: a member that crashes mid-upgrade recovers via WAL
+replay; the store, if present, is validated and either used or rebuilt.
+
+================================================================================
+12. COMPARISON: ASYNC FULL SNAPSHOT VS WAL+INCREMENTAL
+================================================================================
+
+  Aspect                          Async full snapshot (doc 1)   WAL + incremental (this doc)
+  ------------------------------  ----------------------------  ----------------------------
+  Raft-thread cost (trigger)      O(1) capture + enqueue       O(1) delta offer (per entry)
+  Raft-thread cost (per entry)    ~0                            ~0 (offer only)
+  Peak background work            periodic O(snapshot)          per-entry O(delta) + amortized
+                                  generation + persist           compaction (no peak)
+  Snapshot freshness              lags up to threshold (10k)    advances per batch (close to commit)
+  Log retention                   threshold + lag + keepAfter   store lag + keepAfter + batch
+  Follower catch-up               chunked snapshot transfer     mostly WAL AppendEntries; chunked
+                                  (common for far behind)        only for very far behind
+  Restart replay                  WAL tail after snapshot       WAL tail after S (smaller)
+  Per-entry persistence overhead  none                          one small delta write (group-committed)
+  New persistence format          no (staging+rename only)      yes (block store) + migration
+  Service changes                 handles/COW freeze            + store-decorator delta
+                                                                  emitter (per service)
+  New consistency surface         none (async publication)      derived store (rebuildable -> safe)
+  Implementation complexity       medium                        higher
+  Best for                        correctness-first, any size   large CPMap deployments where
+                                                                transfer/restart cost dominates
+
+Verdict: the incremental design is not strictly dominant — it trades a
+periodic cost for a per-entry cost plus a format change. Use it where
+snapshot frequency/transfer/restart dominates (large maps, frequent
+restarts); keep the async design as the baseline and as the cold path.
+
+================================================================================
+13. HYBRID RECOMMENDATION AND PHASED ROLLOUT
+================================================================================
+
+Recommended target = incremental hot path + async cold path:
+
+  - Hot path: WAL-backed incremental store (this doc), flag-gated.
+  - Cold path: the async design's full-snapshot pipeline, used for
+    seeding, far-behind followers, rebuild, and mixed-mode interop. The
+    incremental store's frozen views are the preferred cold-transfer source
+    once present.
+
+Phases:
+  Phase 0: async design (raft-async-snapshot-design.txt) lands as the
+           baseline — it already removes the Raft-thread latency.
+  Phase 1: DeltaSink + DeltaContext + DeltaEmittingCPMapStore on CPMap;
+           writer with group commit; durable S metadata; tests T1-T8 below.
+  Phase 2: incremental truncation (RaftLog.truncateUpTo) + eviction; lag-cap
+           backpressure wiring.
+  Phase 3: frozen views + cold-path transfer from the store; install-side
+           applyView + staged in-memory restore.
+  Phase 4: compaction + disk budget + orphan sweep; rebuild-on-divergence.
+  Phase 5: migrate remaining datastructures; benchmarks; flag flip to default.
+
+================================================================================
+14. TESTS AND BENCHMARKS
+================================================================================
+
+Deterministic unit tests (LocalRaftGroup + a controllable IncrementalSnapshot-
+Store double; the store double injects per-batch delay/failure):
+  T1 raftOpLatencyUnaffectedByDeltaBacklog: store stalled -> probe-op p99
+     flat; append rejection only at the lag cap (backpressure bound).
+  T2 snapshotIndexAdvancesWithCommit: after N commits with a fast store, S ==
+     commitIndex (within a group-commit batch); log truncated incrementally,
+     never before durability.
+  T3 truncationBounds: with a slow store, retained-log size stays <= lag cap +
+     keepAfter + batch; restart replay window bounded.
+  T4 crashRecoveryReplaysWALTail: kill/restore with durable S < commitIndex;
+     in-memory state rebuilt from WAL (S, commitIndex]; partial trailing
+     block record truncated.
+  T5 tornMetadataRebuildsStore: corrupt metadata -> store rebuilt from WAL;
+     no divergence in the state machine.
+  T6 followerCatchUpWithoutSnapshot: follower restarts, nextIndex > S ->
+     AppendEntries only, no InstallSnapshot RPC.
+  T7 farBehindFollowerUsesFrozenView: nextIndex <= S -> chunked transfer of a
+     frozen view; leader releases the view after matchIndex >= S.
+  T8 deltaExtractionMatchesAppliedOps: mutated CPMap with purge enabled; store
+     contents equal in-memory state at every sampled index (incl. timestamps).
+  T9 mixedModeInterop: incremental-mode member and full-snapshot member in one
+     group; transfers and installs work in both directions.
+  T10 divergenceRebuild: inject a store corruption; coordinator detects,
+     rebuilds from WAL, resumes; no Raft-thread stall.
+
+Benchmark (extension of RaftSnapshotLatencyBenchmark from the async design):
+  Same matrix (state size x storage conditions) with two additional metrics:
+    - per-entry delta persistence cost (writer-side, amortized);
+    - catch-up transfer volume for a restarted follower (WAL tail vs snapshot
+      chunks).
+  Expected: probe-op p50/p95/p99/max flat across size and storage; total
+  snapshot-related bytes written per commit lower than the periodic full
+  snapshot at steady state (large maps); restart-to-serving latency
+  dominated by the WAL tail (small), not a full snapshot load.
+
+================================================================================
+15. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 Per-entry overhead: every committed op now carries a second persistence
+     write. Mitigation: group commit batching, block-append locality
+     (buckets by key), and the fact that deltas are typically one key. Must
+     be measured (benchmark metric above); if it regresses throughput on
+     hot single-key groups, gate the feature per group or per datastructure.
+  R2 Store/in-memory divergence: mitigated by the rebuildable-store property
+     (D5.3); the remaining risk is silently SERVING a divergent frozen view.
+     Mitigation: views are checksummed at both ends and validated against the
+     durable S watermark on load.
+  R3 Compaction CPU/disk: worst case transient 2x bucket disk; bounded by
+     budget and pause-on-budget (Section 7). Tunable via compact thresholds.
+  R4 Block store point-lookup cost for far-behind follower transfer: a large
+     map may need many bucket block reads; streamed off-thread, acceptable.
+     LSM swap is the fallback if range access appears.
+  R5 Migration complexity (new format + seeding + mixed mode): the largest
+     implementation cost; phased rollout and flag gating contain it.
+  OQ1 Feature gating granularity: cluster-wide flag vs per-group/per-map.
+        Recommend cluster-wide + per-datastructure opt-in to start.
+  OQ2 Should the incremental store live in the same directory layout as
+       RaftStateStore or a sibling layout? Recommend sibling (separate
+       deletion/rotation lifecycle).
+  OQ3 Is the durable-S metadata a per-group file or part of the group
+       directory manifest? Recommend part of the manifest, atomic write.
+  OQ4 Should CPMap purge timestamps be embedded in DeltaRecord (yes —
+       required for purge-enabled maps; already in the model).
+
+================================================================================
+16. APPENDIX A — CODE ANCHORS
+================================================================================
+
+  WAL (existing):
+    - RaftLog.appendEntries -> store.persistEntry:   RaftLog.java:238-268
+    - FlushTask (batched fsync, flushedLogIndex):    RaftNodeImpl.java:1687-1703
+    - flushedLogIndex gates commit:                  RaftNodeImpl.java:1464;
+                                                     LeaderState.java:37,98-104
+    - WAL file naming:                               RaftStateStore.java:35-41
+    - log capacity formula:                          RaftNodeImpl.java:161,192
+  Full snapshot (today / async design):
+    - takeSnapshotIfCommitIndexAdvanced:             RaftNodeImpl.java:1128-1215
+    - persistAndFlushSnapshotChunks:                 RaftNodeImpl.java:1217-1234
+    - setSnapshot truncation mechanics:              RaftLog.java:322-353
+    - ChunkedSnapshotInstaller (cold-path install):  ChunkedSnapshotInstaller.java
+  Backpressure gate:
+    - canReplicateNewEntry (append rejection):       RaftNodeImpl.java:564-594
+  Services (delta extraction targets):
+    - CPMapService.takeSnapshotChunks / restore:     CPMapService.java:166-171,
+                                                     176-213
+    - CPMap store factory + destroy:                 CPMapService.java:87, 141-144
+    - CPMapStore mutation contract:                  CPMapStore.java:59-136
+                                                       (NO_TIMESTAMP: 47)
+    - HeapCPMapStore put/putIfAbsent/remove/
+      compareAndSet:                                 HeapCPMapStore.java:96,111,
+                                                     120,133
+    - CPMap op run() bodies:                         CPMapPutOp.java:42-44,
+                                                     CPMapPutIfAbsentOp.java:42-44,
+                                                     CPMapCompareAndSetOp.java:44,
+                                                     CPMapRemoveOp.java:40-42
+    - CPMapSetOp/CPMapDeleteOp inherit from
+      PutOp/RemoveOp (op class line 23)
+    - leader timestamp:                              CPMapRaftOp.java:62
+    - CPMapRegistrySnapshot FIXME (non point-in-time): CPMapRegistrySnapshot.java:
+                                                     40-45
+    - AtomicRefService / RaftAtomicValueService /
+      AbstractBlockingService.takeSnapshot:          AtomicRefService.java:112,
+                                                     RaftAtomicValueService.java:97,
+                                                     AbstractBlockingService.java:170
+  Related design: raft-async-snapshot-design.txt (Sections 3.4, 5, 6, 10).
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  COW   Copy-On-Write — the freeze mechanism for point-in-time views.
+  CP    Hazelcast's Raft-based linearizable "CP subsystem" (CAP theorem).
+  CPMap A linearizable map in the CP subsystem.
+  Data  Hazelcast's binary serialized key/value type (immutable).
+  DeltaSink/DeltaContext/DeltaRecord Option B's delta SPI types.
+  DeltaEmittingCPMapStore The CPMap-internal decorator that emits deltas.
+  fsync Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  LSM   Log-Structured Merge-tree (the block store's storage-family analogue).
+  O(1)  Big O notation — per-step complexity claims.
+  p50/p95/p99/max Latency percentiles and maximum (benchmark acceptance).
+  quorum A majority of group members (needed to commit).
+  RPC   Remote Procedure Call — Raft message transport.
+  S     The durable snapshot index of the incremental store.
+  SPI   Service Provider Interface — a pluggable extension contract.
+  V     A captured state version.
+  WAL   Write-Ahead Log — the Raft log already IS the WAL in Hazelcast CP.
+  IncrementalSnapshotStore The proposed persistent delta-store interface.
+  D5.x / T1-T10 Guarantee ids / test ids (cross-referenced with options A-F).
+
+================================================================================
+END OF DESIGN (OPTION B)
+================================================================================

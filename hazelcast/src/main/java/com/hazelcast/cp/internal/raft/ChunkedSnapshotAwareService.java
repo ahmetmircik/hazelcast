@@ -20,6 +20,7 @@ import com.hazelcast.cp.CPGroupId;
 import com.hazelcast.cp.internal.datastructures.snapshot.DataChunkGroup;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.Iterator;
 
 /**
@@ -68,6 +69,31 @@ public interface ChunkedSnapshotAwareService<C, T> extends SnapshotAwareService<
      * @throws NullPointerException If the provided groupId is null.
      */
     void prepareForSnapshotRestore(@Nonnull CPGroupId groupId);
+
+    /**
+     * Captures the service state at the given commit index in O(1): the
+     * snapshot-redesign (Option F) async-generation entry point. While the
+     * capture is active, all writes are redirected to a transient overlay and
+     * the main state stays frozen, so {@link #takeSnapshotChunks} can be
+     * called off the Raft thread by a snapshot worker with a complete and
+     * consistent scan. The capture is released with
+     * {@link #finishSnapshotCapture(CPGroupId)} on the Raft thread after the
+     * worker finished.
+     *
+     * @return {@code null} when async capture is not supported (the sync path
+     *         is then used)
+     */
+    @Nullable
+    default Object captureSnapshot(@Nonnull CPGroupId groupId, long commitIndex) {
+        return null;
+    }
+
+    /**
+     * Applies the pending redirected writes back to the main state and
+     * releases the capture. Called on the Raft thread.
+     */
+    default void finishSnapshotCapture(@Nonnull CPGroupId groupId) {
+    }
 
     @Override
     default void restoreSnapshot(CPGroupId groupId, long commitIndex, T snapshot) {

@@ -1,0 +1,613 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — OPTION C:
+RQLITE/HASHICORP-INFORMED DESIGN
+Design Document (companion to raft-async-snapshot-design.txt and
+raft-incremental-snapshot-design.txt)
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Date: 2026-08-12
+Status: Design (no implementation in this deliverable)
+
+Source basis (verified by reading the code, not from docs alone):
+  - rqlite master:  https://github.com/rqlite/rqlite (user-provided)
+      store/store.go, store/DESIGN.md, snapshot/DESIGN.md
+  - hashicorp/raft v1.7.3 (rqlite go.mod pins v1.7.3):
+      fsm.go, snapshot.go, file_snapshot.go, raft.go, replication.go
+  All line anchors in Appendix A were read from those files.
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary and verdict
+  1.  How rqlite/hashicorp/raft does it (verified)
+  2.  Comparison with my two existing designs
+  3.  Verdict: what is advantageous and worth adopting
+  4.  Refined design (Option C — rqlite-informed)
+  5.  API changes delta
+  6.  Tests and benchmarks delta
+  7.  Compatibility notes
+  8.  Risks and open questions
+  9.  Appendix A — verified source anchors
+
+================================================================================
+0. EXECUTIVE SUMMARY AND VERDICT
+================================================================================
+
+rqlite solves the same problem my two designs solve, from the opposite end:
+instead of moving the snapshot work off a single-threaded Raft executor (my
+approach), hashicorp/raft STRUCTURALLY SEPARATES the threads — a dedicated
+snapshot goroutine that runs Persist concurrently with Apply, while the Raft
+main loop only ever calls FSM.Snapshot(), which the framework's contract
+forces to be cheap ("only capture a pointer to the state").
+
+Three of its mechanisms are genuinely advantageous over my designs and should
+be adopted:
+
+  1. The Snapshot/Persist/Sink contract as a *structural* guarantee, rather
+     than a hand-written coordinator state machine. Adoption is cheap and
+     makes the "constant time on the Raft thread" property enforceable by
+     construction.
+  2. The multi-reader-single-writer snapshot store (rqlite v10): snapshot
+     creation and snapshot READS both take a read lock, so the leader keeps
+     snapshotting and compacting its log while a slow follower is streaming an
+     older snapshot. Reaping (deletion/compaction) takes the write lock and
+     runs in the background. This directly fixes my async design's "slow
+     follower pins the leader" retention problem more cleanly than my
+     matchIndex-based release.
+  3. The full+incremental snapshot chain (rqlite 8.0+): snapshots cost
+     O(recent writes) instead of O(total size), with a compacted-WAL
+     incremental artifact. This validates my Option B (WAL+incremental); the
+     honest difference is that rqlite gets incremental almost for free because
+     SQLite maintains its own WAL file, while Hazelcast's in-memory CPMap has
+     no engine-level WAL, so Option B's DeltaSink SPI is the Hazelcast
+     analogue of what SQLite gives rqlite for free.
+
+Two weaknesses in rqlite/hashicorp that my designs already fix, and must be
+retained:
+
+  a. hashicorp/raft installs a received snapshot by io.Copy'ing it to disk ON
+     the Raft main loop (raft.go installSnapshot) — a multi-GB install stalls
+     Apply on the follower. My design moves follower chunk persistence
+     off-thread. Do NOT copy this weakness.
+  b. hashicorp/raft has no append backpressure when snapshotting stalls; the
+     log store grows unboundedly. My Level-3 lag cap (reject new appends)
+     must be retained.
+
+Final recommendation: Option C = my async design (Option A) + the three
+adoptions above, with Option B's incremental store as the later phase. It is
+strictly better than Option A alone and better than plain rqlite-style
+architecture on the follower side.
+
+================================================================================
+1. HOW RQLITE/HASHICORP/RAFT DOES IT (VERIFIED)
+================================================================================
+
+1.1 The framework-enforced contract (fsm.go:37-49, 71-79)
+---------------------------------------------------------
+  interface FSM {
+      Apply(*Log) any
+      Snapshot() (FSMSnapshot, error)   // main loop; must be cheap
+      Restore(io.ReadCloser) error
+  }
+  interface FSMSnapshot {
+      Persist(sink SnapshotSink) error  // heavy I/O; off the main loop
+      Release()
+  }
+  interface SnapshotSink {
+      io.WriteCloser
+      ID() string
+      Cancel() error
+  }
+  The FSM doc comment makes the contract explicit:
+    - "Snapshot should return quickly, because Apply can not be called while
+      Snapshot is running. Generally this means Snapshot should only capture a
+      pointer to the state, and any expensive IO should happen as part of
+      FSMSnapshot.Persist."
+    - "Apply and Snapshot are always called from the same thread, but Apply
+      will be called concurrently with FSMSnapshot.Persist."
+  This is the core trick: the framework SEPARATES capture from persistence by
+  thread, and the FSM must tolerate concurrent mutation during Persist.
+
+1.2 Threads and ownership (snapshot.go:69-211)
+----------------------------------------------
+  - runSnapshots(): a dedicated long-running goroutine, "parallel to the FSM
+    and main goroutines, so that snapshots do not block normal operation".
+    Timer (SnapshotInterval) + user-trigger channel.
+  - shouldSnapshot(): log delta = lastLogIndex - lastSnapshotIndex >=
+    SnapshotThreshold. Pure index arithmetic.
+  - takeSnapshot() — "must only be called from the snapshot thread, never the
+    main thread":
+      1. sends a request to the main loop (fsmSnapshotCh); the main loop calls
+         FSM.Snapshot() and returns the FSMSnapshot (Apply is blocked only for
+         this cheap call);
+      2. the SNAPSHOT thread calls FSMSnapshot.Persist(sink) (snapshot.go:190)
+         — the expensive serialization/copy, concurrently with Apply;
+      3. sink.Close() (197) — finalize (see 1.3);
+      4. setLastSnapshot (202);
+      5. compactLogs(snapIdx) (205) — on the snapshot thread.
+  - compactLogsWithTrailing (213-248): DeleteRange(minLog, maxLog) where
+    maxLog = min(snapIdx, lastLogIdx - TrailingLogs) — keeps TrailingLogs
+    entries after the snapshot. Off the main loop.
+
+1.3 Sink: crash-safe atomic publish (file_snapshot.go:160-455)
+--------------------------------------------------------------
+  - Create() opens a staging dir named "<term>-<index>.tmp" (tmpSuffix,
+    line 29). Write() appends into it.
+  - Close() writes the meta file, os.Rename(tmpDir, finalDir), and fsync's the
+    parent directory (lines 415-435, skipped on Windows where it is not
+    needed; a noSync flag exists for tests).
+  - Cancel() removes the staging dir.
+  This is byte-for-byte the staging -> atomic rename -> dir fsync pattern in
+  my async design (Section 3.5). Same crash model: either the old or the new
+  snapshot is visible, never a partial one.
+
+1.4 Leader transfer (replication.go:296-345)
+--------------------------------------------
+  - Each follower has a dedicated replication goroutine; when the follower is
+    too far behind, it calls sendLatestSnapshot():
+      snapshots.List() -> Open(mostRecentID) -> transport.InstallSnapshot(
+      req, snapshot) which streams the opened snapshot.
+  - rqlite's store.Open takes only a READ lock (MRSW, see 1.5), so streaming
+    an old snapshot does not block creating a new one.
+
+1.5 The ONE exception: follower install on the main loop (raft.go:1810-1950)
+---------------------------------------------------------------------------
+  - installSnapshot "must only be called from the main thread". It:
+      1. snapshots.Create(...) -> a sink into a .tmp dir;
+      2. io.Copy(sink, rpc.Reader) — "Spill the remote snapshot to disk" —
+         the ENTIRE received snapshot is written to disk ON the Raft main
+         loop (raft.go:1887);
+      3. sink.Close(); then restore is deferred to the FSM via fsmMutateCh;
+      4. compactLogs after install.
+  - Consequence: a multi-GB snapshot install blocks Apply on the follower for
+    the whole download+write duration. rqlite mitigates the RESTORE cost with
+    the clean-snapshot fingerprint (skip re-restore when the local file
+    matches), but not the io.Copy itself. This is the weak spot.
+
+1.6 rqlite-specific additions (store/DESIGN.md, snapshot/DESIGN.md,
+    store.go:2560-2736)
+-------------------------------------------------------------------------------
+  a) Incremental snapshots (rqlite 8.0+): the snapshot is either
+     - FULL: the SQLite database file (checkpointed WAL + db), streamed during
+       Persist; or
+     - INCREMENTAL: the compacted SQLite WAL, written to a WAL staging
+       directory during Snapshot() and packaged by the sink (local node: the
+       sink atomically moves the directory; no bytes go through the Raft
+       transport — an IncrementalFileSnapshot header carries the local path).
+     Cost of Snapshot() on the main loop is O(WAL size), NOT O(DB size);
+     the O(DB) work only happens in a FULL snapshot's Persist (off-loop).
+     A chain of [full, inc1, inc2, ...] reconstructs state; the store walks
+     back to the nearest full (ResolveFiles) and validates the chain.
+  b) MRSW snapshot store (v10): Create (new snapshot) and Open (read for
+     transfer/restore) take a READ lock; only Reap takes the write lock and
+     runs in the background. Fixes the v9 cascade: leader could not snapshot
+     while streaming to a slow follower -> log grew -> latency spikes.
+  c) Reaping with plan-execute crash safety: consolidates incrementals into a
+     full snapshot and deletes obsolete snapshots; the whole sequence is a
+     serialized JSON plan (REAP_PLAN) re-executed idempotently on restart.
+  d) Clean-snapshot fingerprint: after a successful snapshot, a small file
+     (mtime, size, CRC32 of the DB) enables a fast restart — if the local DB
+     file matches, restore-from-snapshot is skipped
+     (raftConfig.NoSnapshotRestoreOnStart).
+  e) Staging-dir persistence across failed snapshots: if Persist fails after
+     the WAL was written, the staging dir keeps the WAL; the next snapshot
+     packages it instead of forcing a full.
+  f) FULL_NEEDED flag: when the incremental chain would be broken (first
+     snapshot, staging dir lost), force the next snapshot to be FULL.
+  g) WAL-size snapshot trigger (store.go:2988-3010): a jittered ticker
+     triggers a snapshot when the SQLite WAL exceeds SnapshotThresholdWALSize
+     — catches the case of many small writes that don't hit the entry-count
+     threshold.
+  h) Checksummed sidecars (.crc32) per data file; verified on Close and on
+     read.
+
+================================================================================
+2. COMPARISON WITH MY TWO EXISTING DESIGNS
+================================================================================
+
+2.1 Table
+---------
+  Aspect                       rqlite/hashicorp/raft        My async design (A)    My incremental (B)
+  ---------------------------  ---------------------------  ---------------------  ---------------------
+  Capture on Raft thread       FSM.Snapshot() must be      handle freeze, O(1)     delta emit, O(1)
+                               cheap (contract-forced)
+  Heavy work off Raft thread   FSMSnapshot.Persist on a    dedicated worker        snapshot writer
+                               dedicated snapshot goroutine
+  Concurrent Apply during      explicit (FSM must          yes (worker vs Raft     yes (writer vs Raft
+  persist                      tolerate)                   thread)                 thread)
+  Crash-safe publish           staging dir -> os.Rename -> same (staging ->        staging blocks ->
+                               parent dir fsync            rename -> dir fsync)    rename
+  Log compaction thread        snapshot goroutine          Raft-thread callback    incremental
+                                                           (bounded)               truncateUpTo
+  Follower install off-thread  NO (io.Copy on main loop)   YES (async store)       YES
+  Append backpressure          NONE (log can grow          YES (lag cap rejects    YES
+                               unboundedly)                appends)
+  Snapshot transfer            single-shot stream per      chunked, one per RTT    mostly WAL catch-up;
+                               follower goroutine          (flow control)          chunked cold path
+  Slow follower vs leader      MRSW store: snapshotting    release in-memory       frozen views (COW)
+  snapshotting                 continues under read lock   chunks when caught up
+  Incremental snapshots        YES (SQLite WAL) via        NO (periodic full)      YES (block store)
+                               engine-maintained WAL
+  Cost model                   O(DB) only in FULL Persist  periodic O(snapshot)    O(delta)/op +
+                               (off-loop)                  off-thread              amortized compaction
+  Point-in-time isolation      relies on SQLite file/WAL   explicit freeze         delta stream IS the
+                               consistency                (COW)                   capture
+  Fast restart                 fingerprint (skip re-       WAL replay after        load store + WAL
+                               restore)                   snapshot                 tail
+
+2.2 Where rqlite/hashicorp is clearly better
+--------------------------------------------
+  B1 Contract-forced capture: the Snapshot/Persist/sink split is enforced by
+     the framework; nothing in the FSM can accidentally do O(size) work in
+     Snapshot() without violating an explicit contract. My coordinator is a
+     hand-written state machine that needs code review to enforce the same.
+  B2 MRSW store + stream-from-disk: the leader keeps snapshotting and
+     compacting while a slow follower drains an old snapshot. My async design
+     releases in-memory chunks only after followers catch up — functionally
+     similar but strictly weaker (it needs matchIndex tracking and still
+     bounds concurrency by per-follower state). The store-level read lock is
+     simpler and also lets reaping run in the background.
+  B3 Incremental artifacts proven in production: full + incremental chain,
+     O(recent writes) cost, chain-repair via FULL_NEEDED + staging reuse —
+     validates Option B and adds two refinements (staging reuse on failure,
+     backlog/WAL-size triggers).
+  B4 Fast-restart fingerprint: skipping re-restore when on-disk state already
+     matches the snapshot is a big restart win for large state; I did not
+     have it.
+  B5 Persist-concurrent-with-Apply as a first-class guarantee: worth stating
+     as an explicit invariant in my design (I had it implicitly).
+
+2.3 Where my designs are clearly better
+---------------------------------------
+  A1 Follower install is off-thread (async store) — rqlite blocks the main
+     loop with io.Copy during install. Strictly stronger.
+  A2 Chunked, flow-controlled, resumable transfer — rqlite has a single-shot
+     stream (a broken transfer restarts the whole snapshot; no per-chunk flow
+     control).
+  A3 Append backpressure (lag cap) — hashicorp/raft has none; a stalled
+     snapshot store grows the log without bound.
+  A4 Explicit point-in-time isolation (freeze/delta) — Hazelcast's in-memory
+     state machines have no file-level consistency to lean on (CPMapRegistry
+     FIXME); rqlite gets this for free from SQLite.
+  A5 Deterministic chunking / series identity (raft-chunked-snapshot-review.txt
+     findings) — rqlite has no cross-member partitioning concern because the
+     snapshot is a byte stream.
+
+================================================================================
+3. VERDICT: WHAT IS ADVANTAGEOUS AND WORTH ADOPTING
+================================================================================
+
+Adopt (cheap, high value):
+  1. SnapshotHandle/Sink protocol mirroring FSMSnapshot/SnapshotSink
+     (Section 4.1) — makes capture-vs-persist structural.
+  2. MRSW semantics in the snapshot store + stream-from-disk for transfers
+     (Section 4.2) — replaces my matchIndex-based retention release.
+  3. Staging reuse on failure (Section 4.3) — resume, don't restart.
+  4. Backlog-based snapshot trigger in addition to the entry-count threshold
+     (Section 4.4) — mirrors rqlite's WAL-size trigger.
+  5. Fast-restart fingerprint where applicable (Section 4.5).
+
+Defer / integrate with Option B:
+  6. Full + incremental chain: already Option B; adopt rqlite's
+     chain-repair (FULL_NEEDED + staging reuse) and reaping-with-plan into B.
+
+Do NOT adopt:
+  7. io.Copy of received snapshots on the Raft thread (rqlite's weakness A1).
+  8. Single-shot un-chunked transfer (rqlite's weakness A2).
+  9. Absence of append backpressure (hashicorp's weakness A3).
+
+================================================================================
+4. REFINED DESIGN (OPTION C — RQLITE-INFORMED)
+================================================================================
+
+Option C = Option A (async design) + adoptions 1-5 above, with Option B as the
+later incremental phase. The guarantees of Option A (constant-time Raft-thread
+steps, log truncation after durable publish, backpressure, failure model) are
+unchanged; the changes below are structural and operational.
+
+4.1 SnapshotHandle/Sink protocol (mirror of FSMSnapshot/SnapshotSink)
+--------------------------------------------------------------------
+  Replace the coordinator's implicit "capture then worker" with an explicit
+  two-phase protocol in the raft impl:
+
+      // Phase 1 — CAPTURE. On the Raft thread. Must be O(1)-ish; the
+      // coordinator refuses any handle whose creation exceeds a budget.
+      // Contract: "capture a pointer to the state; all expensive work
+      // happens in persist()". Mirrors hashicorp FSM.Snapshot().
+      interface SnapshotHandle extends AutoCloseable {
+          long index();
+          int term();
+          // optional: total chunk count / size hints for flow control
+          void close();                     // release frozen state (COW gen)
+      }
+
+      // Phase 2 — PERSIST. On the snapshot worker. Runs concurrently with
+      // Apply on the Raft thread (single-writer to the store per group).
+      // Mirrors FSMSnapshot.Persist(sink).
+      interface SnapshotSink {
+          void writeChunk(SnapshotChunk chunk);   // -> staging
+          void complete();                        // fsync + rename + dir fsync
+          void cancel();                          // drop staging
+      }
+
+      // Coordinator (raft impl): trigger -> capture handles (O(1)) ->
+      // enqueue {handles, sink} to the bounded worker queue -> worker calls
+      // persist(sink) -> sink.complete() -> bounded completion callback on
+      // the Raft thread (monotonicity check, RaftLog.setSnapshot,
+      // lastApplied/members). Failure -> sink.cancel() -> bounded failure
+      // callback -> retry with backoff.
+  Enforcement: the coordinator measures capture cost and the callback cost
+  (metrics raft.snapshot.raftThread.captureMs / .publishMs) and logs a
+  warning if they exceed the budget — the structural analogue of hashicorp's
+  "must return quickly" contract, made observable.
+
+4.2 MRSW snapshot store + stream-from-disk (fixes slow-follower retention)
+--------------------------------------------------------------------------
+  The AsyncSnapshotStore (async design Section 8.3) gains rqlite's lock
+  model:
+      - beginSnapshot/publish (Create) -> READ lock
+      - openSnapshot (Open, for transfer) -> READ lock
+      - reap (delete old snapshots / consolidate) -> WRITE lock, background
+  Consequences:
+      - the leader can take a NEW snapshot while a slow follower streams an
+        OLD one (read-read concurrency) — no more "snapshotting stalls while
+        serving a laggard";
+      - transfer reads stream from the persisted snapshot (openSnapshot +
+        chunk framing), so the in-memory chunk list is no longer the transfer
+        source; it can be released immediately after publish
+        (memory bound drops from "until followers catch up" to "until
+        publish + one in-flight view");
+      - reaping (retention, section 5.4 of the async design) becomes a
+        background, idempotent, plan-file-crash-safe operation (rqlite's
+        plan-execute pattern; cheap to port).
+  This REPLACES my matchIndex-based release rule: the chunk list is released
+  at publish; transfers re-read the published snapshot file.
+
+4.3 Staging reuse on failure (resume, don't restart)
+----------------------------------------------------
+  On a failed generation (chunk write or publish error), retain the
+  successfully staged portion where possible:
+      - the async design's generation stages chunks in order; a failure at
+        chunk k retains chunks [0, k) in the staging area;
+      - the retry generation resumes from chunk k instead of regenerating
+        from scratch;
+      - the FULL_NEEDED analogue: if the staging area is lost (crash before
+        the rename, or node restart), the next snapshot must be a full
+        regeneration. A flag file (rqlite's FULL_NEEDED) carries this across
+        restarts.
+  This is an optimization (the retry path must still be correct when it
+  restarts); the constant-time guarantee is unaffected.
+
+4.4 Backlog-based snapshot trigger
+----------------------------------
+  In addition to commitIndexAdvanceCountToSnapshot (entry-count threshold),
+  trigger when the retained log bytes (or delta backlog) since the last
+  snapshot exceeds a configurable snapshotMaxLogBacklogBytes — the analogue
+  of rqlite's WAL-size trigger. Catches many-small-writes workloads that
+  never hit the entry threshold but grow the log and the restart replay
+  window. Same skip/coalesce/backpressure rules as the async design
+  Section 6.
+
+4.5 Fast-restart fingerprint (where applicable)
+-----------------------------------------------
+  After a successful durable publish, the store writes a small manifest
+  (snapshotIndex, chunk list checksums, total size) that lets the loader
+  verify the on-disk snapshot without re-reading every chunk. On restart:
+      - if the manifest validates, load metadata + truncated state directly;
+      - else fall back to the current load path.
+  For the incremental store (Option B), the fingerprint is the store's own
+  index checkpoints — already in Option B; for Option A it replaces a
+  full checksum pass on restart. (Hazelcast CPMap has no "file already on
+  disk" analogue of rqlite's SQLite file, so rqlite's exact skip-restore
+  trick does not transfer; the manifest is the useful part.)
+
+4.6 Incremental chain (alignment with Option B)
+-----------------------------------------------
+  Option B already models full + incremental; adopt rqlite's chain
+  maintenance details:
+      - chain-repair: FULL_NEEDED flag when the staging area or a WAL-equivalent
+        is lost (Option B Section 8);
+      - reaping with plan-execute crash safety (Option B compaction becomes
+        idempotent and resumable);
+      - chain resolution on read (ResolveFiles equivalent) so a follower can
+        be served base + deltas when it lags by a bounded amount.
+
+4.7 What stays from Option A / B (do NOT regress)
+-------------------------------------------------
+  - Follower install: chunks persist through the async store off-thread;
+    ack only after durable publish; staged restore (Option A 3.4). (rqlite
+    blocks here — we are strictly better.)
+  - Chunked, flow-controlled, resumable transfer (one chunk per round trip;
+    unchanged wire protocol).
+  - Level-3 lag-cap backpressure on appends.
+  - Deterministic chunking + series identity (raft-chunked-snapshot-review.txt
+    Layers 1-2) — prerequisites for any cross-member snapshot reasoning.
+
+4.8 Updated lifecycle walkthrough (leader, local generation)
+------------------------------------------------------------
+  1. Raft thread (O(1)): trigger check (entry-count OR backlog); capture
+     handles (O(1) freeze); create SnapshotSink in the store (READ lock);
+     enqueue generation task. No traversal, no serialization, no disk I/O.
+  2. Worker: traverse handles -> chunks (ChunkUtil) -> pre-serialize transfer
+     buffers -> sink.writeChunk per chunk (staging).
+  3. Store (off-thread): on last chunk, sink.complete() = flush + fsync +
+     atomic rename + dir fsync (READ lock held); durable-publish future.
+  4. Raft thread (O(1) callback): monotonicity check; RaftLog.setSnapshot(
+     alreadyFlushed=true); lastApplied/membership; release in-memory chunk
+     list (transfer now re-reads via openSnapshot, READ lock).
+  5. Coordinator -> IDLE. Reap (WRITE lock) runs in the background.
+  Transfer (slow follower): per-follower worker streams openSnapshot(id)
+  through the chunked protocol; concurrent new snapshots are allowed
+  (read-read).
+  Install (follower): unchanged from Option A 3.3 (off-thread persist,
+  durable-before-ack, staged restore).
+
+================================================================================
+5. API CHANGES DELTA (vs the two existing docs)
+================================================================================
+
+  - AsyncSnapshotStore (async design 8.3) gains:
+      void reap();                       // WRITE lock; background, idempotent
+      void setFullNeeded(); boolean isFullNeeded();   // chain-repair flag
+      SnapshotManifest readManifest(long index);      // fast-restart
+      // beginSnapshot/publish/openSnapshot take READ locks (store-internal)
+  - SnapshotCoordinator (raft impl): capture/persist protocol per 4.1;
+    backlog trigger per 4.4; staging-reuse resume logic per 4.3.
+  - SnapshotHandle/SnapshotSink: new interfaces (raft impl), 4.1.
+  - RaftAlgorithmConfig / properties: add
+      snapshotMaxLogBacklogBytes (backlog trigger, default e.g. 64 MB or off)
+      snapshotReapBackground (bool, default true)
+    (the rest of the config from the async/incremental docs is unchanged).
+  - No service-level API changes beyond Option A/B (handles, DeltaSink).
+
+================================================================================
+6. TESTS AND BENCHMARKS DELTA
+================================================================================
+
+  New/adjusted tests (on top of the async design's T1-T10):
+    C1 slowFollowerDoesNotBlockNewSnapshots: follower streaming an old
+       snapshot (delayed reads) while the leader keeps taking snapshots and
+       compacting; assert snapshot count advances and Raft-op p99 is flat.
+       (This is the regression rqlite's MRSW fix addresses.)
+    C2 publishReleasesInMemoryChunks: after sink.complete(), the chunk list
+       is released and transfer re-reads from openSnapshot.
+    C3 stagingReuseOnFailure: fail at chunk k; retry resumes from k; assert
+       no full regeneration and identical published snapshot.
+    C4 fullNeededAcrossRestart: crash before rename -> FULL_NEEDED set ->
+       next snapshot is a full regeneration.
+    C5 backlogTrigger: many small entries below the entry-count threshold
+       still trigger a snapshot once snapshotMaxLogBacklogBytes is exceeded.
+    C6 manifestFastRestart: after a clean publish, restart loads from the
+       manifest without a full checksum pass.
+    C7 followerInstallRemainsOffThread: rqlite regression guard — received
+       chunk persistence never appears on the Raft thread (T1 instrumentation).
+  Benchmark: reuse the async design's matrix; add
+    - slowFollower scenario: one follower with delayed reads; assert the
+      leader's snapshot rate and probe-op latency are unaffected;
+    - report snapshot-rate-while-serving (snapshots completed per minute with
+      a slow follower present).
+
+================================================================================
+7. COMPATIBILITY NOTES
+================================================================================
+
+  - Wire protocol: unchanged (same chunked InstallSnapshot protocol). The
+    MRSW/openSnapshot changes are store-internal; the sink protocol is
+    raft-internal.
+  - Snapshot format: unchanged for Option A; the manifest is additive
+    (missing manifest -> old load path). Option B's block store is new but
+    seeded from the existing full-snapshot format (unchanged).
+  - Rolling upgrade: new coordinator with old store -> sink falls back to the
+    synchronous path; new store with old raft code -> MRSW/manifest simply
+    unused. Behavior-neutral defaults.
+  - Config: backlog trigger and reap defaults preserve current behavior when
+    the feature is off.
+
+================================================================================
+8. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 MRSW lock scope: the READ lock must be held across a multi-gigabyte
+     transfer read; a concurrent REAP (write lock) may wait a long time.
+     Mitigation (rqlite's): reap runs in the background and waits; bound the
+     wait with a configurable timeout and defer the reap.
+  R2 Staging reuse complicates the failure matrix (partial staging + crash +
+     FULL_NEEDED bookkeeping). Contained by the flag-file state machine and
+     by keeping the restart-from-scratch path as the always-correct fallback.
+  R3 Backlog trigger interacts with the lag cap: both bound the retained log.
+     Keep them consistent (backlog trigger should fire well before the lag
+     cap rejects appends).
+  R4 The capture-budget warning (4.1) needs a sane default; a service that
+     violates the contract must not silently degrade. Log + metric first;
+     optionally reject the handle later.
+  OQ1 Adopt rqlite's directory-move trick for the LOCAL-node transfer case
+       (incremental path moves the staging dir instead of streaming)?
+       For Hazelcast: only useful if the snapshot store and the follower's
+       store can share a filesystem — not the cluster case; skip.
+  OQ2 Should the manifest double as the atomic "publication record" (term +
+       index + checksums) that the loader trusts? Recommend yes — it is the
+       metadata record Option B already specifies.
+  OQ3 Port rqlite's CRC32 sidecars to Hazelcast chunks? Cheap and catches
+       transfer corruption; the prior review already flagged weak chunk
+       validation — recommend yes for the incremental store, optional for A.
+
+================================================================================
+9. APPENDIX A — VERIFIED SOURCE ANCHORS
+================================================================================
+
+hashicorp/raft v1.7.3 (rqlite pins v1.7.3 in go.mod):
+  - FSM.Snapshot contract comment ("return quickly... capture a pointer to
+    the state, any expensive IO should happen as part of FSMSnapshot.Persist";
+    "Apply and Snapshot are always called from the same thread, but Apply will
+    be called concurrently with FSMSnapshot.Persist"): fsm.go:25-49
+  - FSMSnapshot interface (Persist/Release):                 fsm.go:71-79
+  - SnapshotSink interface (io.WriteCloser/ID/Cancel):       snapshot.go:63-67
+  - SnapshotStore interface (Create/List/Open):              snapshot.go:45-59
+  - runSnapshots goroutine ("parallel to the FSM and main
+    goroutines"):                                             snapshot.go:69-102
+  - shouldSnapshot (delta >= SnapshotThreshold):             snapshot.go:104-120
+  - takeSnapshot ("must only be called from the snapshot
+    thread, never the main thread"; Persist at :190, Close
+    :197, setLastSnapshot :202, compactLogs :205):           snapshot.go:122-211
+  - compactLogsWithTrailing (DeleteRange, TrailingLogs):     snapshot.go:213-248
+  - FileSnapshotStore staging->rename->parent-dir fsync:
+    tmpSuffix ".tmp": file_snapshot.go:29; Create: :160;
+    Close: writeMeta+os.Rename+parent Sync: :397-435; Cancel: :450-467
+  - installSnapshot ON THE MAIN THREAD: raft.go:1810-1950;
+    io.Copy(sink, rpc.Reader) at :1887; restore via fsmMutateCh
+    :1938-1945; compactLogs after install
+  - sendLatestSnapshot (per-follower goroutine; Open + stream): replication.go:
+    296-345
+
+rqlite master (user-provided repo):
+  - fsmSnapshot: store/store.go:2560-2736
+      snapshotSync + snapshotCAS; SetSynchronousMode(FULL->OFF);
+      auto-vacuum/optimize; full path: Checkpoint(nil) +
+      NewSnapshotStreamer + StateReader (:2633-2656); incremental path:
+      NewStagingDir + CreateWAL + Checkpoint(walWriter) + walWriter.Close +
+      NewSnapshotPathStreamer + StateReader (:2657-2719); FSMSnapshot wrapper
+      with Finalizer=createSnapshotFingerprint and OnRelease (FULL_NEEDED)
+      (:2724-2736)
+  - SnapshotThreshold wiring: store/store.go:2386-2387
+  - runWALSnapshotting (WAL-size trigger): store/store.go:2988-3010
+  - snapshot/DESIGN.md: MRSW lock (Create/Open read lock, Reap write lock);
+    full+incremental chain + ResolveFiles; reaping plan-execute (REAP_PLAN);
+    ChecksummedFile sidecars; staging persistence across failed snapshots;
+    FULL_NEEDED; clean-snapshot fingerprint (NoSnapshotRestoreOnStart); wire
+    format ([4B len][SnapshotHeader proto][DB bytes][WAL bytes] / incremental
+    header with wal_dir_path)
+  - store/DESIGN.md: FSM bridge; snapshot orchestration overview; fingerprint
+    details; WAL-size ticker
+
+Comparison basis (my designs):
+  - raft-async-snapshot-design.txt (Option A): coordinator, AsyncSnapshotStore,
+    bounds, backpressure, failure model, API, tests/benchmarks.
+  - raft-incremental-snapshot-design.txt (Option B): DeltaSink/DeltaContext,
+    CPMap DeltaEmittingCPMapStore, block store, incremental truncation,
+    durability model.
+  - raft-chunked-snapshot-review.txt: chunk protocol findings (deterministic
+    chunking + series identity are prerequisites).
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  COW   Copy-On-Write — the freeze mechanism for point-in-time views.
+  CPMap A linearizable map in the CP subsystem (Hazelcast).
+  FSM   In the Go raft/rqlite ecosystem: the replicated state machine that
+        applies the log (rqlite's is SQLite). Not "finite state machine".
+  FULL_NEEDED rqlite's flag forcing the next snapshot to be a full one.
+  fsync Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  goroutine / io.Pipe Go concurrency primitives rqlite/etcd stream snapshot
+        copies through.
+  hashicorp/raft The Go Raft library rqlite is built on.
+  MB/GB Megabyte / gigabyte (chunk and snapshot sizes).
+  MRSW  Multi-Reader Single-Writer — rqlite's snapshot-store lock model.
+  O(1)  Big O notation — per-step complexity claims.
+  p99/p95/p50 Latency percentiles (benchmark acceptance).
+  RTT   Round-Trip Time — one chunk per RTT is the transfer flow control.
+  SnapshotHandle/SnapshotSink Proposed capture/persist interface types.
+  SPI   Service Provider Interface — a pluggable extension contract.
+  WAL   Write-Ahead Log — the durable mutation log.
+  C* / T* / R* / OQ* Test, risk, and open-question ids (cross-referenced).
+
+================================================================================
+END OF DESIGN (OPTION C)
+================================================================================

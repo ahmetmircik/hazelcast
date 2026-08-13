@@ -1,0 +1,154 @@
+================================================================================
+RAFT SNAPSHOT REDESIGN — TERMINOLOGY / GLOSSARY
+Shared reference for the design documents (Options A-F):
+  raft-async-snapshot-design.txt           (Option A — async full snapshot)
+  raft-incremental-snapshot-design.txt     (Option B — WAL + incremental)
+  raft-snapshot-rqlite-informed-design.txt (Option C — rqlite-informed)
+  raft-sqlite-state-store-design.txt       (Option D — SQLite backend)
+  raft-etcd-informed-design.txt            (Option E — etcd-informed)
+  raft-versioned-state-design.txt          (Option F — revised synthesis)
+Date: 2026-08-12
+================================================================================
+
+A. DATA STRUCTURES AND ALGORITHMS
+  HAMT   Hash Array Mapped Trie — a persistent (immutable, structural-sharing)
+         hash map, O(log_32 n) per operation. Proposed in an early draft of
+         Option F and REJECTED: per-op apply must stay O(1) on the Raft thread.
+  CHM    ConcurrentHashMap — Java's concurrent hash map; the live CPMap store.
+  COW    Copy-On-Write — deferring a copy until the first write. Used for
+         point-in-time views; REJECTED as a Raft-thread freeze because the
+         first post-freeze mutation copies O(container) on the mutating
+         thread (the Option A hole the shadow freeze fixes).
+  LSM    Log-Structured Merge-tree — write-optimized storage: an in-memory
+         memtable plus sorted immutable runs, compacted in the background.
+  MVCC   Multi-Version Concurrency Control — retaining multiple versions of
+         records so readers observe a consistent point-in-time view.
+  B-tree Balanced search tree; bbolt is a memory-mapped B-tree engine.
+  memtable The in-memory buffer of an LSM, flushed to durable runs.
+  structural sharing Unchanged nodes are shared between versions of an
+         immutable data structure (the mechanism behind HAMT and immutable
+         maps; enables cheap version diffs).
+  Big O  Asymptotic complexity notation: O(1) constant-time, O(log n)
+         logarithmic, O(n) linear in the input size n. The acceptance
+         criterion is expressed in these terms (per-op O(1); per-cycle
+         bounded, independent of snapshot size).
+
+B. STORAGE / PERSISTENCE
+  WAL    Write-Ahead Log — the durable mutation log. In Hazelcast CP the Raft
+         log already IS the WAL (persistEntry + batched fsync); a separate
+         app-level WAL is redundant.
+  fsync  Force the OS file buffers to disk — the durability point of a write.
+  mmap   Memory-mapped file I/O — file pages mapped into the address space;
+         the basis of bbolt read-transaction snapshots (O(1) capture).
+  bbolt  BoltDB — Go embedded KV store (mmap'd B-tree) used by etcd; a
+         read-only transaction is an O(1) point-in-time view.
+  KV     Key-Value (data model).
+  SQL    Structured Query Language; RDBMS — Relational Database Management
+         System; JDBC — Java Database Connectivity (e.g. the SQLite JDBC
+         driver).
+  NFS    Network File System — POSIX-locking caveat for embedded DBs.
+  POSIX  Portable Operating System Interface — the rename/fsync semantics the
+         atomic-publish designs rely on.
+  CRC    Cyclic Redundancy Check — checksum for integrity (CRC32 in the docs).
+  tx     Transaction (bbolt Tx / SQLite transaction).
+  I/O    Input/Output.
+  LRU    Least Recently Used — cache replacement (e.g. a DB-handle cache).
+  SST    Sorted String Table — an immutable sorted run in an LSM (used by
+         LSM-based engines; the block store in Option B is its in-memory
+         analogue).
+
+C. CONCURRENCY / PLUMBING
+  MRSW   Multi-Reader Single-Writer — a lock that admits many concurrent
+         readers and one writer (rqlite's snapshot store: create/read under a
+         read lock, reaping under the write lock).
+  CAS    Compare-And-Swap / Compare-And-Set — an atomic conditional update;
+         also CPMap's compareAndSet op and rqlite's snapshotCAS gate.
+  RPC    Remote Procedure Call — how Raft messages are sent.
+  RTT    Round-Trip Time — one chunk per RTT is the transfer flow-control
+         unit.
+  SPI    Service Provider Interface — a pluggable extension contract.
+         Option B's DeltaSink was an SPI; the revised Option F confines the
+         emitter to a CPMap-internal decorator (no generic SPI).
+  API    Application Programming Interface.
+  goroutine A lightweight concurrent function in Go — rqlite/etcd run their
+         snapshot copies in goroutines (the Go analogue of a worker thread).
+  io.Pipe Go's synchronous in-memory pipe — etcd streams snapshot bytes
+         through one to bound memory during transfer.
+
+D. RAFT / CONSENSUS
+  Raft   The replicated-log consensus algorithm (Ongaro & Ousterhout, 2014)
+         that Hazelcast CP is built on. ("Raft" is the algorithm's name, not
+         an acronym.)
+  FSM    In the Go raft/rqlite/etcd ecosystem: the replicated state machine
+         that applies the committed log (rqlite: SQLite; etcd: mvcc/bbolt).
+         Not the generic "finite state machine" reading.
+  term   Election term number — monotonic; used to reject stale messages.
+  commit index  The highest log index known to be committed (replicated on a
+         majority).
+  lastApplied   The highest log index applied to the state machine.
+  snapshot index The log index a snapshot was taken at.
+  S      (design notation) the durable snapshot index of the incremental
+         store (Option B) — the highest index whose state is durably
+         materialized.
+  quorum A majority of group members (needed to commit).
+  AppendEntries / InstallSnapshot / PreVote / VoteRequest — the Raft RPCs.
+  log matching property The Raft invariant: two logs that agree on index and
+         term are identical up to that index (basis of snapshot consistency).
+  roles  leader / follower / candidate.
+  generation (design notation) one snapshot-producing run of the coordinator;
+         a generation id disambiguates overlapping/obsolete snapshot work.
+  memory tier / disk tier Option E's two snapshot cadences: a cheap,
+         frequent in-memory snapshot index (drives log compaction and
+         catch-up metadata) and a rarer, durable disk snapshot.
+
+E. HAZELCAST-SPECIFIC
+  CP     In Hazelcast: the CP subsystem — the Raft-based linearizable
+         subsystem (the "CP" of the CAP theorem: Consistency + Partition
+         tolerance).
+  CPMap  A linearizable map in the CP subsystem.
+  Data   com.hazelcast.internal.serialization.Data — Hazelcast's binary
+         serialized key/value representation (immutable).
+  RaftNodeImpl / RaftLog / RaftStateStore / RaftIntegration — Hazelcast raft
+         implementation classes: the raft node, the in-memory log
+         ringbuffer, the persistence contract, and the platform integration
+         point.
+  ringbuffer  The ArrayRingbuffer backing RaftLog (in-memory log storage).
+  PartitionOperationThread — Hazelcast's partition thread that runs Raft
+         node tasks; "the Raft thread" throughout these documents.
+  NopRaftStateStore  The no-op persistence store (OSS/test).
+  IDS    IdentifiedDataSerializable — Hazelcast's performant serialization
+         interface for DTOs (SnapshotEntry, SnapshotChunk, DeltaRecord).
+  committedGroupMembers / membersLogIndex — group membership metadata captured
+         with a snapshot.
+  SnapshotEntry / SnapshotChunk — the raft-impl log classes holding a
+         snapshot and one chunk of it.
+  AsyncSnapshotStore / IncrementalSnapshotStore — proposed store interfaces
+         (Option A / Option B).
+  DeltaSink / DeltaContext / DeltaRecord — Option B's delta types.
+  DeltaEmittingCPMapStore — the CPMap-internal decorator that emits deltas
+         from store-call outcomes.
+  SnapshotHandle / SnapshotSink / SnapshotView — proposed capture/persist
+         interface types across the options.
+
+F. METRICS / NOTATION
+  p50 / p95 / p99 / max — latency percentiles and the maximum (benchmark
+         reporting: the acceptance criterion is checked on these).
+  ms / MB / GB — millisecond / megabyte / gigabyte.
+  hex    Hexadecimal — raftlog file names use base-16 indices.
+  mtime  File modification time (etcd's clean-snapshot fingerprint).
+  V      (design notation) a captured state version (Option E/F).
+  A..F   The six design options (document ids).
+  T*/C*/D*/E*/F* — test ids; R* — risk ids; OQ* — open-question ids;
+         C1..C8 / D5.x — guarantee ids. Cross-referenced between documents.
+  snapshotCAS rqlite's mutual-exclusion gate for snapshot / backup / CRC
+         verification.
+  FULL_NEEDED rqlite's flag forcing the next snapshot to be a full one when
+         the incremental chain would be broken.
+  lag cap  The hard bound on how far the durable snapshot may lag the commit
+         index (maxSnapshotLag); exceeding it rejects new appends.
+  catch-up window The retained log entries after a snapshot that slow
+         followers still need (etcd's SnapshotCatchUpEntries).
+  inflight snapshot A snapshot transfer currently being served to a follower.
+================================================================================
+END OF GLOSSARY
+================================================================================

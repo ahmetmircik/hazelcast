@@ -1,0 +1,933 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — ASYNC GENERATION AND PERSISTENCE
+Design Document
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Scope: snapshot generation, chunking, disk persistence, atomic publication,
+       follower installation, leader-side transfer coordination, and their
+       interaction with the single-threaded Raft execution path.
+Date:  2026-08-11
+Status: Design (no implementation in this deliverable)
+
+Related documents (same workspace):
+  - raft-chunked-snapshot-review.txt  (correctness review of the chunk protocol;
+    referenced for transfer invariants and known resource risks)
+  - raft-direct-to-leader-regression-findings.txt (unrelated to snapshots;
+    included for context of the repo workflow only)
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary
+  1.  Constant-time guarantee: precise scope
+  2.  Current-state latency analysis (where data-size-dependent work runs)
+  3.  Proposed architecture and state ownership
+  4.  Concurrency, consistency, durability, atomic-publication guarantees
+  5.  Memory, disk-space, queue, and retained-log bounds
+  6.  Backpressure under slow generation / storage
+  7.  Failure, cancellation, cleanup, crash-recovery behavior
+  8.  Required service-level and persistence API changes
+  9.  Compatibility implications
+ 10.  Tests and benchmarks
+ 11.  Phased rollout
+ 12.  Risks and open questions
+ 13.  Appendix A — exact code locations and invariants used
+
+================================================================================
+0. EXECUTIVE SUMMARY
+================================================================================
+
+Problem
+-------
+Every stage of the snapshot lifecycle today runs synchronously on a Raft
+executor thread (a Hazelcast PartitionOperationThread), and each stage costs
+O(state-machine size) or is exposed to blocking disk latency:
+
+  - Generation: RaftNodeImpl.takeSnapshotIfCommitIndexAdvanced() calls
+    raftIntegration.takeServiceSnapshots() (full service traversal),
+    createChunksFromSnapshot() (chunk building/sorting), then
+    persistAndFlushSnapshotChunks() which writes EVERY chunk to disk and
+    finishes with a blocking flushLogs()/fsync.
+  - Transfer: the leader serializes a whole InstallSnapshotRequest (up to the
+    250 MB chunk cap) synchronously inside raftIntegration.send() on the
+    partition thread; the full chunk list is retained in memory for the
+    lifetime of the log and for the entire duration a follower is behind.
+  - Installation (follower): every received chunk is written to disk on the
+    Raft thread, followed by a blocking flushLogs() and a full
+    restoreSnapshot() (O(snapshot size) op application) before the ack.
+
+Because a PartitionOperationThread serves many partitions, one large snapshot
+in one CP group raises tail latency for all partitions on that thread.
+
+Goal (restated)
+---------------
+The Raft thread's involvement in the snapshot lifecycle is reduced to bounded,
+effectively constant-time coordination:
+
+  - capture an immutable point-in-time view (handle)          -> O(1)-ish
+  - enqueue a generation task                                  -> O(1)
+  - process a completion / failure callback                    -> O(1) + O(bounded
+                                                                  log-capacity)
+  - never wait on disk writes, fsync, rotation, or publication -> never
+
+All data traversal, serialization, compression, chunking, disk I/O, staging,
+fsync, file rotation, and atomic publication move to a dedicated, bounded
+asynchronous pipeline owned by the Raft module, with the disk backend supplied
+by the platform (the enterprise RaftStateStore).
+
+Key design decisions
+--------------------
+  1. Per-node SnapshotCoordinator (raft impl) with one in-flight generation per
+     group; generation id disambiguates overlapping/obsolete work.
+  2. Service-level point-in-time handles with copy-on-write freeze: O(1) freeze
+     on the Raft thread, traversal entirely on the worker. This also fixes the
+     existing CPMapRegistrySnapshot FIXME ("not a point in time snapshotting").
+  3. AsyncSnapshotStore contract (persist chunks -> fsync -> atomic rename ->
+     dir fsync -> durable-publish future). The Raft thread is notified via a
+     single queued callback carrying a small result record.
+  4. Log truncation (in-memory ringbuffer + disk eviction) happens ONLY after
+     the durable-publish future completes.
+  5. Bounded queue + concurrency limit in front of the worker; when full, the
+     trigger is skipped (snapshot lags). A hard snapshot-lag cap converts
+     overload into rejected new appends (existing backpressure mechanism),
+     bounding retained log growth.
+  6. Follower install acks are sent only after the async store confirms
+     durability; the install itself becomes a staged build + O(1) reference
+     swap where the service supports it.
+  7. No wire-protocol changes. Snapshot format on disk unchanged. New API is
+     additive; legacy stores/services fall back to today's path.
+
+The acceptance criterion becomes a measurable invariant: the duration of any
+single Raft-thread task in the snapshot lifecycle is bounded by a constant
+independent of state-machine size and disk-write duration, verified by the
+tests and benchmark in section 10.
+
+================================================================================
+1. CONSTANT-TIME GUARANTEE: PRECISE SCOPE
+================================================================================
+
+What is guaranteed (bounded, effectively constant-time per Raft-thread step)
+----------------------------------------------------------------------------
+The following snapshot-related Raft-thread operations have complexity
+independent of snapshot/state-machine size and of storage latency:
+
+  1. Trigger check (commitIndex - snapshotIndex >= threshold, queue capacity,
+     in-flight flag): O(1).
+  2. Point-in-time handle capture for every SnapshotAwareService: O(1) freeze
+     (reference swap / COW generation bump), regardless of the service data
+     size. (For services not yet migrated to handles, the legacy capture is
+     O(#CP objects in the group) — small, but treated as a migration item.)
+  3. Enqueue of the generation task into the bounded queue: O(1); a full queue
+     results in a skip, never a blocking wait.
+  4. Completion callback (durable publish confirmed): O(1) validation
+     (monotonicity) + O(1) SnapshotEntry swap + ringbuffer truncation of at
+     most `logCapacity` slots (logCapacity is a configuration-derived
+     constant, section 5) + O(1) lastApplied/membership update.
+  5. Failure callback: O(1) — record, log, schedule retry with backoff.
+  6. Follower per-chunk handling: O(1) metadata validation + O(1) enqueue to
+     the async store. The store's write is off-thread.
+  7. Follower install-completion: O(1) reference swap of the assembled
+     SnapshotEntry + O(1) commitIndex/lastApplied/ack, after the async store
+     confirms durability. Staged restore (section 3.4) keeps the state-machine
+     application off-thread.
+  8. Leader per-chunk send: bounded by the chunk-size cap (config), not by the
+     whole snapshot size; chunks are pre-serialized once at generation time
+     (off-thread) so each send step is a bounded buffer copy (section 3.6).
+
+What is NOT guaranteed constant-time (and why that is acceptable)
+-----------------------------------------------------------------
+  - The total wall-clock time to generate + persist a snapshot is
+    O(snapshot size) and grows with size and storage latency. This work is
+    moved off the Raft thread; it never blocks it.
+  - State-machine application (applyLogEntries, restoreSnapshot) is inherent
+    Raft state-machine work, identical in kind to normal operation
+    application; the design removes snapshot-machinery overhead but does not
+    promise that applying N committed entries is O(1). Restore is offloaded
+    via staged build where the service supports it so that the install
+    *completion* on the Raft thread stays O(1).
+  - General log-entry flush/fsync (FlushTask) remains on the Raft thread as
+    today: it is disk-latency-dependent but NOT data-size-dependent (batched,
+    bounded by appendRequestMaxEntryCount), and it gates commit semantics.
+    The snapshot redesign must not increase its frequency.
+
+Formal acceptance criterion
+---------------------------
+For a fixed configuration, let T(size, storage) be the wall-clock duration of
+any single Raft-thread task that initiates, coordinates, completes, or fails a
+snapshot, measured with state-machine size `size` under storage condition
+`storage`. The design requires T(size, storage) <= B for a small constant B
+(see section 10 for measurement methodology and the target values), where B is
+independent of `size` and of write/fsync delay.
+
+================================================================================
+2. CURRENT-STATE LATENCY ANALYSIS
+================================================================================
+
+Execution context: all Raft node tasks run on a single-threaded executor
+(PartitionOperationThread via NodeEngineRaftIntegration.execute/submit). The
+same thread serves every partition mapped to it, so any blocking work in one
+CP group stalls all other partitions on that thread.
+
+2.1 Generation path (Raft thread, synchronous, O(snapshot size))
+----------------------------------------------------------------
+applyLogEntries() -> takeSnapshotIfCommitIndexAdvanced()
+(RaftNodeImpl.java:939-974, 1128-1215). Triggered on every commit advance when
+commitIndex - snapshotIndex() >= commitIndexAdvanceCountToSnapshot (default
+10000), for both LEADER and FOLLOWER roles.
+
+  a) raftIntegration.takeServiceSnapshots(commitIndex)
+     (NodeEngineRaftIntegration.java:259-277): iterates every
+     SnapshotAwareService and calls takeSnapshotChunks()/takeSnapshot().
+     - CPMapService.takeSnapshotChunks (CPMapService.java:166-171) -> 
+       CPMapRegistry.takeSnapshot() (CPMapRegistry.java:130) ->
+       CPMapRegistrySnapshot.toChunks() (CPMapRegistrySnapshot.java:64-97)
+       iterates every map store and every entry, allocating
+       KeyValueDataChunks. O(n entries). NOTE: CPMapRegistrySnapshot.java:40-45
+       carries a FIXME stating it references the live stores — safe today only
+       because the traversal is single-threaded.
+     - AtomicLong/AtomicRef/Semaphore/etc. copy their registries. O(#CP
+       objects).
+  b) createChunksFromSnapshot (ChunkUtil.java:96-228): walks the snapshot map,
+     creates RestoreSnapshotOps, sorts chunks by size (O(k log k)), merges
+     non-chunked ops into the last chunk, finalizes chunk metadata. O(snapshot
+     size) in allocations.
+  c) persistAndFlushSnapshotChunks (RaftNodeImpl.java:1217-1234): for EVERY
+     chunk calls stateStore.persistSnapshotChunk(chunk) — a synchronous disk
+     write of the whole snapshot — then stateStore.flushLogs() — a blocking
+     flush/fsync whose latency is unpredictable on slow or stalled storage.
+  d) log.setSnapshot(snapshotEntry, highestLogIndexToTruncate, alreadyFlushed
+     = true) (RaftLog.java:322-353): in-memory ringbuffer truncation, bounded
+     by logCapacity (config-derived), O(logCapacity). This is the only bounded
+     step today.
+  e) Comment "we flushed the snapshot to the storage. it is safe to modify the
+     memory state now." (RaftNodeImpl.java:1206-1207) shows the design intent:
+     memory state is only advanced after durability — but today that ordering
+     is enforced by BLOCKING the Raft thread.
+
+Latency contribution: O(snapshot size) CPU + serialization + disk write +
+fsync, all on the Raft thread.
+
+2.2 Transfer path (leader Raft thread)
+--------------------------------------
+  a) sendAppendRequest -> shouldSendSnapshot -> sendSnapshotRequest
+     (RaftNodeImpl.java:707-744, 756-760): when a follower's nextIndex falls at
+     or below snapshotIndex(), the leader sends snapshot metadata.
+  b) sendNextSnapshotChunk (RaftNodeImpl.java:762-822): the chunk object is
+     put into InstallSnapshotRequest and raftIntegration.send(request,
+     follower) serializes the request on the partition thread. With the
+     default 250 MB chunk cap, one send step is up to ~250 MB of synchronous
+     serialization on the Raft thread.
+  c) Retention: RaftLog.snapshot holds the full in-memory chunk list for the
+     lifetime of the log and for as long as any follower is behind (prior
+     review Finding 7); a permanently unreachable follower makes the leader
+     re-serialize the full chunk on every backoff cycle.
+
+2.3 Installation path (follower Raft thread)
+--------------------------------------------
+  a) ChunkedSnapshotInstaller.processChunk (ChunkedSnapshotInstaller.java:75-97)
+     -> persistAndTrackChunk (225-237): stateStore.persistSnapshotChunk(chunk)
+     — synchronous disk write per chunk on the follower's Raft thread.
+  b) On the last chunk: createSnapshotFromChunks (255-265) calls
+     stateStore.flushLogs() — blocking fsync — then installCompleteSnapshot ->
+     raftNode.installSnapshot (RaftNodeImpl.java:1241-1276):
+     - state.commitIndex(snapshot.index()); raftLog.setSnapshot(snapshot);
+       raftLog.flush() (blocking if dirty);
+     - raftIntegration.restoreSnapshot(snapshot, index) applies every restore
+       op on the Raft thread — O(snapshot size) state-machine work;
+     - only then AppendSuccessResponse is sent to the leader.
+  c) resetForChunkedSnapshotRestore() destroys live chunked service state
+     before the install (prior review Finding 3) — a correctness issue that
+     the staged-build design (section 3.4) also fixes.
+
+2.4 Summary table of Raft-thread costs today
+--------------------------------------------
+  Step                                    Location                       Cost
+  --------------------------------------  ----------------------------   ---------------
+  trigger check                           RaftNodeImpl:1130              O(1)
+  service traversal + snapshot objects    RaftIntegration:259-277        O(snapshot)
+  chunk building/sorting/merge            ChunkUtil:96-228               O(snapshot)
+  per-chunk disk write (leader gen)       RaftNodeImpl:1220-1227         O(snapshot) + disk
+  flushLogs/fsync (leader gen)            RaftNodeImpl:1230              disk latency
+  ringbuffer truncation                   RaftLog:333-343                O(logCapacity)
+  chunk send serialization (leader)       RaftNodeImpl:812-820           O(chunk cap)
+  per-chunk disk write (follower)         ChunkedSnapshotInstaller:229   O(chunk) + disk
+  flushLogs/fsync (follower install)      ChunkedSnapshotInstaller:258   disk latency
+  restore application (follower install)  RaftNodeImpl:1260              O(snapshot)
+  ack after durable                       RaftNodeImpl:1272-1273         (after blocking)
+
+Everything except the ringbuffer truncation is O(snapshot size) or
+disk-latency-exposed. This is the latency source the redesign removes.
+
+================================================================================
+3. PROPOSED ARCHITECTURE AND STATE OWNERSHIP
+================================================================================
+
+3.1 Ownership model
+-------------------
+  In-memory snapshot state:
+    - The point-in-time handle (frozen generation) is owned by the service and
+      pinned by the coordinator until the worker finishes traversal.
+    - The generated chunk list is owned by the generation (worker); after
+      durable publish it becomes the immutable operation payload of the
+      published SnapshotEntry held by RaftLog.snapshot (as today), and is
+      released once no follower needs it (section 5).
+  On-disk snapshot state:
+    - A staging file (per generation id) is owned by the AsyncSnapshotStore
+      backend until atomic publication; after the atomic rename it becomes the
+      published snapshot, owned by the store (rotation/retention per section
+      5). The Raft module never touches disk paths directly.
+
+3.2 New components (raft impl package)
+--------------------------------------
+  SnapshotCoordinator (one per RaftNodeImpl, i.e., per group):
+    State machine (confined to the Raft thread):
+      IDLE -> CAPTURING (handles acquired, generation id assigned, task
+              enqueued) -> GENERATING/PERSISTING (worker, no Raft-thread
+              state) -> COMPLETED (callback queued) -> IDLE
+      any state -> FAILED (callback queued) -> IDLE (retry with backoff)
+    Fields: inFlight generation id, last triggered index, retry counter,
+    pending-failure flag. All transitions are O(1) record updates.
+    Guards:
+      - at most one generation in flight per group;
+      - a trigger is skipped (not queued) when the worker queue is full or a
+        generation is in flight (section 6);
+      - completion/failure callbacks are submitted to the Raft executor
+        (raftIntegration.submit), preserving happens-before with all other
+        Raft tasks; each callback does bounded work (section 1).
+
+  SnapshotGeneration (worker-owned):
+    - generationId, snapshotIndex, snapshotTerm, members snapshot;
+    - the ordered list of handles to traverse;
+    - stage 1 (worker): traverse handles -> List<SnapshotChunk> using the
+      existing ChunkUtil (deterministic chunking is REQUIRED — see section 9);
+      pre-serialize each chunk into a transfer-ready buffer (section 3.6);
+    - stage 2 (worker): feed chunks to AsyncSnapshotStore.persistChunk(...);
+    - stage 3 (worker): AsyncSnapshotStore.publishSnapshot(generationId) ->
+      future;
+    - on future success: submit completion record {index, term, chunkList,
+      members} to the Raft thread;
+    - on future failure: abort generation (store.abortSnapshot), submit a
+      failure record to the Raft thread.
+
+  AsyncSnapshotStore (new interface, implemented by the platform store):
+    Contract in section 8.3. It owns staging, fsync, atomic rename,
+    directory fsync, log-file eviction, and orphan cleanup on open().
+
+3.3 Snapshot lifecycle walk-through
+-----------------------------------
+  Local generation (leader or follower node, commit advance):
+    1. Raft thread (O(1)): coordinator checks trigger; if the worker queue has
+       capacity, it captures a point-in-time handle per service (O(1) freeze)
+       and enqueues a generation task. commitIndex/term/members are captured
+       with the handle. No traversal, no serialization, no disk I/O.
+    2. Worker: traverses handles, builds chunks (ChunkUtil), pre-serializes
+       transfer buffers, streams chunks to the store's staging file.
+    3. Store (off-thread): on last chunk, flush + fsync + atomic rename +
+       directory fsync; completes the publish future. (Log-file eviction of
+       entries <= snapshotIndex happens here, inside the store.)
+    4. Raft thread (O(1) callback): monotonicity check (index > current
+       snapshot index, else drop); RaftLog.setSnapshot(entry, truncateUpTo,
+       alreadyFlushed=true) — memory ringbuffer truncation only, bounded by
+       logCapacity; lastApplied/membership updates as today. No disk I/O.
+    5. Coordinator -> IDLE. The in-memory chunk list becomes the transfer
+       source and is released when followers catch up (section 5).
+
+  Follower install (leader-initiated transfer):
+    1. Raft thread per chunk (O(1)): validate metadata (existing guards,
+       including the series-identity fixes from raft-chunked-snapshot-review.txt
+       Finding 1/2), enqueue the chunk to the store's staging generation.
+       No disk write on the Raft thread.
+    2. Worker/store: persist chunk; when the final missing chunk is persisted,
+       publishSnapshot -> durable-publish future.
+    3. Raft thread (O(1) callback): assemble the in-memory SnapshotEntry
+       (list reference swap; sorting moved to the worker or performed
+       incrementally in O(1) amortized per chunk), run the staged restore
+       (section 3.4), set commitIndex/lastApplied, send AppendSuccessResponse.
+       The ack is only sent AFTER durability (future completed) — same
+       semantic as today, but the wait is off-thread.
+
+3.4 Point-in-time view (service level) and staged restore
+----------------------------------------------------------
+  Handles (new, section 8.1): SnapshotHandle / ChunkedSnapshotHandle are
+  immutable references to a frozen generation of the service state. Freeze is
+  O(1): the service bumps a volatile "mutable generation" reference; first
+  mutation after a freeze clones the affected structure (copy-on-write). Per-
+  entry Data objects are immutable, so no deep copy is needed; only the
+  container (CPMapStore map, timestamp map, registry) is cloned on first write
+  after freeze. This directly resolves CPMapRegistrySnapshot.java:40-45 FIXME.
+  Traversal reads the frozen generation; concurrent mutations hit the new one.
+  The frozen generation is released by handle.close() after the worker
+  finishes.
+
+  Staged restore (follower install): where the service supports it, restore is
+  performed by the worker into a staging instance (new CPMapStore objects,
+  etc.); the Raft thread swaps the live reference in O(1) and releases the old
+  one. Services that do not yet support staging fall back to the current
+  on-thread restoreSnapshot, which is a documented migration item. This also
+  removes the destructive resetForChunkedSnapshotRestore()-before-validate
+  ordering (prior review Finding 3).
+
+3.5 Async disk pipeline and atomic publication
+----------------------------------------------
+  Pipeline (all off-thread):
+    chunk write (buffered) -> flush on last chunk -> fsync(file) ->
+    atomic rename(staging -> published) -> fsync(parent dir) -> complete
+    future.
+  Atomicity: rename is atomic on POSIX filesystems; a crash at any point
+  leaves either the previous published snapshot or the new one — never a
+  partial snapshot. Crash recovery (section 7) deletes orphaned staging files.
+  Rotation: after the new snapshot is published and durable, the previous
+  published snapshot is retained until safe deletion (section 5) and log
+  entries <= snapshotIndex are evicted by the store.
+
+3.6 Transfer changes
+--------------------
+  - Chunks are pre-serialized once at generation time (worker) into
+    transfer-ready buffers (Data). The leader's per-send step cost becomes a
+    bounded buffer copy instead of full object-graph serialization.
+  - Per-send cost is bounded by the chunk-size cap (constant w.r.t. snapshot
+    size). A new cluster-wide config snapshot.transfer.chunk.max.bytes
+    (optional, section 8.4) can lower the per-send bound without changing the
+    wire format (chunk boundaries are config-defined cluster-wide, matching
+    the existing "same on all nodes" requirement of
+    hazelcast.cp.snapshot.chunk.max.size.mb).
+  - Flow control stays one-chunk-per-round-trip (unchanged protocol).
+  - Retention fix (prior review Finding 7): once every follower's matchIndex
+    >= snapshotIndex, the coordinator releases the in-memory chunk list; slow
+    followers are served by re-reading the published snapshot file via
+    AsyncSnapshotStore.openSnapshot(snapshotIndex) (streamed chunks), so a
+    stalled follower does not pin the leader's heap.
+
+================================================================================
+4. CONCURRENCY, CONSISTENCY, DURABILITY, ATOMIC-PUBLICATION GUARANTEES
+================================================================================
+
+C1 Snapshot-index/term consistency. The handle is captured on the Raft thread
+   at commit index I after applying up to I, so the frozen view is exactly the
+   committed state at I; the published SnapshotEntry carries (term(I), I,
+   members at I) captured at the same instant. Invariant preserved from the
+   current implementation (verified in raft-chunked-snapshot-review.txt §2.1).
+
+C2 Log-truncation ordering. RaftLog.setSnapshot (in-memory truncation) and the
+   store's log-file eviction are invoked only from the completion callback,
+   i.e., strictly after the durable-publish future succeeds. A snapshot is
+   never partially persisted when the log is truncated. "Prevents log
+   truncation until the complete snapshot has been generated, durably
+   persisted, and safely published" — satisfied by construction.
+
+C3 Single-writer Raft confinement. All RaftLog/SnapshotEntry/coordinator
+   mutations happen on the Raft executor; the worker communicates only via
+   (a) the frozen handle (immutable), (b) the store (own thread), and (c) a
+   completion/failure callback submitted to the executor. No shared mutable
+   state between worker and Raft thread beyond these.
+
+C4 Durability before acknowledgement. The follower sends AppendSuccessResponse
+   for an installed snapshot only after the store confirms the publish future
+   (fsync + rename + dir fsync). A crash before that leaves the previous
+   snapshot (or no snapshot) and the follower re-syncs — never acknowledges
+   state it may lose.
+
+C5 Atomic publication. Publication is a single atomic rename; readers (crash
+   recovery, transfer re-read) observe either the complete old or the complete
+   new snapshot. Generation ids on staging files prevent cross-generation
+   confusion.
+
+C6 No index regression / no stale publication. The completion callback rejects
+   any index <= current snapshotIndex (matches installSnapshot guards,
+   RaftNodeImpl.java:1242-1249); a late completion from an obsolete generation
+   is dropped in O(1). commitIndex/lastApplied move only forward.
+
+C7 Point-in-time isolation. Because the handle freezes a generation, the
+   worker's traversal never observes mutations committed after the capture
+   index, and concurrent mutations never observe a partially traversed
+   snapshot. (Resolves the CPMapRegistrySnapshot FIXME.)
+
+C8 Restore atomicity (follower install). Staged build replaces the live
+   service reference only after all chunks are present and durable; a failed
+   install leaves the previous live state intact (addresses prior review
+   Finding 3). Where staging is unavailable, the existing restore path is
+   retained unchanged.
+
+================================================================================
+5. MEMORY, DISK-SPACE, QUEUE, AND RETAINED-LOG BOUNDS
+================================================================================
+
+All bounds below are configuration-derived constants; none scale with snapshot
+size at runtime.
+
+5.1 Raft-log capacity (retained log)
+  Today: logCapacity = commitIndexAdvanceCountToSnapshot (10,000)
+         + uncommittedEntryCountToRejectNewAppends (100)
+         + maxNumberOfLogsToKeepAfterSnapshot (0.1 * threshold = 1,000)
+         (RaftNodeImpl.java:161).
+  With async generation, the snapshot may lag the commit index while the
+  worker/store is busy. New formula:
+         logCapacity = maxSnapshotLag + maxUncommittedEntryCount
+                       + maxNumberOfLogsToKeepAfterSnapshot
+  where maxSnapshotLag = commitIndexAdvanceCountToSnapshot
+                         * snapshotLagMultiplier (new config, default 4).
+  Retained-log memory is therefore bounded by
+  O(logCapacity * maxEntrySize), independent of snapshot size. Entries larger
+  than average are bounded by the same append-time checks that exist today.
+
+5.2 Worker queue
+  Bounded task queue in front of the snapshot executor (capacity = new config
+  snapshotQueueCapacity, default small, e.g. 2 per node). A full queue makes
+  the trigger skip (section 6); the Raft thread never waits on it.
+
+5.3 Concurrency limits
+  - One in-flight generation per group (coordinator).
+  - Node-wide semaphore bounding concurrent generations across groups (new
+    config snapshotMaxConcurrentGenerations, default derived from IO threads).
+  - At most one staging file per generation; staging files are generation-
+    unique and deleted on abort/complete.
+
+5.4 In-memory snapshot retention (leader)
+  The published SnapshotEntry's chunk list is retained in memory only until
+  all followers' matchIndex >= snapshotIndex (or until the next snapshot
+  supersedes it). After that the list is released and transfers re-read from
+  the published file. Transient memory is therefore bounded by the current
+  snapshot + the in-flight generation's chunk list (both config-capped by
+  chunk size), not by "lifetime of the log" as today.
+
+5.5 Disk space
+  Per group, transient disk usage <= staging (1) + published (1) + previous
+  published retained until followers catch up (<= 1). A node-level disk budget
+  (new config snapshotDiskBudgetBytes) is tracked by the coordinator; when the
+  budget would be exceeded, generation triggers are deferred (section 6)
+  rather than failing mid-write. Staging files are removed on abort, publish,
+  and startup scan.
+
+5.6 Follower buffering
+  In-flight chunks buffered by the store before disk write are bounded by the
+  queue depth x chunk cap. The assembled SnapshotEntry list is bounded by the
+  snapshot chunk count and is released after install completes (as today, but
+  the assembly cost is off-thread).
+
+================================================================================
+6. BACKPRESSURE UNDER SLOW GENERATION OR STORAGE
+================================================================================
+
+Level 1 — Skip triggers (Raft thread never blocks).
+  If the worker queue is full, or a generation is in flight, or the disk
+  budget is exceeded, the coordinator skips the trigger and records
+  "snapshot lagging". Normal Raft operations (append/commit/apply/query)
+  continue uninterrupted. The gap commitIndex - snapshotIndex grows until a
+  slot frees up.
+
+Level 2 — Coalescing.
+  While a generation is in flight, repeated triggers are ignored; the
+  in-flight generation already captures the state at its (lower) index, and
+  the next trigger fires after completion. This bounds queue churn to at most
+  one pending generation per group at any time.
+
+Level 3 — Hard lag cap (bounds retained log).
+  If commitIndex - snapshotIndex >= maxSnapshotLag (section 5.1), the node
+  refuses new appends via the existing canReplicateNewEntry() gate
+  (RaftNodeImpl.java:564-594): replicate() returns a retryable failure, as it
+  already does for uncommittedEntryCountToRejectNewAppends. This is
+  backpressure proportional to neither snapshot size nor storage latency: it
+  is a binary bound on log growth. Availability impact is explicit and
+  bounded: the group stops making progress on appends only when snapshot
+  persistence has been stalled for a sustained period, and it resumes
+  automatically when persistence catches up.
+
+Level 4 — Failure retry with backoff.
+  A failed generation is retried after a bounded delay (new config
+  snapshotPersistenceRetryDelayMillis, default aligned with
+  appendRequestBackoffTimeoutInMillis). Retries never run synchronously on the
+  Raft thread and never block it.
+
+Guarantee: at no point does any of the above wait for a duration proportional
+to snapshot size or to storage latency on the Raft thread. The most expensive
+Raft-thread action in the worst case is skipping a trigger or rejecting an
+append — both O(1).
+
+================================================================================
+7. FAILURE, CANCELLATION, CLEANUP, CRASH-RECOVERY BEHAVIOR
+================================================================================
+
+7.1 Partial writes / disk-full / stalled storage
+  All writes go to the staging file; any IOException (write failure, disk
+  full, stalled device) fails the generation: store.abortSnapshot() deletes
+  the staging file, the failure callback (O(1)) runs on the Raft thread, and
+  retry is scheduled with backoff (Level 4). The previously published
+  snapshot remains intact and loadable. The Raft thread never observes the
+  failure synchronously and never performs cleanup I/O.
+
+7.2 fsync failure
+  publishSnapshot() failing at fsync/rename/dir-fsync produces the same
+  failure path as 7.1. Because publication is atomic, a partial fsync leaves
+  either the old or the new snapshot; the coordinator re-generates from
+  scratch on retry.
+
+7.3 Process crash
+  - Mid-staging: the incomplete staging file is orphaned; on restart,
+    store.open() scans the staging directory and deletes files whose
+    generation is not referenced by the durable publication record
+    (generation ids in file names).
+  - Between rename and dir-fsync: the filesystem may show either snapshot;
+    both are complete. No recovery action needed.
+  - After publish: the new snapshot loads; in-memory transfer state is lost
+    (follower re-syncs from leader; leader re-generates). Matches today's
+    restart semantics (RestoredRaftState from the store, RaftStateLoader).
+
+7.4 Leadership change
+  A local generation does not depend on leadership: it snapshots committed
+  state at index I, which stays valid after step-down, so it is allowed to
+  complete. If, while a generation is in flight, the node installs a
+  leader-supplied snapshot at a higher index, the coordinator aborts the
+  stale generation (index <= installed index) and discards its staging file
+  (guarded by generation id + monotonicity in the callback).
+
+7.5 Node shutdown / group destruction
+  setStatus(TERMINATED/STEPPED_DOWN) and groupDestroyed() (RaftNodeImpl.java:
+  507-537) call coordinator.abort(): the in-flight generation's staging file
+  is deleted via the store and the publish future is completed exceptionally.
+  The existing closeStateStore() path is unchanged.
+
+7.6 Overlapping snapshot requests
+  - Local generation vs. leader install: monotonicity resolves it (7.4).
+  - Two trigger attempts: coalesced (Level 2).
+  - Follower receiving a newer series mid-install: existing
+    ChunkedSnapshotInstaller supersession logic applies, with chunk
+    persistence re-pointed at a fresh staging generation; the old staging
+    generation is aborted (bounded, off-thread).
+
+7.7 Orphaned temporary files
+  Primary: startup scan (7.3). Belt-and-braces: a periodic sweep deletes
+  staging files older than a configurable age, since a crashed process may
+  not have had time to clean up. Sweeps run on the worker, never on the Raft
+  thread.
+
+================================================================================
+8. REQUIRED SERVICE-LEVEL AND PERSISTENCE API CHANGES
+================================================================================
+
+8.1 SnapshotAwareService / ChunkedSnapshotAwareService (additive, defaults)
+  - New: SnapshotHandle takeSnapshotHandle(CPGroupId groupId, long
+    commitIndex) on SnapshotAwareService. Default implementation wraps the
+    result of the existing takeSnapshot(...) (legacy path). The handle
+    exposes a close() to release the frozen generation.
+  - New: ChunkedSnapshotHandle takeChunkedSnapshotHandle(CPGroupId groupId,
+    long commitIndex) on ChunkedSnapshotAwareService. Default delegates to the
+    existing takeSnapshotChunks(...). The handle exposes an iterator over
+    DataChunkGroup<?>, a total-chunk-count hint, and close().
+  - New interfaces:
+      public interface SnapshotHandle extends AutoCloseable {
+          Object getSnapshot();            // legacy payload or frozen reference
+          void close();
+      }
+      public interface ChunkedSnapshotHandle extends AutoCloseable {
+          Iterator<DataChunkGroup<?>> iterator();
+          long estimatedChunkCount();
+          void close();
+      }
+  - Copy-on-write freeze support in services that hold mutable registries
+    (CPMapService/CPMapStore, AtomicLongService, AtomicRefService,
+    SemaphoreService, LockService, CountDownLatchService): freeze is a
+    volatile generation bump (O(1)); first mutation after a freeze clones the
+    container. CPMapRegistrySnapshot's "not point in time" FIXME is resolved
+    by freezing the store map reference instead of putAll'ing live stores.
+
+8.2 RaftIntegration (additive)
+  - New: @Nullable AsyncSnapshotStore getSnapshotPersistence();
+    returns null when the platform has no async backend (then the coordinator
+    falls back to the current synchronous path, preserving behavior).
+  - New: Executor getSnapshotExecutor() (or a documented node-wide bounded
+    executor, e.g. the existing IO/global executor); used by the coordinator
+    with a bounded queue (section 5.2).
+  - takeServiceSnapshots(long) is deprecated in favor of handle-based capture
+    but retained as the legacy fallback; restoreSnapshot stays for the
+    non-staged fallback.
+
+8.3 Persistence — new AsyncSnapshotStore (implemented by the enterprise store;
+    RaftStateStore may extend it or be composed)
+      public interface AsyncSnapshotStore {
+          // open a staging generation; O(1); called by the worker
+          void beginSnapshot(long generationId, long snapshotIndex, int term);
+          // write one chunk to the staging file; async, off-thread;
+          // ordering guaranteed by the store for a given generation
+          CompletableFuture<Void> persistChunk(long generationId, SnapshotChunk chunk);
+          // flush + fsync + atomic rename + dir fsync; completes on durability
+          CompletableFuture<Void> publishSnapshot(long generationId);
+          // delete staging file for an aborted/obsolete generation
+          void abortSnapshot(long generationId);
+          // delete a published snapshot (rotation)
+          void deleteSnapshot(long snapshotIndex);
+          // stream a published snapshot for transfer re-reads
+          InputStream openSnapshot(long snapshotIndex) throws IOException;
+          // delete orphaned staging files; called from open()
+          void cleanupOrphanedStagingFiles() throws IOException;
+      }
+  The store remains responsible for log-file eviction (entries <= published
+  snapshotIndex) as part of publishSnapshot, matching today's flushLogs()
+  semantics. Existing synchronous methods (persistSnapshotChunk,
+  deleteSnapshotChunks, flushLogs) are retained for the legacy fallback path
+  and for backward-compatible store implementations.
+
+8.4 RaftAlgorithmConfig / properties (additive, defaults preserve behavior)
+  - snapshotLagMultiplier (default 4): logCapacity growth factor (section 5.1).
+  - snapshotQueueCapacity (default small, e.g. 2 per node): worker queue bound.
+  - snapshotMaxConcurrentGenerations (default derived from IO threads).
+  - snapshotDiskBudgetBytes (default e.g. 25% of data dir free space, or
+    explicit): node-level disk bound (section 5.5).
+  - snapshotPersistenceRetryDelayMillis (default aligned with
+    appendRequestBackoffTimeoutInMillis): failure retry cadence (section 7.1).
+  - snapshot.transfer.chunk.max.bytes (optional): tighter per-send bound
+    (section 3.6); cluster-wide, like the existing
+    hazelcast.cp.snapshot.chunk.max.size.mb.
+
+8.5 Raft impl internal changes
+  - RaftNodeImpl: takeSnapshotIfCommitIndexAdvanced() becomes capture+enqueue;
+    new callbacks onSnapshotPersisted(...) / onSnapshotFailed(...); logCapacity
+    formula per section 5.1; coordinator wiring in both constructors.
+  - ChunkedSnapshotInstaller: chunk persistence via the AsyncSnapshotStore;
+    install completion after the publish future; staged restore where
+    available.
+  - New classes: SnapshotCoordinator, SnapshotGeneration, SnapshotGenerationResult
+    (record: index, term, chunkList, members, failure), plus the handle
+    interfaces (section 8.1).
+
+================================================================================
+9. COMPATIBILITY IMPLICATIONS
+================================================================================
+
+9.1 Wire protocol: UNCHANGED. InstallSnapshotRequest/Response, AppendRequest/
+    Response, chunk framing, chunk numbering, and flow control are untouched.
+    Followers cannot distinguish a member running the async pipeline from one
+    running the legacy path.
+
+9.2 Chunk partitioning / snapshot format: UNCHANGED. The same ChunkUtil
+    produces the same chunk list for the same logical state, so chunk counts
+    and boundaries match across members. (Deterministic partitioning per
+    raft-chunked-snapshot-review.txt section 10 Layer 1 remains a
+    prerequisite; without it, mixed-series assembly hazards persist regardless
+    of this design.) The on-disk snapshot layout (chunk records) is unchanged;
+    only the write path (staging -> rename) is added by the store.
+
+9.3 Rolling upgrade:
+    - New coordinator on old store (getSnapshotPersistence() == null): falls
+      back to today's synchronous path. Behavior-neutral.
+    - New store on old raft code: the AsyncSnapshotStore methods are simply
+      unused; synchronous methods continue to work.
+    - Mixed cluster: wire format identical (9.1); snapshot format identical
+      (9.2); configs that affect partitioning must already be cluster-equal
+      (existing requirement for hazelcast.cp.snapshot.chunk.max.size.mb);
+      snapshotLagMultiplier and the other new configs may differ per node
+      safely (they only bound local resources).
+    - Service handles: default methods mean un-migrated services keep the
+      legacy capture; the coordinator only uses handles when every service
+      offers them (fallback per service is also acceptable while migrating).
+
+9.4 Behavior-neutral defaults: with snapshotLagMultiplier = 1 and no
+    AsyncSnapshotStore, log capacity and timing match today's code, so a
+    rolling upgrade cannot change snapshot cadence or resource usage.
+
+9.5 Enterprise store contract: the real RaftStateStore (created via
+    persistenceService.createRaftStateStore in RaftService.java:937) gains
+    AsyncSnapshotStore; existing persisted state remains loadable because the
+    published-snapshot file layout is unchanged.
+
+================================================================================
+10. TESTS AND BENCHMARKS
+================================================================================
+
+Methodology note: all tests use the existing LocalRaftGroup /
+LocalRaftIntegration harness (single-threaded Raft executor) plus a new
+ControllableSnapshotStore test double implementing AsyncSnapshotStore with
+per-chunk and per-publish delay/failure injection and latch hooks. No sleeps
+are needed for correctness assertions; the benchmark uses controlled delays to
+model storage conditions.
+
+10.1 Deterministic unit tests (raft impl)
+  T1 boundedRaftThreadWorkWhenSnapshotSizeGrows
+     Chunked test service sized 10 / 1k / 100k entries; a wrapping executor
+     records the duration of every Raft-thread task. Assert the snapshot
+     trigger task and the completion callback stay below B regardless of size,
+     and that generation+persistence work executes on the worker thread.
+  T2 raftOpLatencyUnaffectedByStorageDelay
+     ControllableSnapshotStore with publish delayed 0/50/500 ms; a probe op is
+     replicated continuously; assert p99 of the probe is flat.
+  T3 logTruncationWaitsForDurablePublish
+     Stall the store mid-publish; assert setSnapshot is NOT called and the log
+     is not truncated until the publish future completes; after completion,
+     truncation happens exactly once.
+  T4 backpressureBoundsRetainedLog
+     Store stalled forever; assert appends are rejected once commitIndex -
+     snapshotIndex >= maxSnapshotLag, and log size <= logCapacity bound.
+  T5 failurePaths
+     (a) fail chunk n -> generation aborted, staging deleted, old published
+     snapshot intact, retry with backoff eventually succeeds;
+     (b) fail publish/fsync -> failure callback on Raft thread, no Raft-thread
+     I/O, retry succeeds; (c) disk-full IOException -> same path.
+  T6 crashRecoveryAndOrphanCleanup
+     open() deletes orphaned staging files; the last atomically published
+     snapshot is restored; a partially written staging file is never loaded.
+  T7 leadershipChangeAndOverlap
+     Generation in flight + step-down: generation completes or is superseded
+     by a newer leader install; overlapping triggers coalesce; stale completion
+     callback is dropped (no index regression).
+  T8 followerAcksOnlyAfterDurable
+     Follower receives all chunks; assert AppendSuccessResponse is sent only
+     after publishSnapshot completes; assert per-chunk handling on the Raft
+     thread stays bounded (no disk writes on the Raft thread).
+  T9 pointInTimeIsolation
+     Mutate the CPMap while a generation is in flight; assert the snapshot
+     reflects the frozen index (verifies C7 and the CPMapRegistrySnapshot fix).
+  T10 stagedRestoreAtomicity
+     Install failure mid-restore leaves the previous live state intact and the
+     node refuses to ack (regression for prior review Finding 3).
+
+10.2 Latency benchmark (RaftSnapshotLatencyBenchmark, JUnit harness; run
+     manually / tagged, not part of default CI)
+  Setup: 3-node LocalRaftGroup, chunked RaftDataService (or CPMap) with N
+  entries in {10k, 100k, 1M}; storage conditions via ControllableSnapshotStore:
+    - fast:              0 ms per chunk, 0 ms publish
+    - slow write:        10 ms per chunk write
+    - delayed write:     write completion deferred 50 ms per chunk
+    - delayed fsync:     publish (fsync+rename) deferred 200 ms
+  Measurements, reported in a table per (size, storage):
+    - generation duration: handle capture -> chunk list ready (worker wall
+      clock, excludes Raft-thread time);
+    - persistence duration: chunk list -> durable publish (store wall clock);
+    - Raft-op latency: p50/p95/p99/max of a background probe replicate op
+      issued throughout the benchmark;
+    - Raft-thread snapshot-step duration: max observed duration of trigger /
+      completion / per-chunk tasks (T1 instrumentation).
+  Acceptance assertion (auto-checked by the harness):
+    - max Raft-thread snapshot-step duration is within B (e.g. 5 ms) across all
+      (size, storage) combinations;
+    - probe-op p99 and max do not grow monotonically with N, and do not move
+      by more than a fixed tolerance across storage conditions.
+  Expected result table (illustrative targets):
+    size | storage        | gen (ms) | persist (ms) | probe p50/p95/p99/max (ms)
+    10k  | fast           |   ~5     |   ~5         | 0.1 / 0.2 / 0.3 / 0.5
+    100k | fast           |  ~40     |  ~40         | 0.1 / 0.2 / 0.3 / 0.5
+    1M   | fast           | ~400     | ~400         | 0.1 / 0.2 / 0.3 / 0.5
+    100k | slow write     |  ~40     | ~1200        | 0.1 / 0.2 / 0.3 / 0.5
+    100k | delayed write  |  ~40     | ~2500        | 0.1 / 0.2 / 0.3 / 0.5
+    100k | delayed fsync  |  ~40     | ~500         | 0.1 / 0.2 / 0.3 / 0.5
+    (Generation/persistence grow with size — expected; probe latency stays
+     flat — the acceptance criterion.)
+
+  The benchmark also verifies the transfer path: a slow follower held behind
+  the snapshot while the leader serves pre-serialized chunks; assert per-send
+  Raft-thread cost <= transfer chunk cap bound and that in-memory retention is
+  released once the follower catches up.
+
+================================================================================
+11. PHASED ROLLOUT
+================================================================================
+
+  Phase 0 (prep): deterministic chunking (raft-chunked-snapshot-review.txt
+    Layer 1) — prerequisite for any cross-member snapshot identity reasoning.
+  Phase 1: AsyncSnapshotStore interface + enterprise store implementation
+    (staging, rename, orphan cleanup, openSnapshot). No raft changes; store is
+    additive.
+  Phase 2: SnapshotCoordinator + handle capture + async local generation with
+    fallback (getSnapshotPersistence() == null -> legacy). Tests T1-T4.
+  Phase 3: async follower install (persist off-thread, ack-after-durable,
+    staged restore). Tests T5-T10.
+  Phase 4: transfer changes (pre-serialized chunks, retention release,
+    optional transfer chunk cap). Transfer benchmark.
+  Phase 5: backpressure tuning, disk budget, metrics (snapshot lag,
+    generation/persist durations, queue depth), operational docs.
+
+================================================================================
+12. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 COW freeze cost: first mutation after freeze clones a container. For a
+     large CPMap mutated heavily during a snapshot, clone-on-first-mutation
+     copies the whole container once on the Raft thread. Mitigation: clone
+     per-segment (ConcurrentHashMap) or clone lazily by the mutating
+     operation; quantify in T9. This is the main remaining O(size)-on-Raft
+     risk if implemented naively.
+  R2 Staged restore requires per-service support; services not migrated keep
+     the on-thread restore path, so follower install is not bounded for them
+     until migration completes. Acceptable as documented migration item.
+  R3 Pre-serialized transfer buffers double memory for the in-flight
+     generation (logical chunks + serialized form). Bound via retention
+     release (section 5.4); quantify in the benchmark.
+  R4 Disk budget accounting under shared filesystems / multiple members on one
+     host is approximate; keep the budget configurable and conservative.
+  R5 General log-entry fsync (FlushTask) remains on the Raft thread; if
+     storage is stalled, commit latency is still storage-bound. Out of scope
+     here (not data-size-dependent), but should be revisited separately.
+  OQ1 Should the coordinator be per-node (shared across groups on a partition
+       thread) rather than per-group, to bound cross-group amplification?
+       Current design: per-group coordinator + node-wide semaphore/queue
+       (section 5.3) — sufficient; a shared coordinator is a later
+       optimization.
+  OQ2 Is a transfer chunk cap change acceptable as a new cluster-wide config
+       (section 8.4)? It is wire-compatible; only partitioning granularity
+       changes, which the config already governs.
+  OQ3 Should snapshot lag be exposed as a metric and used for auto-tuning the
+       lag multiplier? Nice-to-have; defaults suffice for the first release.
+
+================================================================================
+13. APPENDIX A — EXACT CODE LOCATIONS AND INVARIANTS USED
+================================================================================
+
+  Generation (Raft thread, today):
+    - RaftNodeImpl.takeSnapshotIfCommitIndexAdvanced(): 1128-1215
+    - RaftNodeImpl.persistAndFlushSnapshotChunks():     1217-1234
+    - NodeEngineRaftIntegration.takeServiceSnapshots(): 259-277
+    - ChunkUtil.createChunksFromSnapshot() + helpers: 96-228
+    - CPMapService.takeSnapshotChunks / takeSnapshot:    166-171 / 239-244
+    - CPMapRegistry.takeSnapshot():                      130
+    - CPMapRegistrySnapshot.toChunks / FIXME:            64-97 / 40-45
+  Transfer (leader):
+    - RaftNodeImpl.shouldSendSnapshot / sendSnapshotRequest: 733-744
+    - RaftNodeImpl.sendNextSnapshotChunk:                     762-822
+    - RaftNodeImpl.createMetadataChunk:                       824-834
+  Installation (follower):
+    - ChunkedSnapshotInstaller.processChunk / persistAndTrackChunk /
+      createSnapshotFromChunks: 75-97 / 225-237 / 255-265
+    - RaftNodeImpl.installSnapshot:                           1241-1276
+  Log / durability:
+    - RaftLog.setSnapshot(..., alreadyFlushed):               318-353
+    - RaftLog.flush():                                        355-367
+    - logCapacity formula:                                    RaftNodeImpl.java:161,192
+    - FlushTask:                                              1687-1703
+    - canReplicateNewEntry (backpressure gate):               564-594
+    - closeStateStore / setStatus / groupDestroyed:           393-399 / 507-537
+  Persistence contract:
+    - RaftStateStore (persistSnapshotChunk, deleteSnapshotChunks,
+      flushLogs):                                  RaftStateStore.java:95-173
+    - NopRaftStateStore (no-op):                   NopRaftStateStore.java
+    - store creation:                             RaftService.java:937, 894-895
+  Config:
+    - RaftAlgorithmConfig (threshold, uncommitted count, backoff, capacity):
+      RaftAlgorithmConfig.java:32-67, 121-142
+    - ChunkUtil.MAX_CHUNK_SIZE_IN_MB:              ChunkUtil.java:54-67
+  Test harness:
+    - LocalRaftIntegration (single-thread executor, drop/alter rules):
+      testing/LocalRaftIntegration.java
+    - InMemoryRaftStateStore (chunked snapshot persistence semantics):
+      testing/InMemoryRaftStateStore.java:45-157
+    - SnapshotTest / ChunkedSnapshotInstallerTest: existing coverage base
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  COW   Copy-On-Write — the freeze mechanism for point-in-time views.
+  CP    Hazelcast's Raft-based linearizable "CP subsystem" (CAP theorem).
+  CPMap A linearizable map in the CP subsystem.
+  Data  Hazelcast's binary serialized key/value type (immutable).
+  fsync Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  lag cap  Hard bound on commitIndex - durableS (maxSnapshotLag); exceeding
+         it rejects new appends.
+  O(1)/O(logCapacity) Big O notation — the per-step complexity claims.
+  p50/p95/p99/max Latency percentiles and maximum (benchmark acceptance).
+  POSIX The rename/fsync semantics the atomic-publish design relies on.
+  Raft  The replicated-log consensus algorithm (Ongaro & Ousterhout 2014).
+  ringbuffer The ArrayRingbuffer backing RaftLog (in-memory log).
+  S     The snapshot index (durable publish point).
+  SnapshotEntry/SnapshotChunk Raft-log classes for a snapshot and one chunk.
+  term  Raft election term number (monotonicity/consistency marker).
+  AsyncSnapshotStore The proposed async persistence interface.
+  C1-C8 / T1-T10 Guarantee ids / test ids (cross-referenced with options B-F).
+
+================================================================================
+END OF DESIGN
+================================================================================

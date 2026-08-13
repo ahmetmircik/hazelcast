@@ -32,6 +32,7 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.InternalCompletableFuture;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -299,4 +300,70 @@ public interface RaftIntegration {
      * @return the operation to restore snapshot
      */
     Object newRestoreSnapshotOp(String serviceName, long commitIndex, Object chunk);
+
+    /**
+     * Returns the factory for the per-group snapshot pipeline (delta
+     * emission + incremental durable store) for the given CP group, or
+     * {@code null} when the pipeline is not enabled on this node (the
+     * default).
+     * <p>
+     * When non-null, the Raft node builds a
+     * {@link SnapshotPipeline} from the factory, opens a
+     * {@link com.hazelcast.cp.internal.datastructures.snapshot.DeltaContext}
+     * around apply, and the pipeline drains into the durable incremental
+     * store on the {@link #getSnapshotExecutor() worker} off the Raft thread
+     * (snapshot-redesign Option F).
+     *
+     * @param groupId id of CP group
+     * @return the snapshot pipeline factory, or {@code null} when not enabled
+     */
+    @Nullable
+    default SnapshotPipelineFactory getSnapshotPipelineFactory(CPGroupId groupId) {
+        return null;
+    }
+
+    /**
+     * Returns the node-wide bounded executor on which snapshot drains run
+     * (the "worker" domain of the threading model), or {@code null} when the
+     * pipeline is not enabled.
+     */
+    @Nullable
+    default java.util.concurrent.Executor getSnapshotExecutor() {
+        return null;
+    }
+
+    /**
+     * Captures the services' state at the given commit index in O(1) so the
+     * chunked snapshot can be generated OFF the Raft thread (the redesign's
+     * async generation). While the capture is active, mutations are
+     * redirected to a transient overlay and the services' state stays frozen,
+     * so {@link #takeCapturedServiceSnapshots(Object, long)} can be called by
+     * a snapshot worker with a complete, consistent scan.
+     *
+     * @return a capture handle, or {@code null} when async generation is not
+     *         supported (the synchronous path is then used)
+     */
+    @Nullable
+    default Object captureSnapshot(long commitIndex) {
+        return null;
+    }
+
+    /**
+     * Builds the service snapshots for an already-captured state. Called by
+     * the snapshot worker, off the Raft thread.
+     *
+     * @return the same shape as {@link #takeServiceSnapshots(long)}
+     */
+    @Nullable
+    default Object takeCapturedServiceSnapshots(Object capture, long commitIndex) {
+        return null;
+    }
+
+    /**
+     * Applies the pending redirected writes back to the services' state and
+     * releases the capture. Called on the Raft thread after the worker
+     * finished.
+     */
+    default void finishSnapshotCapture(Object capture) {
+    }
 }

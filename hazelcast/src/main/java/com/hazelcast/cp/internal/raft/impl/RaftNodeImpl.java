@@ -48,6 +48,8 @@ import com.hazelcast.cp.internal.raft.impl.handler.TriggerLeaderElectionHandlerT
 import com.hazelcast.cp.internal.raft.impl.handler.VoteRequestHandlerTask;
 import com.hazelcast.cp.internal.raft.impl.handler.VoteResponseHandlerTask;
 import com.hazelcast.cp.internal.raft.impl.log.LogEntry;
+import com.hazelcast.cp.internal.datastructures.snapshot.DeltaContext;
+import com.hazelcast.cp.internal.datastructures.snapshot.SnapshotPipelineConfig;
 import com.hazelcast.cp.internal.raft.impl.log.RaftLog;
 import com.hazelcast.cp.internal.raft.impl.log.SnapshotChunk;
 import com.hazelcast.cp.internal.raft.impl.log.SnapshotEntry;
@@ -76,6 +78,7 @@ import com.hazelcast.spi.impl.InternalCompletableFuture;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.concurrent.Executor;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -132,6 +135,18 @@ public class RaftNodeImpl implements RaftNode {
     private final Runnable flushTask;
     private final RaftStateStore stateStore;
 
+    /** The per-group snapshot pipeline (delta emission + durable store), or null when not enabled. */
+    private final SnapshotPipeline snapshotPipeline;
+    private volatile long durableSnapshotIndex;
+
+    /**
+     * The snapshot-lag cap: when the snapshot generation cannot keep up and
+     * {@code commitIndex - snapshotIndex} exceeds this bound, new appends are
+     * rejected (bounded backpressure, Option F §3.1) so the in-flight
+     * overlay/delta buffers cannot grow without bound.
+     */
+    private final long maxSnapshotLag;
+
     private long lastAppendEntriesTimestamp;
     private long appendFailureResponsesSent;
     private boolean appendRequestBackoffResetTaskScheduled;
@@ -170,6 +185,8 @@ public class RaftNodeImpl implements RaftNode {
             this.flushTask = new FlushTask();
         }
         this.chunkedSnapshotInstaller = new ChunkedSnapshotInstaller(this);
+        this.snapshotPipeline = initSnapshotPipeline();
+        this.maxSnapshotLag = SnapshotPipelineConfig.maxSnapshotLag(commitIndexAdvanceCountToSnapshot);
     }
 
     @SuppressWarnings("checkstyle:executablestatementcount")
@@ -201,6 +218,57 @@ public class RaftNodeImpl implements RaftNode {
             this.flushTask = new FlushTask();
         }
         this.chunkedSnapshotInstaller = new ChunkedSnapshotInstaller(this);
+        this.snapshotPipeline = initSnapshotPipeline();
+        this.maxSnapshotLag = SnapshotPipelineConfig.maxSnapshotLag(commitIndexAdvanceCountToSnapshot);
+    }
+
+    /**
+     * Builds the per-group snapshot pipeline when the platform provides a
+     * factory and a worker executor; {@code null} otherwise (the default —
+     * behavior is then exactly as before). The completion/failure callbacks
+     * are routed back to the Raft thread via {@code raftIntegration.submit}.
+     */
+    private SnapshotPipeline initSnapshotPipeline() {
+        SnapshotPipelineFactory factory = raftIntegration.getSnapshotPipelineFactory(groupId);
+        Executor worker = raftIntegration.getSnapshotExecutor();
+        if (factory == null || worker == null) {
+            return null;
+        }
+        try {
+            return factory.newPipeline(worker,
+                    () -> raftIntegration.submit(this::onSnapshotPipelineProgress),
+                    () -> raftIntegration.submit(this::onSnapshotPipelineFailure));
+        } catch (IOException e) {
+            logger.warning("Cannot initialize the snapshot pipeline for " + groupId + ", disabling it", e);
+            return null;
+        }
+    }
+
+    /**
+     * Runs on the Raft thread after a worker drain durably advanced the
+     * incremental snapshot index (memory-tier update; log truncation up to
+     * this index is the documented follow-up).
+     */
+    private void onSnapshotPipelineProgress() {
+        if (snapshotPipeline != null) {
+            durableSnapshotIndex = snapshotPipeline.durableSnapshotIndex();
+        }
+    }
+
+    private void onSnapshotPipelineFailure() {
+        if (logger.isFineEnabled()) {
+            logger.fine("Snapshot pipeline failed for %s; deltas were re-queued and will be retried.", groupId);
+        }
+    }
+
+    private void closeSnapshotPipeline() {
+        if (snapshotPipeline != null) {
+            try {
+                snapshotPipeline.close();
+            } catch (IOException e) {
+                logger.warning("Error closing the snapshot pipeline of " + groupId, e);
+            }
+        }
     }
 
     /**
@@ -328,6 +396,9 @@ public class RaftNodeImpl implements RaftNode {
                     setStatus(TERMINATED);
                 }
             } finally {
+                if (status == TERMINATED) {
+                    closeSnapshotPipeline();
+                }
                 if (failure == null) {
                     resultFuture.complete(null);
                 } else {
@@ -570,6 +641,16 @@ public class RaftNodeImpl implements RaftNode {
         long lastLogIndex = log.lastLogOrSnapshotIndex();
         long commitIndex = state.commitIndex();
         if (lastLogIndex - commitIndex >= maxUncommittedEntryCount) {
+            return false;
+        }
+
+        // bounded backpressure while a snapshot is being generated (Option F
+        // §3.1): once the in-flight snapshot lags the commit index beyond the
+        // cap, reject new appends so the log/overlay/delta buffers cannot grow
+        // without bound. The cap is cadence x multiplier and only triggers
+        // when generation cannot keep up.
+        if (SnapshotPipelineConfig.isSnapshotEnabled()
+                && commitIndex - log.snapshotIndex() > maxSnapshotLag) {
             return false;
         }
 
@@ -1015,7 +1096,18 @@ public class RaftNodeImpl implements RaftNode {
                 response = new IllegalArgumentException("Invalid command: " + operation);
             }
         } else {
-            response = raftIntegration.runOperation(operation, entry.index());
+            SnapshotPipeline pipeline = snapshotPipeline;
+            if (pipeline != null) {
+                // open the delta context so service store decorators emit
+                // key-level deltas into the pipeline's bounded sink (O(1) per
+                // op); the drain to the durable store runs off the Raft thread
+                try (DeltaContext ignored = pipeline.beginApply(entry.index())) {
+                    response = raftIntegration.runOperation(operation, entry.index());
+                }
+                pipeline.onApplied();
+            } else {
+                response = raftIntegration.runOperation(operation, entry.index());
+            }
         }
 
         if (response == PostponedResponse.INSTANCE) {
@@ -1140,6 +1232,15 @@ public class RaftNodeImpl implements RaftNode {
 
         logger.fine("Taking chunked snapshot at commit index: %d", commitIndex);
 
+        // async generation (Option F): O(1) capture here, O(n) scan +
+        // chunking + persistence on the snapshot worker, bounded install back
+        // on this thread. Falls back to the synchronous path when not enabled.
+        Object capture = raftIntegration.captureSnapshot(commitIndex);
+        if (capture != null) {
+            takeSnapshotAsynchronously(capture, commitIndex);
+            return;
+        }
+
         Object snapshot;
         try {
             snapshot = raftIntegration.takeServiceSnapshots(commitIndex);
@@ -1173,45 +1274,95 @@ public class RaftNodeImpl implements RaftNode {
             throw new HazelcastException(e);
         }
 
-        snapshot = chunksFromSnapshot;
+        installChunkedSnapshot(null, chunksFromSnapshot, snapshotTerm, commitIndex, members);
+    }
 
-        long highestLogIndexToTruncate = commitIndex - maxNumberOfLogsToKeepAfterSnapshot;
-        LeaderState leaderState = state.leaderState();
-        if (leaderState != null) {
-            long[] matchIndices = leaderState.matchIndices();
-            // Last slot is reserved for leader index and always zero.
+    /**
+     * The async chunked snapshot generation (Option F): the capture is O(1)
+     * on the Raft thread; the O(n) scan, chunk building and disk persistence
+     * run on the snapshot worker; the bounded install (log truncation) and
+     * the capture release run back on the Raft thread.
+     */
+    private void takeSnapshotAsynchronously(Object capture, long commitIndex) {
+        Executor worker = raftIntegration.getSnapshotExecutor();
+        if (worker == null) {
+            raftIntegration.finishSnapshotCapture(capture);
+            return;
+        }
+        int snapshotTerm = state.log().getLogEntry(commitIndex).term();
+        RaftGroupMembers members = state.committedGroupMembers();
+        worker.execute(() -> {
+            try {
+                Object snapshot = raftIntegration.takeCapturedServiceSnapshots(capture, commitIndex);
+                List<SnapshotChunk> chunks = createChunksFromSnapshot(
+                        raftIntegration,
+                        snapshotTerm,
+                        commitIndex,
+                        members.members(),
+                        members.index(),
+                        snapshot,
+                        logger
+                );
+                persistAndFlushSnapshotChunks(chunks, commitIndex);
+                raftIntegration.submit(() -> installChunkedSnapshot(capture, chunks, snapshotTerm, commitIndex, members));
+            } catch (Throwable t) {
+                logger.warning("Async chunked snapshot generation failed at index " + commitIndex, t);
+                raftIntegration.submit(() -> raftIntegration.finishSnapshotCapture(capture));
+            }
+        });
+    }
 
-            // If there is at least one follower with unknown match index,
-            // its log can be close to the leader's log so we are keeping the old log entries.
-            boolean allMatchIndicesKnown = Arrays.stream(matchIndices, 0, matchIndices.length - 1)
-                    .noneMatch(i -> i == 0);
+    /**
+     * The bounded part of snapshot installation: computes the truncation
+     * index and installs the snapshot into the Raft log. Runs on the Raft
+     * thread. When a capture is given (async generation), it is released
+     * afterwards (overlay applied back to the services' state).
+     */
+    private void installChunkedSnapshot(Object capture, List<SnapshotChunk> chunks, int snapshotTerm,
+                                        long commitIndex, RaftGroupMembers members) {
+        try {
+            long highestLogIndexToTruncate = commitIndex - maxNumberOfLogsToKeepAfterSnapshot;
+            LeaderState leaderState = state.leaderState();
+            if (leaderState != null) {
+                long[] matchIndices = leaderState.matchIndices();
+                // Last slot is reserved for leader index and always zero.
 
-            if (allMatchIndicesKnown) {
-                // Otherwise, we will keep the log entries until the minimum match index
-                // that is bigger than (commitIndex - maxNumberOfLogsToKeepAfterSnapshot).
-                // If there is no such follower (all of the minority followers are far behind),
-                // then there is no need to keep the old log entries.
-                highestLogIndexToTruncate = Arrays.stream(matchIndices)
-                        // No need to keep any log entry if all followers are up to date
-                        .filter(i -> i < commitIndex)
-                        .filter(i -> i > commitIndex - maxNumberOfLogsToKeepAfterSnapshot)
-                        // We should not delete the smallest matchIndex
-                        .map(i -> i - 1)
-                        .sorted()
-                        .findFirst()
-                        .orElse(commitIndex);
+                // If there is at least one follower with unknown match index,
+                // its log can be close to the leader's log so we are keeping the old log entries.
+                boolean allMatchIndicesKnown = Arrays.stream(matchIndices, 0, matchIndices.length - 1)
+                        .noneMatch(i -> i == 0);
+
+                if (allMatchIndicesKnown) {
+                    // Otherwise, we will keep the log entries until the minimum match index
+                    // that is bigger than (commitIndex - maxNumberOfLogsToKeepAfterSnapshot).
+                    // If there is no such follower (all of the minority followers are far behind),
+                    // then there is no need to keep the old log entries.
+                    highestLogIndexToTruncate = Arrays.stream(matchIndices)
+                            // No need to keep any log entry if all followers are up to date
+                            .filter(i -> i < commitIndex)
+                            .filter(i -> i > commitIndex - maxNumberOfLogsToKeepAfterSnapshot)
+                            // We should not delete the smallest matchIndex
+                            .map(i -> i - 1)
+                            .sorted()
+                            .findFirst()
+                            .orElse(commitIndex);
+                }
+            }
+
+            // we flushed the snapshot to the storage.
+            // it is safe to modify the memory state now.
+
+            SnapshotEntry snapshotEntry = new SnapshotEntry(snapshotTerm, commitIndex,
+                    chunks, members.index(), members.members());
+
+            int truncatedEntryCount = state.log().setSnapshot(snapshotEntry, highestLogIndexToTruncate, true);
+
+            logger.fine("%s is taken, %d entries are truncated.", snapshotEntry, truncatedEntryCount);
+        } finally {
+            if (capture != null) {
+                raftIntegration.finishSnapshotCapture(capture);
             }
         }
-
-        // we flushed the snapshot to the storage.
-        // it is safe to modify the memory state now.
-
-        SnapshotEntry snapshotEntry = new SnapshotEntry(snapshotTerm, commitIndex,
-                snapshot, members.index(), members.members());
-
-        int truncatedEntryCount = log.setSnapshot(snapshotEntry, highestLogIndexToTruncate, true);
-
-        logger.fine("%s is taken, %d entries are truncated.", snapshotEntry, truncatedEntryCount);
     }
 
     private void persistAndFlushSnapshotChunks(List<SnapshotChunk> chunksFromSnapshot, long snapshotIndex)

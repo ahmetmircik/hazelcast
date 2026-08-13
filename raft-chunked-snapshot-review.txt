@@ -1,0 +1,637 @@
+================================================================================
+Raft Chunked Snapshot Implementation - Review
+================================================================================
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Scope: in-memory chunked snapshot generation, transfer, assembly, installation.
+       Snapshot persistence / crash recovery / fsync ordering / durable
+       publication / restart restoration are OUT OF SCOPE. Snapshot and
+       transfer state is treated as in-memory state that may be lost when a
+       member terminates.
+Date: 2026-08-10
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+The chunked snapshot feature replaces the single-shot snapshot RPC with a
+metadata-triggered, pull-based chunk protocol.
+
+- Generation runs synchronously on the Raft (partition) thread inside
+  RaftNodeImpl.takeSnapshotIfCommitIndexAdvanced(): it snapshots every
+  SnapshotAwareService at commitIndex, splits chunked services into
+  DataChunkGroups, packs them into SnapshotChunks, and stores the chunk list
+  inside the SnapshotEntry held by RaftLog.snapshot (in-memory,
+  NopRaftStateStore).
+- Transfer is leader-push + follower-pull: when a follower's nextIndex falls
+  at/below the leader's snapshot index, the leader sends a metadata chunk
+  (operation == null); the follower resets its per-node ChunkedSnapshotInstaller
+  state and replies with an InstallSnapshotResponse requesting the first missing
+  chunk; the leader serves exactly one chunk per round-trip under a 20-round
+  backoff; the follower assembles chunks, sorts by number, and installs
+  atomically-on-the-Raft-thread via RaftNodeImpl.installSnapshot().
+- Installation sets commitIndex = snapshot.index(), truncates the log, runs the
+  restore ops, restores group members, and advances lastApplied.
+
+The overall shape is sound: all snapshot state is confined to the single-
+threaded Raft executor, RPC-level term checks reject stale leaders, per-follower
+one-chunk-in-flight flow control bounds buffering, duplicates are idempotent,
+and commitIndex monotonicity prevents an older snapshot from regressing a
+follower.
+
+However, the review found:
+  * 1 Critical safety bug (mixed-series chunk assembly -> silent data loss)
+  * 2 High issues (permanent follower stall after leader change; non-atomic
+    installation / destructive reset before install)
+  * 3 Medium issues (weak chunk validation, empty-snapshot edge,
+    rolling-upgrade fallback gap)
+plus memory/performance risks, test gaps, and a deterministic fix proposal.
+
+--------------------------------------------------------------------------------
+2. IMPLEMENTATION FLOW AND INVARIANTS
+--------------------------------------------------------------------------------
+2.1 Snapshot generation (RaftNodeImpl.takeSnapshotIfCommitIndexAdvanced,
+    lines 1128-1215)
+- Triggered from applyLogEntries() when commitIndex - log.snapshotIndex() >=
+  commitIndexAdvanceCountToSnapshot, for both LEADER and FOLLOWER roles.
+- VERIFIED invariant: snapshot index = commitIndex, snapshot term =
+  log.getLogEntry(commitIndex).term(), membership = state.committedGroupMembers().
+  Because generation runs on the Raft thread after applying up to commitIndex,
+  the captured state is exactly the committed state at that index.
+- ChunkUtil.createChunksFromSnapshot (ChunkUtil.java 96-228): chunked services
+  contribute one SnapshotChunk per DataChunkGroup; non-chunked service ops are
+  merged into the last chunk. DataChunkGroups are produced by
+  ChunkUtil.groupServiceChunksBySize, which sorts chunks by descending size
+  first. Chunk boundaries/counts are NOT guaranteed identical across members
+  for the same logical snapshot (see Finding 1): iteration over HashMap /
+  ConcurrentHashMap / LinkedHashMap during chunking is order-dependent.
+- Chunk data (CPMap Data objects) is immutable and timestamp/key-value lists
+  are freshly allocated, so later state-machine mutations cannot mutate
+  already-generated chunks. Everything runs on the Raft thread.
+
+2.2 Transfer (leader side, RaftNodeImpl.sendNextSnapshotChunk 762-822;
+    InstallSnapshotResponseHandlerTask)
+- sendAppendRequest -> shouldSendSnapshot (733-740) when nextIndex <=
+  snapshotIndex() and the entry (and its predecessor) are no longer in the log.
+  The leader then sends a metadata chunk (METADATA_CHUNK_INDEX = -1,
+  METADATA_CHUNK_NUMBER = 0) to force a follower reset.
+- Every InstallSnapshotRequest is stamped with the leader's current RPC term,
+  queryRound, and a flowControlSequenceNumber from
+  FollowerState.setMaxAppendRequestBackoff() (one outstanding request per
+  follower; 20-round backoff with appendRequestBackoffTimeoutInMillis retry
+  cadence).
+- On InstallSnapshotResponse, the leader echoes the follower's requested chunk
+  number if the indexes match, or sends a metadata chunk if the follower is
+  behind.
+
+2.3 Assembly and installation (follower side,
+    ChunkedSnapshotInstaller.processChunk 88-110,
+    RaftNodeImpl.installSnapshot 1241-1276)
+- Guards in order: RPC-term stale rejection (InstallSnapshotRequestHandlerTask
+  64-71, prevents old-leader chunks from installing after a term change);
+  isStaleChunk (index < commitIndex); isDuplicateCommitIndex (index ==
+  commitIndex -> ack without install); isFromOlderSnapshot (index <
+  currentSnapshotIndex -> silent abort); isFromNewerSnapshot (index >
+  currentSnapshotIndex -> reset series); metadata chunk (operation == null) is
+  never stored; isTermConsistent (chunk term == series term, else
+  IllegalStateException); duplicate chunk numbers are idempotent via
+  missingChunks.remove.
+- Completion requires missingChunks empty; chunks are sorted by chunkNumber,
+  wrapped in a SnapshotEntry, then installSnapshot sets commitIndex,
+  log.setSnapshot (truncates <= index), raftLog.flush(), restoreSnapshot (runs
+  each RestoreSnapshotOp), setStatus(ACTIVE), restoreGroupMembers,
+  lastApplied(index), invalidateFuturesUntil.
+- Installation is single-threaded on the Raft thread; a partially assembled
+  snapshot can never become visible (installation only happens when
+  missingChunks is empty).
+
+2.4 Verified-correct areas
+- Stale-leader isolation: any InstallSnapshotRequest/AppendRequest with term <
+  current term is rejected before touching snapshot or log state; a term bump
+  demotes the node and clears LeaderState (dropping all per-follower transfer
+  state - no leak on step-down).
+- No index regression: installSnapshot refuses snapshots with index <
+  commitIndex; RaftState.commitIndex/lastApplied only move forward; setSnapshot
+  throws if the new snapshot index <= existing snapshot index.
+- No early truncation: log entries are truncated only after a fully assembled
+  snapshot exists.
+- Duplicate chunks cannot inflate counters: receivedChunks.add happens only
+  after a successful missingChunks.remove; initialize pre-populates the set
+  with exactly [0, chunkCount).
+- Cross-group isolation: RaftService.handleSnapshotRequest/Response routes by
+  groupId; responses are guarded by AbstractResponseHandlerTask.isKnownMember.
+
+--------------------------------------------------------------------------------
+3. CORRECTNESS FINDINGS (ordered by severity)
+--------------------------------------------------------------------------------
+
+FINDING 1 - CRITICAL, High confidence: mixed-series chunk assembly silently
+corrupts snapshots after a leader change (no snapshot/series identity on chunks)
+--------------------------------------------------------------------------------
+Location: ChunkedSnapshotInstaller.validateAndStoreChunk (112-170), initialize
+(243-254), createSnapshotFromChunks (268-278); RaftNodeImpl.sendNextSnapshotChunk
+(762-822).
+
+Invariant violated: "all chunks of an installed snapshot belong to one
+consistent partitioning of one snapshot; the restored state machine reflects
+commitIndex."
+
+The transfer has no generation/session identity: the installer keys the series
+only by (currentSnapshotIndex, currentTerm), and the term check compares only
+the chunk's last-included term (identical across leaders for the same index by
+Log Matching). handleNewSnapshotSeries supersedes only when chunk.index() >
+currentSnapshotIndex; an equal-index chunk never resets the series, and there
+is no validation that incoming chunks have a consistent chunkCount or a
+consistent partitioning.
+
+NOTE ON "SAME INDEX+TERM": Raft log matching + deterministic state machines
+guarantee that two snapshots at the same (index, term) encode the SAME LOGICAL
+content. The bug is at the PHYSICAL partition layer: the protocol ships a chunk
+cover, not the logical state. Chunk partitioning is not deterministic across
+generators (see root causes below), so a mixed cover is incomplete and the
+restore (replacement, not merge) silently loses data.
+
+Root causes of nondeterministic partitioning:
+  a) CPMapRegistrySnapshot.toChunks iterates mapStores.entrySet(), a
+     ConcurrentHashMap with no stable cross-node iteration order
+     (CPMapRegistry.java:50, CPMapRegistrySnapshot.java:64-76). With >=2 CP
+     maps, which map's data lands in which chunk number differs per node.
+  b) appendStoreChunks cuts chunk boundaries by size while walking
+     mapStore.iterator() (CPMapRegistrySnapshot.java:78-97).
+  c) ChunkUtil.groupServiceChunksBySize re-groups the flat chunk list with a
+     size-sorted greedy pack that is tie/order-sensitive (ChunkUtil.java:295-333).
+  d) NodeEngineRaftIntegration.takeServiceSnapshots iterates a HashMap of
+     services; ChunkUtil.optimizeChunks merges non-chunked ops into the "last"
+     chunk, which depends on that iteration order.
+  e) The test service RaftDataService.splitMap iterates a HashMap.
+
+Concrete sequence:
+1. Leader L1 (term 5) snapshots at index 100 -> 10 chunks (partitioning P1).
+   Follower F starts installing S100: receives chunks 0-4, currentSnapshotIndex
+   =100, currentTerm=t(100)=3, missing {5..9}.
+2. L1 steps down. L2 elected (term 6). L2 (which took its own local snapshot at
+   100 while a follower) has a snapshot at index 100 with a different
+   partitioning (e.g. 12 chunks, P2).
+3. L2's metadata chunk (index 100, RPC term 6 > F's term 5): the handler
+   demotes F and accepts it. In the installer: not stale, not duplicate-commit,
+   not older (equal), not newer (equal) -> metadata skipped -> requestMissingChunks
+   sends InstallSnapshotResponse(100, 5).
+4. L2 serves its chunk 5 (of 12). F: term check passes; missingChunks.remove(5)
+   succeeds -> stored. F requests 6,7,8,9 - all from P2.
+5. missingChunks now empty (0-4 from P1, 5-9 from P2) -> installCompleteSnapshot()
+   installs a MIXED snapshot: data present in P1's 5-9 but absent from P2's 5-9
+   is lost. F sets commitIndex = lastApplied = 100 and ACKs the leader.
+
+Impact: silent data loss on that member; if F is later elected leader it can
+serve divergent state. Safety, silent (no error, no exception).
+
+Minimal fix: add a snapshot-generation/session id carried in every SnapshotChunk
+and reject/supersede any chunk whose id differs; verify chunk.chunkCount() ==
+totalChunks on every data chunk and chunk.index()/term() consistency.
+
+Robust long-term improvement: make chunk identity part of the wire contract:
+(snapshotIndex, snapshotTerm, transferGenerationId, chunkNumber, chunkCount),
+and have the follower re-request metadata for any series id it has never seen.
+Alternatively make the partitioning a pure, deterministic function of the
+committed key set (see the fix proposal section).
+
+Regression test: shouldNotMixChunksFromDifferentTransfers and
+shouldNotLoseSnapshotDataWhenChunksArriveFromDifferentTransfers (both added and
+confirmed failing - see section 9).
+
+FINDING 2 - HIGH, High confidence: silent abort of "older" snapshot chunks
+permanently stalls a follower after a leader change
+--------------------------------------------------------------------------------
+Location: ChunkedSnapshotInstaller.isFromOlderSnapshot (207-209) + abort branch
+(128-133); RaftNodeImpl.shouldSendSnapshot (733-740); metadata path in
+sendNextSnapshotChunk (789-793).
+
+Invariant violated: liveness - a follower with an in-progress (incomplete)
+series must be able to make progress with the current leader. The abort path
+sends no response and never resets currentSnapshotIndex.
+
+Concrete sequence:
+1. L1 (term 5) sends snapshot chunks at index 100 to F; F has
+   currentSnapshotIndex=100, commitIndex=90.
+2. L1 fails; L2 elected (term 6), L2's snapshot is at index 95.
+3. L2's initial AppendEntries(prevLogIndex=97) is rejected by F
+   (followerNextIndex=91); L2 sets F's nextIndex=91.
+4. L2's next send: shouldSendSnapshot(91) is true (91 <= 95, entry 91 not in
+   L2's log) -> L2 sends a metadata chunk at index 95; because
+   shouldSendSnapshot short-circuits sendAppendRequest, L2 never sends the
+   actual log entries 91..97 to F.
+5. F: 95 >= commitIndex(90), 95 < currentSnapshotIndex(100) ->
+   isFromOlderSnapshot -> silent ABORT; no InstallSnapshotResponse, no
+   AppendFailureResponse, no reset.
+6. L2's backoff (20 rounds) expires -> AppendRequestBackoffResetTask ->
+   sendAppendRequest -> shouldSendSnapshot again -> metadata 95 -> abort.
+   Repeats indefinitely until a leader generates a snapshot with index > 100.
+   If a later leader has snapshot index 100, the stuck series then blends with
+   that leader's chunks - degenerating into Finding 1.
+
+Impact: F is permanently left at commitIndex=90; if F is needed for quorum, the
+group loses availability. Liveness.
+
+Minimal fix: treat an "older" chunk as a supersession trigger when it
+originates from the current leader - reset the series (handleNewSnapshotSeries)
+instead of aborting, and send an AppendFailureResponse/InstallSnapshotResponse
+so the leader's backoff is released promptly.
+
+Robust long-term improvement: drive the follower entirely from the metadata;
+re-sync whenever the leader's snapshot identity differs from the in-progress
+series; on the leader, fall back to AppendEntries for entries still in the log
+before requiring a snapshot.
+
+Regression test: shouldSupersedeIncompleteSeriesWhenCurrentLeaderSendsOlderSnapshot
+(added and confirmed failing - see section 9).
+
+FINDING 3 - HIGH, Medium-High confidence: installation is not failure-atomic;
+restore failures are silently swallowed after the live state was already
+destroyed
+--------------------------------------------------------------------------------
+Location: ChunkedSnapshotInstaller.installCompleteSnapshot (172-176) calls
+resetForChunkedSnapshotRestore() BEFORE installSnapshot;
+RaftNodeImpl.installSnapshot (1241-1276) orders commitIndex/log/state-machine/
+membership updates with no rollback;
+NodeEngineRaftIntegration.restoreSnapshot (288-300) catches per-op Throwables,
+logs them, and CONTINUES; contrast LocalRaftIntegration.restoreSnapshot
+(374-386) which rethrows - test/prod behavior diverges.
+
+Invariant violated: "snapshot installation is atomic; failure leaves the node in
+a valid state, and a follower never acknowledges a snapshot it did not fully
+apply."
+
+Concrete sequences:
+1. Swallowed failure: a RestoreSnapshotOp fails (service throws, unknown service
+   name -> NPE inside RestoreSnapshotOp.run during a rolling upgrade,
+   deserialization mismatch). runOperation returns the Throwable;
+   restoreSnapshot logs severe and continues. installSnapshot completes
+   normally: commitIndex = lastApplied = snapshot.index(), AppendSuccessResponse
+   sent. The follower's state machine is partially restored but acknowledged.
+2. Destructive pre-reset: resetForChunkedSnapshotRestore() wipes all chunked
+   services for the group before the snapshot is validated or installed. If
+   createSnapshotFromChunks() or installSnapshot throws after the reset, the
+   node is left with wiped-but-unrestored service state, commitIndex already
+   advanced, and the log truncated - a permanent mixed state; the next
+   applyLogEntries hits entry == null -> AssertionError (RaftNodeImpl 956-960).
+
+Impact: silent data divergence (sequence 1) or a permanently broken member
+(sequence 2). Safety + concurrency (visibility of partial install).
+
+Minimal fix: (a) make restoreSnapshot fail the install: accumulate the first
+Throwable, abort remaining ops, propagate so installSnapshot throws and the
+follower does not ack; (b) move resetForChunkedSnapshotRestore() to after all
+validation, or make installSnapshot perform reset+restore as one unit so either
+both happen or neither; (c) order install so the state machine is replaced
+before commitIndex is advanced and the log truncated.
+
+Robust long-term improvement: perform install as a single prepare -> apply-into-
+staging -> commit (swap refs + advance commitIndex/lastApplied + truncate log)
+transaction on the Raft thread.
+
+Regression test: shouldNotResetServiceStateWhenSnapshotInstallFails (added and
+confirmed failing - see section 9).
+
+FINDING 4 - MEDIUM, High confidence: weak validation of chunk metadata leaves
+degenerate paths (out-of-range chunk requests crash the leader's task; malformed
+series stalls)
+--------------------------------------------------------------------------------
+Location: RaftNodeImpl.sendNextSnapshotChunk snapshotChunks.get(requestedChunkNumber)
+(798) - no range check; ChunkedSnapshotInstaller term-mismatch
+IllegalStateException (149-154) thrown outside the try/finally that resets state
+(108) and without any response to the leader; InstallSnapshotResponseHandlerTask
+(65-73) calls sendNextSnapshotChunk unconditionally even for stale responses
+whose flow-control sequence does not match.
+
+Invariant violated: a malformed/stale message must be rejected without crashing
+the sender's task or wedging the receiver's series.
+
+Concrete sequences:
+1. A follower whose series was initialized with chunkCount=10 (from leader A)
+   requests chunk 10/11 (from leader B's 12-chunk partitioning - the Finding 1
+   scenario) -> snapshotChunks.get(10) throws IndexOutOfBoundsException on the
+   leader's Raft thread (caught by RaftNodeStatusAwareTask.run, logged, follower
+   gets nothing until the next heartbeat re-sends metadata).
+2. A chunk with a mismatched chunk.term() throws IllegalStateException from
+   inside validateAndStoreChunk; processChunk's finally { reset(); } is not
+   reached; the series is wedged until a newer index arrives.
+3. A stale InstallSnapshotResponse (old flow-control seq) still reaches
+   sendNextSnapshotChunk; combined with FollowerState.setMaxAppendRequestBackoff()
+   assert backoffRound == 0, a stale response can trip an assertion in test
+   builds or silently overwrite backoff state in production.
+
+Impact: liveness stalls and spurious leader-side exceptions.
+
+Minimal fix: range-check requestedChunkNumber against chunkCount before
+indexing; wrap the term check so a mismatch resets the series and sends an
+AppendFailureResponse; guard sendNextSnapshotChunk so a stale response
+(mismatched flow-control seq) is ignored.
+
+Regression test: shouldNotThrowWhenChunkTermIsInconsistent (added and confirmed
+failing - see section 9).
+
+FINDING 5 - MEDIUM, Medium confidence: zero-chunk and empty-snapshot edges are
+not handled defensively
+--------------------------------------------------------------------------------
+Location: RaftNodeImpl.sendNextSnapshotChunk (767-769) throws
+IllegalStateException("No chunks extracted from snapshot") when
+extractChunksFrom(snapshotEntry) is empty; ChunkedSnapshotInstaller with
+chunkCount == 0 (253) installs the snapshot immediately on the metadata chunk
+with no data chunks.
+
+Invariant violated: the protocol must handle empty snapshots deterministically
+and must not crash the leader's heartbeat path.
+
+Reachability: today every group has at least one non-null, non-chunked service
+snapshot (e.g. AtomicLongService.takeSnapshot returns a non-null empty
+snapshot), so the chunk list is never empty in production. But this is an
+unstated assumption: any change (a service starting to return null for empty
+state, or a group with only null-returning services) turns the leader's
+heartbeat into a repeating IllegalStateException and turns the follower into an
+empty-snapshot installer that wipes the state machine and installs nothing.
+
+Minimal fix: define the empty snapshot as a single metadata+empty-data chunk
+(chunkCount = 1, operation = emptyList) on generation, or treat chunkCount == 0
+on the follower as "metadata-only snapshot; install an empty snapshot" only
+after an explicit marker.
+
+Regression test: shouldNotInstallSnapshotWithoutAnyDataChunk (added and
+confirmed failing - see section 9).
+
+FINDING 6 - MEDIUM, Medium confidence: no version/fallback gate for chunked
+transfer during rolling upgrades
+--------------------------------------------------------------------------------
+Location: leader side sendAppendRequest/sendSnapshotRequest (725-744) never
+checks the follower's member version; NodeEngineRaftIntegration.send(
+InstallSnapshotRequest...) (233-235) ships a new class-id op
+(InstallSnapshotRequestOp) with no capability negotiation;
+InstallSnapshotRequestHandlerTask (64-81) has no version guard.
+
+Invariant violated: rolling upgrade must either fall back to log replication or
+fail explicitly; it must not stall a peer.
+
+Sequence: a mixed cluster where the new-version leader holds a snapshot and an
+old-version follower's nextIndex falls behind it: the leader sends only
+InstallSnapshotRequestOp; the old member cannot deserialize the new op class id
+-> the message is dropped -> no response -> 20-round backoff retry loop forever,
+while shouldSendSnapshot prevents any AppendEntries to that follower. If
+old-version members form the commit quorum, the group can no longer commit.
+
+Minimal fix: gate chunked transfer on the target member's version (send
+AppendEntries when the peer cannot handle InstallSnapshotRequest), or define an
+explicit "snapshot unsupported -> follower requests log catch-up" fallback.
+
+Robust improvement: make the chunked-snapshot RPC versioned (Versioned
+serialization) with a capability handshake (metadata chunk doubles as a
+capability probe; a follower that cannot parse it responds with a legacy
+AppendFailureResponse so the leader falls back).
+
+FINDING 7 - LOW-MEDIUM, High confidence: follower-side retries and cleanup
+depend on leader liveness; slow/unreachable followers retain the leader's full
+snapshot in memory
+--------------------------------------------------------------------------------
+Location: ChunkedSnapshotInstaller.requestMissingChunks (178-197) sends to
+raftNode.getLeader() (may be null mid-election - response dropped, and the
+follower has no timeout/retry of its own); sendNextSnapshotChunk (810-821)
+keeps the entire snapshot chunk list referenced by RaftLog.snapshot for as long
+as any follower is behind.
+
+Impact: bounded (recovery exists via heartbeats), but the complete chunk list is
+retained on the leader for the whole duration a follower is behind, with no
+per-follower/global byte cap; a permanently unreachable follower causes the
+leader to re-serialize the full 250 MB chunk on every backoff cycle. Resource
+usage, not correctness.
+
+--------------------------------------------------------------------------------
+4. CONCRETE FAILURE INTERLEAVINGS
+--------------------------------------------------------------------------------
+- Finding 1: leader change mid-transfer with equal (index, term) but different
+  partitioning -> mixed cover -> silent data loss (see Finding 1 sequence).
+- Finding 2: new leader's snapshot index between the follower's commitIndex and
+  its in-progress snapshot index -> permanent stall (see Finding 2 sequence).
+- Finding 3: install failure after resetForChunkedSnapshotRestore -> wiped state
+  machine, no new snapshot, permanent mixed state; restore op failure swallowed
+  -> partial snapshot acknowledged.
+- Ack from an earlier transfer advancing a newer transfer: VERIFIED SAFE. A late
+  InstallSnapshotResponse(100, k) arriving after the leader moved to snapshot
+  150 re-triggers a metadata reset; the flow-control seq mismatch prevents the
+  stale ack from resetting backoff in a way that accelerates the newer transfer.
+- Concurrent local snapshot generation vs. leader-initiated install: VERIFIED
+  SAFE. F's local snapshot at the same/lower index makes the leader's chunks a
+  no-op ack (isDuplicateCommitIndex) or stale; at a higher index the leader's
+  series hits isFromOlderSnapshot and F catches up via normal matchIndex
+  advance. (This surface is where Finding 2's stall lives when the leader's
+  snapshot index is between F's commitIndex and F's in-progress index.)
+
+--------------------------------------------------------------------------------
+5. MEMORY, RESOURCE, AND PERFORMANCE RISKS
+--------------------------------------------------------------------------------
+- Double materialization on the leader: generation builds the full chunk list
+  while the services still hold the live data (transiently ~2x snapshot size);
+  the full chunk list is retained in RaftLog.snapshot for the lifetime of the
+  log - no streaming, no compression.
+- Follower-side buffering: receivedChunks holds the full in-progress snapshot in
+  addition to the already-installed SnapshotEntry - up to 2x snapshot size on a
+  follower mid-install.
+- Serialization on the Raft thread: a 250 MB InstallSnapshotRequest is
+  serialized synchronously inside raftIntegration.send(...) on the leader's
+  partition thread; this blocks all other partitions assigned to that
+  PartitionOperationThread, including other CP groups.
+- Chunk-by-chunk latency: one chunk per round-trip, with a 20-round timeout as
+  the only retry for a lost response; a single lost chunk/ack can stall the
+  transfer for 20 x appendRequestBackoffTimeoutInMillis.
+- Unbounded per-group transfer state: no cap on concurrent transfers across
+  groups, no global byte limit on in-flight snapshot data; a slow follower holds
+  the leader's whole snapshot in memory indefinitely.
+- No overflow risks found: chunk sizes are long; counts are int bounded by the
+  number of map entries; calculateEstimatedCapacity guards Integer.MAX_VALUE /
+  KEY_VALUE_STRIDE. Chunk size accounting is approximate (documented), so a
+  single KeyValueDataChunk can exceed the configured max - documented, not a
+  correctness issue.
+
+--------------------------------------------------------------------------------
+6. MISSING OR WEAK TESTS
+--------------------------------------------------------------------------------
+Existing coverage (SnapshotTest, ChunkedSnapshotInstallerTest, immutability/
+chunking tests): single-series transfer, slow-follower catch-up with 5-6 chunks
+(RaftDataService is chunked with MAX_AMOUNT_IN_A_CHUNK=10), lost append
+responses, membership-change-with-snapshot, unit-level idempotency/staleness.
+
+Gaps:
+1. No test for equal-index, different-partition series mixing (Finding 1).
+2. No test for leader change mid-transfer with a lower-index new-leader
+   snapshot (Finding 2).
+3. No test for install/restore throwing (Finding 3) - no assertion that
+   commitIndex/lastApplied stay consistent or that the node refuses to ack.
+4. No reordering/duplicate-delay tests across series boundaries.
+5. No test for chunkCount/term inconsistency across chunks of the same series.
+6. No empty-snapshot or single-chunk boundary test at the Raft level.
+7. No test for out-of-range requestedChunkNumber (Finding 4).
+8. No rolling-upgrade/mixed-version test (Finding 6).
+9. No test asserting a follower cannot expose partially installed state.
+10. No constrained-heap / many-chunks test verifying memory bounds and
+    completion counters.
+
+The harness (LocalRaftIntegration can drop/alter InstallSnapshotRequest/
+InstallSnapshotResponse; RaftDataService is a controllable
+ChunkedSnapshotAwareService) supports deterministic interception - no sleeps
+required.
+
+--------------------------------------------------------------------------------
+7. RECOMMENDED IMPROVEMENTS (ranked by risk reduction per unit of complexity)
+--------------------------------------------------------------------------------
+1. Add a transfer/session identity to chunks and enforce it on the follower
+   (kills Finding 1 + the equal-index half of Finding 2): a per-snapshot
+   generation id in every SnapshotChunk, reset the series whenever the id
+   differs, and validate chunkCount on every data chunk.
+2. Make older-snapshot chunks supersede instead of silently aborting, and make
+   install failure atomic (kills Finding 2's stall and Finding 3's partial
+   install).
+3. Add the missing deterministic tests so the above have regression coverage.
+
+--------------------------------------------------------------------------------
+8. OPEN DESIGN QUESTIONS
+--------------------------------------------------------------------------------
+- Should chunked transfer be pipelined (multiple in-flight chunks per follower)
+  with a per-follower byte budget, given the default 250 MB chunks make
+  one-at-a-time transfers of multi-GB CP maps painfully slow?
+- Is the full snapshot retained in RaftLog.snapshot (memory ~= live data size)
+  acceptable, or should the leader stream chunks from the service iterator?
+- Where should the global limits live (per-group vs per-node in-flight bytes,
+  concurrent transfers across groups)?
+- Should the maxChunkSizeInMB config be validated for cluster-wide equality at
+  join time, and should chunking be made deterministic (e.g. sort by Data bytes)
+  to make series identity robust even without a session id?
+- What is the intended rolling-upgrade policy for the new InstallSnapshotRequest
+  message type (version-gated fallback vs full-cluster upgrade before
+  snapshots)?
+
+================================================================================
+9. TEST REPRODUCTION RESULTS (unit tests added to
+   ChunkedSnapshotInstallerTest.java)
+================================================================================
+Command: ./mvnw -pl hazelcast -am -Dtest=ChunkedSnapshotInstallerTest
+         -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false
+         -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dpmd.skip=true
+         -Denforcer.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true
+         -Djacoco.skip=true -Dspotless.check.skip=true -Dmaven.source.skip=true
+         test
+
+Result: Tests run: 10, Failures: 5, Errors: 1 (the 4 pre-existing tests stay
+green; all 5 reproduction tests fail for the predicted reasons).
+
+1. shouldNotMixChunksFromDifferentTransfers (Finding 1)
+   - FAILURE: "Installed snapshot mixes chunks from two different transfer
+     series". Confirms the installer assembles chunks from two series.
+2. shouldNotLoseSnapshotDataWhenChunksArriveFromDifferentTransfers (Finding 1,
+   harm demonstration)
+   - FAILURE: "Missing entry e5 after mixed-series restore expected:<e5> but
+     was:<null>". Both series encode the SAME logical dataset {e0..e9} at
+     (index=100, term=3) with different partitionings; the mixed snapshot
+     replayed through the real restore path (RaftDataService) loses e5..e9.
+     Proves the harm is real even though the logical content is identical.
+3. shouldSupersedeIncompleteSeriesWhenCurrentLeaderSendsOlderSnapshot
+   (Finding 2)
+   - FAILURE: "Wanted but not invoked: send(InstallSnapshotResponse)". The
+     older-snapshot chunk is silently aborted - no reset, no notification.
+4. shouldNotResetServiceStateWhenSnapshotInstallFails (Finding 3)
+   - FAILURE: resetForChunkedSnapshotRestore() "Never wanted here ... But
+     invoked here: ChunkedSnapshotInstaller.installCompleteSnapshot(
+     ChunkedSnapshotInstaller.java:175)". Live service state is destroyed
+     before a failed install.
+5. shouldNotThrowWhenChunkTermIsInconsistent (Finding 4)
+   - ERROR: IllegalStateException "Term mismatch detected! Snapshot index 100
+     expects term 3 but received term 4". The exception escapes processChunk;
+     the series is unrecoverable without a newer index.
+6. shouldNotInstallSnapshotWithoutAnyDataChunk (Finding 5)
+   - FAILURE: installSnapshot "Never wanted here ... But invoked here:
+     ChunkedSnapshotInstaller.installCompleteSnapshot(
+     ChunkedSnapshotInstaller.java:175)". A zero-chunk metadata-only series
+     installs an empty snapshot.
+
+CONFIRMED: Findings 1, 2, 3, 4, 5.
+DISPROVED: none (the positive invariants covered by the pre-existing tests -
+duplicate idempotency, stale-chunk rejection, install-then-reset - still pass).
+INCONCLUSIVE:
+  - Finding 3 swallowed-restore sub-path (NodeEngineRaftIntegration.restoreSnapshot
+    swallowing Throwables): not reachable from the installer unit fixture;
+    needs a NodeEngineRaftIntegration-level test with an injectable throwing
+    RaftOp/service.
+  - Leader-side findings (out-of-range requestedChunkNumber ->
+    IndexOutOfBoundsException; empty-chunk-list IllegalStateException): need a
+    real RaftNodeImpl; smallest existing fixture is LocalRaftGroup
+    (integration-level), deferred.
+
+NEXT THREE HIGHEST-VALUE UNIT TESTS:
+  1. shouldNotCompleteWhenIncomingSeriesChunkCountDiffers - Finding 1's
+     chunk-count variant (10 vs 12 chunks): mixing must not complete while
+     chunks of the incoming series are unrequested.
+  2. shouldClearInstallerStateAfterFailedInstall - Finding 3 follow-up: after a
+     failed install, currentSnapshotIndex/receivedChunks/missingChunks must be
+     reset so a subsequent valid series can proceed.
+  3. shouldIgnoreDelayedChunkFromInstalledSnapshot - delayed chunks arriving
+     after a completed install must neither re-trigger installSnapshot nor
+     advance state (late-message safety).
+
+================================================================================
+10. DETERMINISTIC FIX PROPOSAL (response to "what is your suggestion to fix the
+    issue deterministically?")
+================================================================================
+Goal: for the same (index, term), the chunk list - count, boundaries, and
+per-chunk content - is identical on every member, AND the follower never mixes
+chunks it cannot prove belong to the series it is assembling.
+
+LAYER 1 - Deterministic chunking (pure function of the committed key set)
+  Invariant: chunking is a pure function of the committed state at (index, term).
+  a) CPMapRegistrySnapshot.toChunks / appendStoreChunks: sort map stores by map
+     name; sort entries inside a store by serialized key bytes
+     (Arrays.compareUnsigned(a.toByteArray(), b.toByteArray())). Data payloads
+     are identical for identical committed entries, so ordering is canonical.
+  b) ChunkUtil.groupServiceChunksBySize: no change strictly required once (a)
+     lands, because List.sort is stable and the input list becomes
+     deterministic; optionally add the chunk's original index as a secondary
+     sort key for a total order.
+  c) NodeEngineRaftIntegration.takeServiceSnapshots: iterate services sorted by
+     serviceInfo.getName() so optimizeChunks' "last chunk" merge is
+     deterministic.
+  d) Test double RaftDataService.splitMap: sort entries (documents the
+     contract).
+  Cost: one O(n log n) sort of the key set at snapshot generation time on the
+  Raft thread - negligible vs the serialization cost of a 250 MB chunk.
+
+LAYER 2 - Series identity + follower-side validation (makes mixing impossible,
+not just harmless)
+  Deterministic partitioning only makes equal-(index,term) mixing harmless; it
+  does not make it impossible (rolling upgrades that change chunking, chunkCount
+  mismatch from config drift, or buggy peers would reintroduce it).
+  a) Add SnapshotChunk.snapshotGenerationId (long; chosen once per snapshot on
+     the leader). Serialize it via the Versioned interface (like
+     KeyValueDataChunk) so old members read old frames - a rolling-upgrade-safe
+     wire change.
+  b) ChunkedSnapshotInstaller: track currentSnapshotId; on any chunk whose id
+     differs, supersede (handleNewSnapshotSeries) regardless of whether the
+     index is equal, older, or newer (keep the commitIndex stale-chunk guard).
+     Validate every data chunk's chunkCount == totalChunks and index/term
+     against the series header; on mismatch, supersede and re-fetch metadata.
+  c) The metadata chunk is the series header: it carries snapshotId, chunkCount,
+     and optionally a whole-snapshot size/checksum.
+  d) This also fixes Finding 2: an "older" snapshot from the current leader now
+     has a different snapshotId -> supersede + request chunks instead of the
+     current silent abort.
+  e) Validate cluster-wide equality of hazelcast.cp.snapshot.chunk.max.size.mb
+     (no longer safety-critical once Layers 1+2 are in, but prevents needless
+     full-transfer restarts after every leader change).
+
+VERIFICATION
+  - shouldNotMixChunksFromDifferentTransfers and
+    shouldNotLoseSnapshotDataWhenChunksArriveFromDifferentTransfers become green
+    under the fix (the latter passes under either layer).
+  - New determinism test: shouldProduceIdenticalChunkingForSameLogicalState -
+    build two snapshots with the same key set but different insertion orders,
+    run createChunksFromSnapshot on both, assert identical chunk count and
+    identical per-chunk content.
+  - New identity test: shouldRejectChunkFromDifferentSnapshotGeneration - same
+    index/term, different snapshotId -> the series resets and requests fresh
+    metadata.
+
+================================================================================
+END OF REVIEW
+================================================================================

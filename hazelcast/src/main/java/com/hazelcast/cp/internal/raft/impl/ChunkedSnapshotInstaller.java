@@ -113,6 +113,13 @@ public class ChunkedSnapshotInstaller {
             return ChunkProcessingDecision.ABORT;
         }
 
+        if (isLeaderTermChanged(request)) {
+            logger.info(format("Starting new snapshot installation from leader %s in request term %d "
+                            + "- switching from index %d to index %d",
+                    request.leader(), request.term(), transferState.snapshotIndex(), chunk.index()));
+            startNewSnapshotTransfer(request);
+        }
+
         if (isFromOlderSnapshot(chunk)) {
             logger.fine("Rejecting old snapshot chunk - received snapshot [term=%d, index=%d, "
                             + "chunk=%d(0-based)/%d], is older than current snapshot index: %d",
@@ -205,6 +212,10 @@ public class ChunkedSnapshotInstaller {
 
     private boolean isTermConsistent(SnapshotChunk chunk) {
         return chunk.term() == transferState.snapshotTerm();
+    }
+
+    private boolean isLeaderTermChanged(InstallSnapshotRequest request) {
+        return !transferState.hasLeaderTerm(request.term());
     }
 
     private void startNewSnapshotTransfer(InstallSnapshotRequest request) {

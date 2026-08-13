@@ -1,0 +1,601 @@
+================================================================================
+RAFT SNAPSHOT LIFECYCLE REDESIGN — OPTION F (REVISED SYNTHESIS):
+O(1) PER-OP VIA DELTA EMISSION + TRANSIENT SHADOW FREEZE
+Design Document — the consolidated answer to Options A-E
+Repo: hazelcast (6.0.0-SNAPSHOT)
+Date: 2026-08-12
+Status: Design (no implementation in this deliverable)
+
+REVISION NOTE: the first version of this document proposed persistent
+(immutable) hash-array-mapped-trie state for CPMap to make capture a
+reference grab. That was REJECTED: HAMT per-op is O(log_32 n) with per-op
+allocation, i.e. a real regression of the Raft thread's apply path, which is
+the one path that must stay O(1). This revision keeps the mutable CHM and
+achieves O(1) capture + O(1) per-op by (a) emitting deltas at the service
+boundary (Option B's decorator, O(1)) and (b) a transient write-redirection
+shadow for the rare full copy (replacing Option A's COW freeze, which had an
+O(container) hole). See Section 1.
+================================================================================
+
+TABLE OF CONTENTS
+  0.  Executive summary and verdict
+  1.  Why HAMT was rejected (and what the constraint really requires)
+  2.  The corrected architecture
+  3.  Threading model (single and multiple group scenarios)
+  4.  Per-op and per-cycle cost table
+  5.  Correctness of the delta stream and the shadow freeze
+  6.  What composes from A-E (keep / drop / fix)
+  7.  Tests and benchmarks
+  8.  Risks and open questions
+  9.  Appendix A — anchors
+
+================================================================================
+0. EXECUTIVE SUMMARY AND VERDICT
+================================================================================
+
+The requirement set is: per-op apply O(1) on the Raft thread, capture O(1),
+and no O(size) work on the Raft thread at any point in the snapshot
+lifecycle. The clean way to meet ALL THREE is to stop trying to derive
+snapshots from a mutable map via immutable-state tricks, and instead:
+
+  1. KEEP the live state a mutable ConcurrentHashMap — per-op apply stays
+     exactly what it is today (O(1), zero allocation beyond the CHM put).
+  2. EMIT the delta at the service boundary: the CPMap store decorator
+     (Option B's DeltaEmittingCPMapStore, which is service-internal, not a
+     generic SPI) appends (key, value, timestamp, opIndex) to a bounded
+     per-group sink during apply — O(1), outcome-aware by construction, and
+     the same structure that feeds the durable incremental store.
+  3. For the RARE full copy (seeding, rebuild, far-behind follower, stalled
+     store), use a TRANSIENT SHADOW FREEZE instead of Option A's COW freeze:
+     capture is a flag flip (O(1)); while the worker copies the (now frozen)
+     main map off-thread, writes redirect to a small overlay (O(1)); reads
+     consult overlay-then-main (O(1)); the worker drains the overlay back
+     and the flags flip back (O(1) on the Raft thread). No clone, no
+     O(container) step, ever, on the Raft thread.
+
+Per-op cost: O(1) in ALL states (pure CHM in steady state; CHM + one bounded
+buffer append for the delta; CHM + overlay during the brief freeze window).
+Capture: O(1) (flag flip). The Raft thread performs zero O(size) work: the
+copy is off-thread, the delta drain is off-thread, publication is a bounded
+callback.
+
+Verdict: this is the answer. It is Option B (delta emission) + a corrected
+Option A (shadow freeze instead of COW freeze) + C/E coordination, with NO
+HAMT, NO O(log n), and NO generic SPI. It replaces the earlier F.
+
+================================================================================
+1. WHY HAMT WAS REJECTED (AND WHAT THE CONSTRAINT REALLY REQUIRES)
+================================================================================
+
+1.1 The failed approach
+-----------------------
+Persistent HAMT (Option F v1): put/remove allocate O(log_32 n) nodes and walk
+that many levels; reads are O(log n). For a 10M-entry CPMap this is a real
+constant-factor regression on the single most latency-critical path in the CP
+subsystem (apply on the Raft thread), and it taxes write-hot maps with
+per-op allocation. The user's constraint — "per-op must stay O(1)" — is
+correct: the apply path is the one path that must never grow with anything.
+
+1.2 What the constraint actually requires
+-----------------------------------------
+  - apply (per-op):                 O(1)
+  - snapshot capture (per-cycle):   O(1)
+  - per-cycle Raft-thread work:     bounded, independent of size and storage
+  - everything O(size):             off the Raft thread
+Nothing in that list requires immutable state. It requires only:
+  (a) a way to feed the durable store with exact deltas at O(1) per op, and
+  (b) a way to obtain a consistent full view for the rare full copy without
+      blocking or cloning on the Raft thread.
+Both exist: (a) is emission at the service boundary (the store decorator),
+(b) is the transient shadow freeze. Neither needs HAMT.
+
+================================================================================
+2. THE CORRECTED ARCHITECTURE
+================================================================================
+
+2.1 Live state (unchanged): mutable CHM
+---------------------------------------
+  CPMapStore keeps its current ConcurrentHashMap-backed implementation
+  (HeapCPMapStore). Semantics, memory layout, and per-op behavior are
+  unchanged. The registry still holds (Data key -> value + optional
+  timestamp) exactly as today.
+
+2.2 Delta emission at the service boundary (O(1), no generic SPI)
+-----------------------------------------------------------------
+  CPMapService wraps every store in DeltaEmittingCPMapStore (Option B
+  Section 3.3, unchanged). The decorator:
+      put(key,value,ts)        -> delegate.put + sink.put(mapName,key,value,ts)
+      putIfAbsent(...)         -> delegate + sink.put ONLY if prev == null
+      compareAndSet(...)       -> delegate + sink.put ONLY if changed
+      remove(key)              -> delegate + sink.delete ONLY if removed != null
+      purge(...)               -> delegate + one sink.delete per purged key
+      destroyMapStore          -> service-level sink.removeAll(mapName)
+  The sink is a bounded per-group buffer (ArrayList append or small CHM):
+  O(1) per op. This is NOT a generic SPI: it is the CPMap service's own
+  decorator, it knows the outcome by construction (same thread, same call),
+  and it is testable in isolation (F2/F3).
+  Why this is acceptable as "per-op work": one bounded-buffer append (~20-40
+  ns) next to an operation that already involves op deserialization, raft
+  replication, and a CHM put. Measured in the benchmark (7.2); the lag-cap
+  backpressure (A Section 6) bounds the buffer when the durable store lags.
+
+2.3 Transient shadow freeze (replaces Option A's COW freeze)
+------------------------------------------------------------
+  Needed only for the RARE full copy: initial durable seeding, store
+  rebuild, far-behind-follower transfer when the durable store's base is too
+  old, or a stalled-store fallback. Steady state NEVER opens a shadow.
+
+  State:
+    main       CHM (live state; NOT written while the shadow is active)
+    overlay    CHM (ALL writes while the shadow is active; entries or
+               tombstones)
+    shadowOn   boolean (Raft-thread confined transitions)
+
+  Raft thread:
+    capture (O(1)): if !shadowOn { shadowOn=true; overlay=new CHM; record index }
+    write while shadowOn (O(1)): overlay.put(key, value|TOMBSTONE)
+                                    [main untouched — this is the key rule]
+    read  while shadowOn (O(1)): overlay.get(key) -> present? value : main.get
+    write when !shadowOn (O(1)): main.put/remove (unchanged)
+
+  Worker (off-thread), while shadowOn (copy then drain, one continuous phase):
+    1. copy main -> chunk stream (main is never written while shadowOn, so
+       CHM iteration is complete and consistent — no weak-consistency issue).
+    2. drain overlay -> main (CHM putAll is thread-safe; tombstones ->
+       main.remove) AND -> durable store (same record format as the sink),
+       LOOPING until it observes the overlay empty. Writes may re-add to the
+       overlay during the drain; the loop re-drains them.
+    3. submit a bounded "drain done" callback.
+
+  Raft thread (O(1), ATOMIC): when IT observes overlay.isEmpty() ->
+     shadowOn=false; writes and reads return to main-only; overlay retired.
+     The emptiness check and the flip are the same serialized step on the
+     Raft thread, so no write can land in the overlay after the flip.
+
+  ORDERING INVARIANT (why there is NO race — this corrects an earlier draft
+  that flipped at "copy done"): writes go to the overlay from capture until
+  the flip, so main receives NO writes until the flip; the worker only
+  drains overlay->main while shadowOn. Hence every value the worker writes
+  into main is <= every value a post-flip write will place there, and the
+  flip happens only when the overlay is empty. A "flip at copy-done, then
+  drain" protocol would race — the drain could overwrite a newer post-flip
+  write of the same key. This protocol cannot: main is monotonic across the
+  freeze boundary (pre-freeze values from the copy; post-flip values from
+  new writes; nothing in between).
+
+  All Raft-thread steps are O(1). Reads during the window are at most two
+  CHM lookups.
+
+2.4 The durable store (Option B, unchanged; fed by 2.2 and 2.3)
+----------------------------------------------------------------
+  - Steady state: the durable incremental store advances S from the sink's
+    drained records (2.2), group-committed off-thread. Transfer to followers
+    = stream the store's base + deltas at S + the WAL tail (S, commitIndex];
+    NO full copy in the common case (the durable store IS the transfer
+    source, Option C 4.2).
+  - Rare full copies (2.3) seed/rebuild the store and serve far-behind
+    followers.
+  - Atomic publication, staging->rename, FULL_NEEDED, reaping, SQLite
+    backend, manifest: unchanged from Options B/C/D.
+
+2.5 The unified Raft-thread lifecycle (FINAL)
+---------------------------------------------
+  Per committed entry (apply):
+    1. raftIntegration.runOperation(op, index)  — as today, CHM O(1);
+       the decorator appends the delta to the sink (O(1)).
+  Per snapshot cycle (memory tier / metadata): O(1) record of index/term.
+  Per snapshot cycle (disk tier):
+    1. trigger check: O(1)
+    2. capture: flag flip + sink watermark (O(1)); NO data touch
+    3. enqueue {sink batch / copy request} to the bounded worker queue: O(1)
+    4. completion callback (durable publish / copy done / drain done):
+       O(1) + ringbuffer truncation O(logCapacity)
+    5. failure callback: O(1), retry with backoff
+  Nothing on the Raft thread is O(size). Ever.
+
+================================================================================
+3. THREADING MODEL (SINGLE AND MULTIPLE GROUP SCENARIOS)
+================================================================================
+
+3.1 The current model (and why it is the problem)
+-------------------------------------------------
+  Today every Raft node's tasks run on ONE thread: the PartitionOperationThread
+  that owns the group's partition index. NodeEngineRaftIntegration routes by
+  partitionId (execute() runs inline if already on that thread, otherwise via
+  PartitionSpecificRunnableAdaptor; submit() always routes —
+  NodeEngineRaftIntegration.java:137-151). Consequences:
+    - one partition thread serves EVERY CP group mapped to that partition
+      index (the common case: a metadata group + user groups), serialized;
+    - groups on different partition indexes run on different partition
+      threads, concurrently;
+    - snapshot generation (takeSnapshotIfCommitIndexAdvanced,
+      RaftNodeImpl.java:1128-1215), the per-chunk disk write + fsync
+      (persistAndFlushSnapshotChunks, 1217-1234), and the follower's
+      per-chunk persistence (ChunkedSnapshotInstaller.persistAndTrackChunk,
+      225-237) ALL run INLINE on that same thread.
+  Therefore one large snapshot in group G1 blocks every other group and
+  partition on that partition thread for the whole generation + disk-write
+  duration. This is the tail-latency source the redesign removes.
+
+3.2 The new model: three thread domains
+---------------------------------------
+  Domain 1 — Raft / partition threads (UNCHANGED ownership; per-partition
+  single thread). Runs, for all groups on the partition, the normal Raft
+  work (append, commit, apply, handlers, election, heartbeats, queries) PLUS
+  only the BOUNDED snapshot coordination per group:
+    - trigger check, capture (flag flip / handle grab), memory-tier record
+    - per-op sink append during apply (O(1))
+    - completion / failure callbacks (O(1) + O(logCapacity) truncation)
+    - transfer chunk SEND: a bounded copy of a worker-pre-serialized chunk
+      (O(chunk cap), NOT O(snapshot))
+  Invariant I1: NO O(size) traversal, serialization, compression, or disk
+  I/O ever runs on a partition thread.
+
+  Domain 2 — Snapshot worker pool (NEW, node-wide, bounded). Runs all heavy
+  snapshot work: frozen-view traversal, structural delta drain, chunk
+  building, serialization/compression, pre-serialization of transfer
+  buffers, durable-store writes, fsync, atomic publish, reaping/compaction,
+  orphan sweep, and transfer streaming reads from the durable store.
+  Admission: one bounded queue (snapshotQueueCapacity) + a node-wide
+  concurrency cap (snapshotMaxConcurrentGenerations, semaphore); per group
+  at most ONE in-flight generation (coalescing). Workers never run Raft-node
+  tasks and never mutate Raft state (I2); they read immutable views and
+  write to the store.
+
+  Domain 3 — Store I/O threads (OPTIONAL, inside the store implementation;
+  e.g. SQLite's own workers for Option D, or a dedicated disk pipeline).
+  Bounded; communicates back only via futures/callbacks submitted to
+  Domain 1. The file-based backend needs no separate domain (Domain 2 does
+  its I/O).
+
+  Communication rules (no shared mutable state between domains):
+    - partition thread -> worker: bounded queue offer (skip if full) or a
+      flag flip; NEVER blocks.
+    - worker -> partition thread: raftIntegration.submit(callback), which
+      routes to the group's OWN partition thread via its partitionId,
+      preserving happens-before with the group's other tasks (I3). Workers
+      never call partition-thread code directly.
+    - shared data between domains is only thread-safe structures (CHM
+      overlay, concurrent queues, futures) and immutable views.
+
+3.3 Single-group scenario
+-------------------------
+  1 group, 1 partition thread, 1 coordinator, at most 1 in-flight
+  generation, 1 sink.
+    - partition thread: apply (O(1) + sink append), capture (O(1)), bounded
+      callbacks. Nothing else snapshot-related.
+    - worker: 1 generation at a time (off-thread traversal/chunking/persist).
+    - memory: sink + (rare) overlay, bounded by the group's lag cap.
+  This is the strictest form of the acceptance criterion: even the group's
+  own ops are unaffected while its snapshot is generated and persisted.
+
+3.4 Multiple-group scenario (the common case)
+---------------------------------------------
+  N groups sharing one partition thread (and, across the node, groups on
+  different partition threads):
+    - On the shared partition thread, each group's snapshot steps are O(1),
+      so NO group can monopolize the thread: a large snapshot in G1 cannot
+      delay G2's ops, commits, or queries on the same thread. This is the
+      direct fix for today's cross-group stall.
+    - The worker pool is SHARED node-wide. Fairness: FIFO admission (or a
+      weighted per-group policy) so one large generation does not starve
+      other groups' generations; per-group in-flight = 1 prevents a group
+      from flooding the queue.
+    - Cross-partition safety: workers are generic (they consume views/sink
+      batches and produce store writes + callbacks); a callback routes back
+      to the correct partition thread via the group's partitionId (I3), so
+      groups on different partition threads can safely share the pool.
+    - Backpressure is per-group (each group's durable S and lag cap are
+      independent) plus node-wide (queue + semaphore bounds).
+    - A follower group installing a large snapshot on a shared partition
+      thread: chunk persistence runs in the store/worker domain, the ack is
+      sent only after durable; the partition thread only validates metadata,
+      enqueues, and processes the completion — a slow disk cannot stall the
+      other groups on that thread.
+
+3.5 Which thread does what (matrix)
+-----------------------------------
+  Work item                         Domain      Bounded?
+  apply / ops / commit / query      partition   O(1)
+  capture (flag flip / handle)      partition   O(1)
+  sink append (delta emit)          partition   O(1)
+  memory-tier record                partition   O(1)
+  completion / failure callback     partition   O(1)+O(logCapacity)
+  transfer chunk send               partition   O(chunk cap)
+  traversal / walk / structural     worker      O(n) off-thread
+  diff / delta drain
+  chunking / serialization /        worker      O(n) off-thread
+  compression
+  pre-serialization of transfer     worker      O(n) off-thread
+  buffers
+  store writes / fsync / atomic     worker      O(n) off-thread
+  publish
+  reaping / compaction / orphan     worker      amortized off-thread
+  sweep
+  transfer streaming reads          worker      O(n) off-thread
+  SQLite commit (Option D only)     store I/O   O(batch) off-thread
+
+3.6 Invariants and config
+-------------------------
+  I1 partition threads never do O(size) or disk-I/O snapshot work.
+  I2 workers never mutate Raft state; they read immutable views and write
+     the store.
+  I3 worker -> Raft callbacks use the existing submit routing (partitionId),
+     preserving happens-before.
+  I4 per-group in-flight = 1; node-wide in-flight <=
+     snapshotMaxConcurrentGenerations; queue <= snapshotQueueCapacity.
+  I5 no locks shared between domains (only concurrent structures) ->
+     deadlock-freedom by construction.
+  New config: snapshotExecutorThreads (worker pool size; default derived
+  from IO threads, e.g. max(2, ioThreads/2)); snapshotQueueCapacity;
+  snapshotMaxConcurrentGenerations. Idle cost when no snapshot is due: the
+  pool is idle and the queue empty (no timers beyond the O(1) trigger
+  checks on the partition threads).
+
+3.7 Why this threading model is sufficient (no stronger model needed)
+---------------------------------------------------------------------
+  The design does NOT require one thread per group (wasteful), a dedicated
+  thread per snapshot (unbounded), or any priority preemption on the
+  partition threads. Because every partition-thread snapshot step is O(1),
+  the single shared partition thread remains the correct scheduler for Raft
+  work, and the bounded worker pool is the correct scheduler for snapshot
+  work. The only requirements are the queue + semaphore admission control
+  (I4) and the routing invariant (I3), both of which reuse existing Hazelcast
+  mechanisms (PartitionSpecificRunnableAdaptor, bounded executors).
+
+================================================================================
+4. PER-OP AND PER-CYCLE COST TABLE
+================================================================================
+
+  State               Reads             Writes (apply)       Capture
+  ------------------  ----------------  -------------------  --------------
+  steady (no shadow)  main.get  O(1)    main.put + sink.add O(1)   flag flip O(1)
+  shadow active       overlay.get else  overlay.put + sink.add       n/a
+  (copy + drain)      main.get  O(1)    O(1)
+  (after the atomic   main.get  O(1)    main.put + sink.add O(1)   n/a
+   flip back)
+
+  Per-cycle Raft-thread work: O(1) + O(logCapacity) truncation on the
+  completion callback. Independent of snapshot size and storage latency.
+  Per-op: O(1) in every state; zero steady-state read overhead.
+
+4.1 MEMORY BOUNDS DURING SNAPSHOTTING (answering "how do you control
+    memory growth while the leader keeps serving?")
+----------------------------------------------------------------------
+  Four memory consumers exist while ops continue; ALL are config-bounded and
+  NONE is proportional to snapshot size:
+
+  M1 sink / pending deltas (steady state): drained off-thread per batch;
+     hard bound = maxSnapshotLag entries' worth of deltas (reject appends
+     when commitIndex - S >= maxSnapshotLag). Typical size is one drain
+     interval, far below the cap.
+  M2 overlay (shadow active): absorbs ALL writes from capture until the
+     atomic flip; size = writeRate x (copyTime + drainTime). copyTime IS
+     O(main size) — this is the one case where a long copy under sustained
+     writes can push the overlay to the cap. Hard bound = maxSnapshotLag
+     (same mechanism as M1: appends are rejected until the copy finishes),
+     so the overlay can never reach O(main size): a 10M-entry map that takes
+     10s to copy caps the overlay at ~maxSnapshotLag entries regardless.
+     Availability impact is explicit and confined to the rare cold path
+     (seeding / rebuild / store-stalled); steady state never opens a shadow.
+     OPTIMIZATION (optional): per-segment freezing (freeze only the segment
+     being copied; other segments keep serving writes directly) shrinks the
+     overlay by ~segments^2 for uniform write distributions (CHM default
+     concurrency = 16).
+  M3 worker chunk buffer: O(maxChunkSize) — streaming, not O(main).
+  M4 retained log (ringbuffer): O(logCapacity), truncated by the memory
+     tier (metadata-only, no shadow needed).
+  Plus the durable store's bounded queue + concurrency cap (Option A 5.2).
+
+  Net: while snapshotting, the leader keeps committing and serving reads;
+  writes are served until persistence falls behind by maxSnapshotLag, after
+  which they are REJECTED (retryable), never blocked. Memory stays within
+  maxSnapshotLag x (avg entry size) + O(logCapacity) + O(chunk) — independent
+  of state-machine size.
+
+================================================================================
+5. CORRECTNESS OF THE DELTA STREAM AND THE SHADOW FREEZE
+================================================================================
+
+D1 Delta exactness (2.2): the decorator emits from the ACTUAL outcome of
+   each store call on the same thread as apply, so the sink equals exactly
+   the mutations caused by committed entries, in order, single-threaded.
+   Conditional ops (putIfAbsent, compareAndSet) emit only on success;
+   remove emits only when the key existed; purge emits one delete per purged
+   key; destroy emits removeAll (tombstone). Timestamps are carried (purge
+   semantics). Restore/install does NOT emit (no context), so there is no
+   double-write (Option B Section 3.3).
+
+D2 Shadow-freeze consistency (2.3): while the shadow is active, main receives
+   NO writes, so the worker's CHM iteration is complete and consistent; the
+   overlay captures every write for both live reads (overlay-then-main) and
+   the drain. ORDERING INVARIANT: writes stay in the overlay until the ATOMIC
+   flip (the Raft thread's serialized isEmpty() + shadowOn=false), so a
+   post-flip write can never be overwritten by the drain of an older overlay
+   value, and the overlay is empty at flip time. (An earlier draft that
+   flipped at "copy done" and drained afterwards had a lost-update race; it
+   was corrected to this single-phase protocol.)
+
+D3 No lost deltas during the freeze: window writes are recorded in the
+   overlay AND drained to the durable store (2.3 step), so S continues to
+   advance during a full copy; the copy itself is for seeding/rebuild/fall-
+   back and does not conflict with the delta stream (both are applied in
+   order; the store is derived, rebuildable state — Option B Section 5).
+
+D4 Log truncation ordering: unchanged (Option A C2): memory tier truncates
+   the ringbuffer only (metadata-safe); the durable store's S and WAL
+   eviction advance only after durable group commit; ack after durable.
+
+D5 Index consistency: capture records the committed index/term/members on the
+   Raft thread; the completion callback verifies monotonicity (Option E 4.5).
+
+================================================================================
+6. WHAT COMPOSES FROM A-E (KEEP / DROP / FIX)
+================================================================================
+
+  KEEP (unchanged):
+    - Option B: the durable incremental store (block store, DeltaRecord,
+      durable S, reaping, rebuild-on-divergence) and the CPMap decorator
+      (DeltaEmittingCPMapStore).
+    - Option C: SnapshotHandle/Sink protocol, MRSW store + stream-from-disk,
+      staging reuse + FULL_NEEDED, backlog trigger, fast-restart manifest.
+    - Option E: two-tier cadence (memory tier = metadata record, free),
+      inflight-snapshot compaction pause + catch-up window, transfer-liveness
+      monitor.
+    - Option D: SQLite as the durable store backend (optional).
+  DROP:
+    - Option F v1: HAMT / persistent state / structural diff (O(log n) per-op
+      — rejected).
+  FIX (from Option A):
+    - The COW freeze (O(container) first-mutation clone on the Raft thread)
+      is replaced by the transient shadow freeze (2.3) — the same "freeze the
+      view, off-thread copy" intent without any O(size) step on the Raft
+      thread.
+  NEW (this revision):
+    - The shadow-freeze protocol (2.3) with its flag transitions and the
+      overlay-drain path.
+
+================================================================================
+7. TESTS AND BENCHMARKS
+================================================================================
+
+7.1 Deterministic tests
+  F1 perOpStaysO1: instrument apply; assert per-op cost is flat from 10 to
+     10M keys, in steady state AND during a freeze window (no O(n) step at
+     capture, no clone).
+  F2 deltaExactness: put/putIfAbsent/compareAndSet/remove/purge/destroy
+     sequences (incl. purge-enabled maps with timestamps); assert the sink
+     equals the applied key-level changes (Option B T8, now data-structure-
+     level via the decorator).
+  F3 freezeConsistency: freeze while a copy is in flight; mutate; assert the
+     copy sees exactly the frozen state, live reads see the latest state
+     (overlay-then-main), and the drain converges (overlay empty, reads
+     main-only).
+  F4 noLostDeltasDuringFreeze: freeze + full copy while the durable store is
+     consuming deltas; assert S advances continuously and the store state at
+     S equals the state machine at S (rebuild check).
+  F5 logTruncationAndDurabilityOrdering: unchanged from A (T3/T8).
+  F6 pipelinedTransferResume + inflightPause + twoTier: unchanged from
+     C/E (C5/E1/E2/E3) with the shadow as the copy source.
+  F7 overlayBound: sustained writes during a long freeze (stalled store);
+     assert the overlay is bounded by the lag cap and appends are rejected
+     at the cap (no unbounded memory).
+  F8 noLostUpdateAcrossFreezeBoundary (REGRESSION for the ordering bug found
+     in review): write K=v1 before capture; capture; write K=v2 (into the
+     overlay); let the copy finish and the drain run; then after the flip
+     write K=v3. Assert main ends with v3 and the drained durable store
+     reflects v1->v2->v3 in order. This fails under the naive "flip at
+     copy-done, then drain" protocol (the drain could overwrite v3 with v2)
+     and passes under the single-phase shadow protocol.
+  F9 leaderAvailabilityDuringSnapshot: while a snapshot is in flight (delta
+     drain AND full copy), assert reads and writes are served continuously
+     (probe op p99 flat) and commit advances; appends are rejected ONLY when
+     the lag cap is reached (F7), never blocked.
+
+7.2 Benchmark (extends C/E matrix)
+  - Apply-path microbenchmark: CHM vs CHM+decorator-sink per-op (the cost of
+    the delta emission — target < 10% of op time).
+  - Snapshot Raft-thread step duration vs size (10k..10M): assert flat —
+    the acceptance criterion.
+  - Full-copy wall time (off-thread) vs size, and its frequency in steady
+    state (should be ~0 with a healthy incremental store).
+  - Transfer: pipelined chunked stream from the durable store vs size;
+    slow follower present; leader snapshot rate unaffected.
+  - Storage conditions (fast/slow/delayed write/delayed fsync): probe op
+    p50/p95/p99/max flat.
+
+================================================================================
+8. RISKS AND OPEN QUESTIONS
+================================================================================
+
+  R1 Delta-emission overhead (R1 in Option B): one bounded-buffer append per
+     op. Measured in 7.2; if it regresses hot single-key groups, batch the
+     append (per-apply-logEntries batch, not per-op) — the decorator can
+     accumulate into the active batch and flush once per applyLogEntries
+     call, making the per-op cost one ArrayList add with no queue interaction.
+  R2 Overlay memory during a copy under sustained writes: bounded by the
+     lag cap (F7); the copy is off-thread and the drain is off-thread, so
+     the shadow window is copyTime + drainTime, and appends are rejected
+     (retryable) only if the overlay reaches the cap — the leader keeps
+     serving reads and committing throughout. Steady state never opens a
+     shadow, so this applies only to the rare cold path.
+  R3 CHM iteration consistency: valid because main is NOT written while the
+     shadow is active (all writes go to the overlay). This is the one
+     invariant the shadow enforces; F3 asserts it.
+  R4 The overlay adds a second lookup on reads only while the shadow is
+     active; steady-state reads have zero overhead (F1).
+  R5 Copy-time growth: copyTime is O(main size), so under sustained writes a
+     large full copy can push the overlay to the cap (writes rejected for
+     the remainder of the copy). Mitigations: (a) the incremental store
+     makes full copies rare (seeding/rebuild only); (b) optional per-segment
+     freezing shrinks the overlay by ~segments^2 for uniform writes (CHM
+     default concurrency 16); (c) the lag cap keeps memory bounded
+     regardless (F7).
+  R6 Shadow-drain ordering: correctness of the flip depends on the Raft
+     thread's serialized isEmpty() + shadowOn=false step; F8 is the
+     regression test that pins it.
+  OQ1 Per-op vs per-batch delta emission: recommend per-batch (accumulate in
+       the decorator's context, flush once per applyLogEntries) — keeps the
+       per-op cost to a single list add. Decided by the 7.2 microbenchmark.
+  OQ2 Should the shadow-freeze also be used for the memory tier? No — the
+       memory tier is metadata-only (index/term/members), no data access.
+  OQ3 When the durable store is healthy, full copies should be ~zero; keep
+       the copy path but treat its frequency as a metric
+       (raft.snapshot.fullCopy.count) with a warning if it exceeds the
+       backlog trigger rate.
+
+================================================================================
+9. APPENDIX A — ANCHORS
+================================================================================
+
+  Hazelcast (this workspace):
+    - CPMap mutable store: CPMapStore.java:42-138, HeapCPMapStore.java:96-140.
+    - Apply path: RaftNodeImpl.applyLogEntry (RaftNodeImpl.java:980-1026);
+      the decorator hooks the store methods called from CPMap ops
+      (CPMapPutOp.java:42-44, CPMapPutIfAbsentOp.java:42-44,
+      CPMapCompareAndSetOp.java:44, CPMapRemoveOp.java:40-42,
+      CPMapService.java:87 store factory, 141-144 destroy).
+    - Restore/install (no emission): ChunkedSnapshotInstaller.java;
+      RaftNodeImpl.installSnapshot (RaftNodeImpl.java:1241-1276).
+  Prior options: raft-async-snapshot-design.txt (A), raft-incremental-
+    snapshot-design.txt (B; the decorator and durable store are reused
+    verbatim), raft-snapshot-rqlite-informed-design.txt (C),
+    raft-sqlite-state-store-design.txt (D), raft-etcd-informed-design.txt
+    (E). This document supersedes the earlier raft-versioned-state-design.txt
+    (HAMT-based F v1, rejected).
+
+TERMINOLOGY (terms used in this document; full glossary with every option's
+abbreviations: raft-snapshot-terminology.txt)
+  CHM    ConcurrentHashMap — the live CPMap store; per-op must stay O(1).
+  COW    Copy-On-Write — rejected as a Raft-thread freeze (O(container)
+         first-mutation clone); replaced by the transient shadow freeze.
+  CP     Hazelcast's Raft-based linearizable "CP subsystem" (CAP theorem).
+  CPMap  A linearizable map in the CP subsystem.
+  Data   Hazelcast's binary serialized key/value type (immutable).
+  DeltaEmittingCPMapStore The CPMap-internal decorator that emits deltas
+         from store-call outcomes (O(1) per op).
+  fsync  Force OS file buffers to disk — the durability point.
+  generation One snapshot-producing run of the coordinator.
+  HAMT   Hash Array Mapped Trie — a persistent hash map (O(log n) per op);
+         PROPOSED AND REJECTED: per-op apply must stay O(1).
+  lag cap  Hard bound on commitIndex - durableS (maxSnapshotLag); exceeding
+         it rejects new appends (also bounds the sink and overlay memory).
+  memory tier / disk tier The two snapshot cadences (Option E).
+  MRSW   Multi-Reader Single-Writer — rqlite's snapshot-store lock model.
+  O(1)   Big O notation — the per-op/per-cycle complexity claims.
+  overlay / shadow / flip The transient write-redirection mechanism that
+         freezes `main` for an off-thread copy without any clone on the Raft
+         thread (capture = flag flip; writes -> overlay; atomic flip back).
+  p50/p95/p99/max Latency percentiles and maximum (benchmark acceptance).
+  ringbuffer The ArrayRingbuffer backing RaftLog (in-memory log).
+  S      The durable snapshot index of the incremental store.
+  sink   The bounded per-group buffer the decorator appends deltas to.
+  SPI    Service Provider Interface — rejected for delta emission (confined
+         to the CPMap-internal decorator instead).
+  term   Raft election term number (monotonicity/consistency marker).
+  WAL    Write-Ahead Log — the Raft log already IS the WAL in Hazelcast CP.
+  F1-F9 / R1-R6 / OQ1-OQ3 Test, risk, and open-question ids (cross-referenced).
+
+================================================================================
+END OF DESIGN (OPTION F — REVISED SYNTHESIS)
+================================================================================

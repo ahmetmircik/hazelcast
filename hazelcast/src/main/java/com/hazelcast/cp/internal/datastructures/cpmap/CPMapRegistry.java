@@ -22,8 +22,10 @@ import com.hazelcast.cp.CPGroupId;
 import com.hazelcast.cp.CPMap;
 import com.hazelcast.cp.internal.datastructures.cpmap.store.CPMapStore;
 import com.hazelcast.cp.internal.datastructures.cpmap.store.HeapCPMapStore;
+import com.hazelcast.cp.internal.datastructures.snapshot.SnapshotOverlay;
 import com.hazelcast.internal.metrics.MetricDescriptor;
 import com.hazelcast.internal.metrics.MetricsCollectionContext;
+import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.spi.exception.DistributedObjectDestroyedException;
 import com.hazelcast.spi.impl.NodeEngine;
 
@@ -49,6 +51,16 @@ public class CPMapRegistry {
     private final String groupName;
     private final ConcurrentMap<String, CPMapStore> mapStores;
     private final Set<String> destroyed;
+
+    /**
+     * Transient write-redirection overlay for async chunked snapshot
+     * generation (Option F): while captured, store mutations are redirected
+     * here and the real stores stay frozen, so a snapshot worker can scan
+     * them off the Raft thread at a single point-in-time. The capture is
+     * O(1); {@link #finishSnapshotCapture()} applies the overlay back on the
+     * Raft thread.
+     */
+    private final SnapshotOverlay<CPMapShadowKey, Data> snapshotOverlay = new SnapshotOverlay<>();
 
     public CPMapRegistry(CPGroupId groupId) {
         this.groupName = groupId.getName();
@@ -129,5 +141,42 @@ public class CPMapRegistry {
 
     public CPMapRegistrySnapshot takeSnapshot() {
         return new CPMapRegistrySnapshot(this);
+    }
+
+    /**
+     * Captures the registry state in O(1) for async snapshot generation.
+     */
+    public boolean captureSnapshot() {
+        return snapshotOverlay.capture();
+    }
+
+    public boolean isSnapshotCaptured() {
+        return snapshotOverlay.isActive();
+    }
+
+    /**
+     * Applies the pending redirected writes back to the real stores and
+     * releases the capture. Called on the Raft thread.
+     */
+    public void finishSnapshotCapture() {
+        snapshotOverlay.finish(this::applyOverlayPut, this::applyOverlayRemove);
+    }
+
+    SnapshotOverlay<CPMapShadowKey, Data> snapshotOverlay() {
+        return snapshotOverlay;
+    }
+
+    private void applyOverlayPut(CPMapShadowKey shadowKey, Data value) {
+        CPMapStore store = mapStores.get(shadowKey.mapName());
+        if (store != null) {
+            store.put(shadowKey.key(), value, CPMapStore.NO_TIMESTAMP);
+        }
+    }
+
+    private void applyOverlayRemove(CPMapShadowKey shadowKey, Data ignored) {
+        CPMapStore store = mapStores.get(shadowKey.mapName());
+        if (store != null) {
+            store.remove(shadowKey.key());
+        }
     }
 }

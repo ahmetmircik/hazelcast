@@ -38,6 +38,8 @@ import com.hazelcast.cp.internal.datastructures.spi.RaftRemoteService;
 import com.hazelcast.cp.internal.exception.CannotRemoveCPMemberException;
 import com.hazelcast.cp.internal.operation.GetCPObjectInfosOp;
 import com.hazelcast.cp.internal.operation.ResetCPMemberOp;
+import com.hazelcast.cp.internal.datastructures.snapshot.SnapshotPipelineConfig;
+import com.hazelcast.cp.internal.raft.impl.persistence.FileRaftStateStore;
 import com.hazelcast.cp.internal.persistence.CPPersistenceService;
 import com.hazelcast.cp.internal.raft.SnapshotAwareService;
 import com.hazelcast.cp.internal.raft.impl.RaftEndpoint;
@@ -113,6 +115,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.nio.file.Path;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -889,6 +892,14 @@ public class RaftService implements ManagedService, SnapshotAwareService<Metadat
         return new NodeEngineRaftIntegration(nodeEngine, groupId, localCPMember, partitionId);
     }
 
+    
+    private static Path raftStateStoreDir(CPGroupId groupId, RaftEndpoint localMember) {
+        return Path.of(SnapshotPipelineConfig.SNAPSHOT_DIR)
+                .resolve(localMember.getUuid().toString()) // per-member scope
+                .resolve("raft-state")
+                .resolve(SnapshotPipelineConfig.groupDirName(groupId));
+    }
+
     protected RaftNodeImpl buildRaftNode(CPGroupId groupId, RaftEndpoint localCPMember, Collection<RaftEndpoint> members,
                                          RaftAlgorithmConfig raftAlgorithmConfig, RaftIntegration integration,
                                          RaftStateStore stateStore) {
@@ -934,7 +945,10 @@ public class RaftService implements ManagedService, SnapshotAwareService<Metadat
             RaftIntegration integration = createRaftIntegration(groupId, localCPMember, partitionId);
             RaftAlgorithmConfig raftAlgorithmConfig = config.getRaftAlgorithmConfig();
             CPPersistenceService persistenceService = getCPPersistenceService();
-            RaftStateStore stateStore = persistenceService.createRaftStateStore((RaftGroupId) groupId, null);
+            RaftStateStore stateStore = SnapshotPipelineConfig.isSnapshotEnabled()
+                    ? new FileRaftStateStore(raftStateStoreDir((RaftGroupId) groupId, localCPMember),
+                            nodeEngine.getSerializationService())
+                    : persistenceService.createRaftStateStore((RaftGroupId) groupId, null);
             RaftNodeImpl node = buildRaftNode(groupId, localCPMember, members, raftAlgorithmConfig,
                     integration, stateStore);
 

@@ -48,6 +48,10 @@ import com.hazelcast.cp.internal.raft.impl.dto.VoteResponse;
 import com.hazelcast.cp.internal.raft.impl.log.SnapshotChunk;
 import com.hazelcast.cp.internal.raft.impl.log.SnapshotEntry;
 import com.hazelcast.cp.internal.raftop.NotifyTermChangeOp;
+import com.hazelcast.cp.internal.datastructures.snapshot.SnapshotPipelineConfig;
+import com.hazelcast.cp.internal.raft.impl.SnapshotPipeline;
+import com.hazelcast.cp.internal.raft.impl.SnapshotPipelineFactory;
+import com.hazelcast.cp.internal.raft.impl.persistence.FileIncrementalSnapshotStore;
 import com.hazelcast.cp.internal.raftop.snapshot.RestoreSnapshotOp;
 import com.hazelcast.cp.internal.util.PartitionSpecificRunnableAdaptor;
 import com.hazelcast.internal.util.FrequentLogSuppressor;
@@ -65,6 +69,9 @@ import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.nio.file.Path;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.cp.internal.RaftService.CP_SUBSYSTEM_EXECUTOR;
@@ -356,5 +363,92 @@ class NodeEngineRaftIntegration implements RaftIntegration {
     @Override
     public Object newRestoreSnapshotOp(String serviceName, long commitIndex, Object chunk) {
         return new RestoreSnapshotOp(serviceName, chunk);
+    }
+
+    @Override
+    public SnapshotPipelineFactory getSnapshotPipelineFactory(CPGroupId groupId) {
+        if (!SnapshotPipelineConfig.isSnapshotEnabled()) {
+            return null;
+        }
+        // per-group pipeline backed by the file incremental store under the
+        // configured snapshot directory; the worker, completion and failure
+        // callbacks are wired by the Raft node
+        return (worker, completionNotifier, failureNotifier) -> new SnapshotPipeline(
+                new FileIncrementalSnapshotStore(snapshotDir(groupId)),
+                worker, completionNotifier, failureNotifier);
+    }
+
+    @Override
+    public Executor getSnapshotExecutor() {
+        if (!SnapshotPipelineConfig.isSnapshotEnabled()) {
+            return null;
+        }
+        // the node-wide bounded global task scheduler is the snapshot worker
+        // domain; snapshot drains run here, off the partition threads
+        return nodeEngine.getExecutionService().getGlobalTaskScheduler();
+    }
+
+    private Path snapshotDir(CPGroupId groupId) {
+        return Path.of(SnapshotPipelineConfig.SNAPSHOT_DIR)
+                .resolve(localCPMember.getUuid().toString()) // per-member scope
+                .resolve("delta")
+                .resolve(SnapshotPipelineConfig.groupDirName(groupId));
+    }
+
+    @Override
+    public Object captureSnapshot(long commitIndex) {
+        if (!SnapshotPipelineConfig.isSnapshotEnabled()) {
+            return null;
+        }
+        CaptureHandle handle = new CaptureHandle();
+        for (ServiceInfo serviceInfo : nodeEngine.getServiceInfos(SnapshotAwareService.class)) {
+            SnapshotAwareService<?> service = serviceInfo.getService();
+            if (service instanceof ChunkedSnapshotAwareService<?, ?> chunkedService) {
+                // O(1) freeze: mutations redirect to a transient overlay, the
+                // real state stays frozen for the off-thread scan
+                Object capture = chunkedService.captureSnapshot(groupId, commitIndex);
+                if (capture == null) {
+                    return null; // unsupported service -> fall back to the sync path
+                }
+                handle.chunkedCaptures.put(serviceInfo, capture);
+            } else {
+                // the small services are captured synchronously on the Raft
+                // thread (bounded, not data-size-dependent)
+                Object snapshot = service.takeSnapshot(groupId, commitIndex);
+                if (snapshot != null) {
+                    handle.smallSnapshots.put(serviceInfo, snapshot);
+                }
+            }
+        }
+        return handle;
+    }
+
+    @Override
+    public Object takeCapturedServiceSnapshots(Object capture, long commitIndex) {
+        CaptureHandle handle = (CaptureHandle) capture;
+        Map<Object, Object> snapshotPerServiceInfo = new HashMap<>(handle.smallSnapshots);
+        for (Map.Entry<ServiceInfo, Object> entry : handle.chunkedCaptures.entrySet()) {
+            // the chunked scan runs on the worker over the FROZEN state
+            ChunkedSnapshotAwareService<?, ?> chunkedService =
+                    (ChunkedSnapshotAwareService<?, ?>) entry.getKey().getService();
+            snapshotPerServiceInfo.put(entry.getKey(),
+                    chunkedService.takeSnapshotChunks(groupId, commitIndex));
+        }
+        return snapshotPerServiceInfo;
+    }
+
+    @Override
+    public void finishSnapshotCapture(Object capture) {
+        CaptureHandle handle = (CaptureHandle) capture;
+        for (Map.Entry<ServiceInfo, Object> entry : handle.chunkedCaptures.entrySet()) {
+            // on the Raft thread: apply the overlay back to the real state
+            ((ChunkedSnapshotAwareService<?, ?>) entry.getKey().getService())
+                    .finishSnapshotCapture(groupId);
+        }
+    }
+
+    private static final class CaptureHandle {
+        final Map<ServiceInfo, Object> chunkedCaptures = new HashMap<>();
+        final Map<ServiceInfo, Object> smallSnapshots = new HashMap<>();
     }
 }

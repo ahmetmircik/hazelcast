@@ -1,0 +1,344 @@
+================================================================================
+HAZELCAST CP RAFT SNAPSHOT REDESIGN — FINAL CONTEXT / REVIEW PROMPT
+Workspace: /Users/ahmet.mircik/ai_cp/hazelcast   Branch: fix/6.0/raftInspection
+Date: 2026-08-12
+================================================================================
+HOW TO USE THIS FILE
+--------------------------------------------------------------------------------
+  A) AS A REVIEW PROMPT: hand this file (plus the workspace) to a reviewer.
+     It contains the original task, the chosen design, the exact
+     implementation inventory, the verification results and the open items.
+     Section 11 is a targeted review checklist.
+  B) AS CONTEXT RESTORATION: read this file at the start of any new session
+     to regain the full state without re-reading the conversation history.
+
+================================================================================
+1. ORIGINAL TASK AND ACCEPTANCE CRITERIA
+================================================================================
+  "Review and redesign Hazelcast Raft snapshot generation to eliminate
+   data-size-dependent pauses and latency spikes across the ENTIRE snapshot
+   lifecycle, including writing the generated snapshot to disk."
+  Hard requirements (all still standing):
+    - the Raft thread performs only BOUNDED coordination (O(1)-ish);
+    - data traversal / serialization / chunking / disk I/O run OFF the Raft
+      thread;
+    - no data-size-dependent pauses on the Raft thread (generation AND disk
+      persistence);
+    - log truncation only after durable publish;
+    - bounded memory / bounded disk / bounded retained log;
+    - bounded queues + backpressure (new appends rejected when the pipeline
+      cannot keep up);
+    - bounded completion/failure callbacks;
+    - robust failure handling (retry, no lost state);
+    - full compatibility with the existing chunked snapshot protocol
+      (InstallSnapshot, ChunkedSnapshotInstaller, followers, membership
+      changes);
+    - tests/benchmarks reporting p50/p95/p99/max of Raft-operation latency.
+
+================================================================================
+2. DESIGN HISTORY AND THE CHOSEN ARCHITECTURE
+================================================================================
+  Explored options (all documented in the raft-*.txt files, section 12):
+    A  async full snapshot (COW freeze; had an O(container) first-write hole)
+    B  WAL + incremental delta emission into a durable block store
+    C  rqlite-informed (FSM snapshot + chunk pipeline, MRSW staging reuse)
+    D  SQLite-backed RaftStateStore
+    E  etcd-informed (two-tier memory/disk snapshot cadence, bbolt read-tx)
+    F  versioned state; HAMT proposed and REJECTED (per-op O(log n) apply is
+       unacceptable) -> CHM + O(1) delta emission + transient shadow freeze
+  CHOSEN: Option F (the synthesis). Key ideas, all now implemented:
+    (1) O(1) per-op delta emission at the SERVICE BOUNDARY (no generic SPI;
+        a CPMap-internal store decorator).
+    (2) O(1) capture via a transient WRITE-REDIRECTION FREEZE (shadow/overlay)
+        so the O(n) scan can run off-thread at a single point-in-time.
+    (3) The O(n) chunked scan + chunk building + disk persistence run on a
+        bounded snapshot WORKER; the Raft thread only does capture (O(1)),
+        the bounded install (log.setSnapshot + truncate) and bounded
+        callbacks.
+    (4) A durable DELTA TIER (append-only delta log + durable snapshot index
+        S advanced only after fsync = group commit) feeding crash/restart
+        recovery; the chunked full snapshot remains the transfer/install tier
+        (lagging followers and joiners still need the full state).
+    (5) Three thread domains (documented as design section 3):
+        Domain 1 partition (Raft) threads  — O(1) coordination only;
+        Domain 2 snapshot worker pool       — node-wide, bounded (global task
+                                              scheduler in the impl);
+        Domain 3 store I/O (optional)       — inside the store impl.
+
+================================================================================
+3. FINAL ARCHITECTURE (implemented, property-gated)
+================================================================================
+  ENABLED BY: -Dhazelcast.cp.snapshot.enabled=true (default OFF; when off,
+  every change is provably behavior-neutral — verified by the test suite).
+
+  A) DELTA EMISSION (the O(1) per-op path)
+     applyLogEntry -> DeltaContext (ThreadLocal) -> store decorator emits
+     key-level DeltaRecord{s} into a bounded per-group sink. Restore/install
+     never opens a context, so it never emits.
+
+  B) TRANSIENT FREEZE (the O(1) capture)
+     - SnapshotShadow: standalone map-level freeze (worker copies `main`,
+       drains overlay, single-writer flips when empty).
+     - SnapshotOverlay: the EXTERNAL-main variant used by CPMapRegistry
+       (one overlay per registry, composite key CPMapShadowKey(map,key) so
+       the registry snapshot is atomic ACROSS maps). While active, all store
+       mutations redirect to the overlay and the real stores stay frozen;
+       finish() applies the overlay back on the Raft thread (single writer,
+       so no update can be lost).
+
+  C) ASYNC CHUNKED GENERATION (kills the O(n)-on-Raft-thread problem)
+     takeSnapshotIfCommitIndexAdvanced:
+       capture = raftIntegration.captureSnapshot(commitIndex)   // O(1)
+       if capture != null -> takeSnapshotAsynchronously(...):
+           worker executes: takeCapturedServiceSnapshots (frozen scan)
+                            -> createChunksFromSnapshot -> persistAndFlush
+                            -> submit(installChunkedSnapshot)
+           Raft thread (completion): compute truncation index,
+                            log.setSnapshot, finishSnapshotCapture (release).
+       if capture == null -> the ORIGINAL synchronous path (unchanged).
+     Small services (atomic refs etc.) are captured synchronously in
+     captureSnapshot (bounded, not data-size-dependent).
+
+  D) DURABLE TIERS
+     - FileRaftStateStore: members/term (atomic rename+fsync), append-only
+       length-prefixed raft log (torn-tail tolerant), snapshot chunks staged
+       and atomically published on flushLogs; implements RaftStateLoader
+       (load() -> RestoredRaftState) for restart restore.
+     - FileIncrementalSnapshotStore + IncrementalSnapshotStore interface:
+       append-only delta log + durable-s.dat; S advances ONLY after fsync
+       (group commit). Un-flushed tails stay replayable after a crash.
+
+  E) PIPELINE COORDINATOR
+     SnapshotPipeline: beginApply(opIndex) opens the context; onApplied()
+     submits ONE drain (in-flight=1 coalescing) to the worker; drain appends
+     deltas to the durable store + flush; completion/failure callbacks are
+     routed back to the Raft thread via raftIntegration.submit; on failure
+     the drained records are re-queued (never lost) and retried.
+
+================================================================================
+4. IMPLEMENTATION INVENTORY
+================================================================================
+  NEW MAIN FILES (14) — com.hazelcast.cp.internal.*:
+    datastructures/snapshot:
+      DeltaRecord        immutable key-level mutation record (+binary I/O)
+      DeltaSink          bounded sink contract (O(1) append)
+      DeltaContext       ThreadLocal apply-scoped context (AutoCloseable)
+      SnapshotDeltaAccumulator  bounded per-group sink (beginBatch/drain/requeue)
+      SnapshotShadow     standalone map freeze (worker copy + drain + flip)
+      SnapshotOverlay    external-main freeze (used by CPMapRegistry)
+      SnapshotPipelineConfig  properties: snapshot.enabled / .dir / .lag.multiplier
+    datastructures/cpmap:
+      CPMapShadowKey     composite overlay key (mapName, key)
+      store/DeltaEmittingCPMapStore  O(1) emission + overlay write-redirection
+    raft/impl:
+      SnapshotPipeline        per-group coordinator (bounded drain + callbacks)
+      SnapshotPipelineFactory functional factory (worker+notifiers injected)
+    raft/impl/persistence:
+      FileRaftStateStore      disk RaftStateStore + RaftStateLoader
+      IncrementalSnapshotStore  durable delta-store interface (AutoCloseable)
+      FileIncrementalSnapshotStore  delta log + durable S
+
+  MODIFIED TRACKED FILES (7):
+    RaftIntegration            + getSnapshotPipelineFactory / getSnapshotExecutor
+                               + captureSnapshot / takeCapturedServiceSnapshots
+                               / finishSnapshotCapture (all default, null/no-op)
+    RaftNodeImpl               + snapshotPipeline field + DeltaContext in
+                               applyLogEntry + async chunked generation branch
+                               + bounded install extraction + lag-cap rejection
+                               in canReplicateNewEntry + pipeline close on
+                               termination + maxSnapshotLag field
+    NodeEngineRaftIntegration  real pipeline factory (FileIncrementalSnapshotStore
+                               per member+group under the snapshot dir), worker =
+                               global task scheduler, capture/finish impl
+    RaftService                FileRaftStateStore per member+group when enabled
+                               (restore via load(); OSS has no restore loop)
+    CPMapService               decorator wrap (overlay passed), captureSnapshot /
+                               finishSnapshotCapture overrides
+    CPMapRegistry              SnapshotOverlay field + capture/finish + overlay
+                               put/remove helpers
+    ChunkedSnapshotAwareService  + default captureSnapshot / finishSnapshotCapture
+
+  NEW TEST FILES (7):
+    DeltaEmittingCPMapStoreTest  (7)  delta exactness (F2) incl. no-context case
+    SnapshotShadowTest           (6)  freeze consistency, F8 flip invariant, drain
+    SnapshotOverlayTest          (6)  external-main overlay protocol
+    SnapshotPipelineTest         (3)  emit->persist->durable S, failure requeue,
+                                      in-flight coalescing
+    FileRaftStateStoreTest       (7)  round-trip, truncate, atomic publish,
+                                      supersede, delete, torn tail, no-state fail
+    FileIncrementalSnapshotStoreTest (4)  S advances/reopens, replayable tail,
+                                      below-S rejection, delete
+    AsyncChunkedSnapshotTest     (1)  property-ON 3-node cluster smoke: async
+                                      chunked + delta + FileRaftStateStore over
+                                      several snapshot cycles, consistency on
+                                      every member
+
+  PRE-EXISTING USER CHANGE (NOT MINE — flag for the reviewer):
+    raft/impl/SnapshotTransferState.java  adds a SnapshotTransferId record
+    (12 lines). Present in the workspace; not part of this work.
+
+================================================================================
+5. WIRING / INTEGRATION POINTS (exact)
+================================================================================
+  - RaftNodeImpl.applyLogEntry: when snapshotPipeline != null ->
+    try (DeltaContext ctx = pipeline.beginApply(index)) { runOperation } ;
+    pipeline.onApplied(). Else the original single call (byte-identical).
+  - RaftNodeImpl.initSnapshotPipeline(): factory + worker from the
+    integration; notifiers = () -> raftIntegration.submit(...) so callbacks
+    run on the group's partition thread (happens-before preserved).
+  - NodeEngineRaftIntegration.snapshotDir / RaftService.raftStateStoreDir:
+    <root>/<localMemberUuid>/... per-member scoping (critical for same-JVM
+    multi-member tests; also the correct real-cluster shape).
+  - RaftService.createRaftNode: FileRaftStateStore when enabled, else the
+    enterprise CPPersistenceService store (unchanged default).
+  - CPMapService.getOrInitMapStore: wraps stores with the decorator (+overlay)
+    when enabled; capture/finish delegate to the registry overlay.
+  - CPMapRegistry: overlay redirect happens inside the decorator's put/pia/
+    cas/remove/get (overlay-then-store); finish() applies the overlay to the
+    real stores with CPMapStore.NO_TIMESTAMP (purge timestamps are a
+    documented limitation, see section 9).
+
+================================================================================
+6. MEMORY BOUNDS AND BACKPRESSURE (the "will it OOM?" answer)
+================================================================================
+  - Raft log: FIXED-CAPACITY ringbuffer (~cadence 10000 + uncommitted 100 +
+    keep-after-snapshot 1000 = ~11100 entries). RaftLog.appendEntries throws
+    IllegalStateException when full -> the append is rejected, the client
+    retries. The log cannot grow without bound.
+  - Uncommitted entries: canReplicateNewEntry rejects at maxUncommittedEntryCount
+    (default 100).
+  - In-flight overlay + delta sink during the async window: grow only from
+    APPLIED writes, which stop when the log fills -> implicitly bounded by the
+    ringbuffer capacity.
+  - NEWLY WIRED explicit cap: SnapshotPipelineConfig.maxSnapshotLag =
+    cadence x multiplier (default 4; property hazelcast.cp.snapshot.lag.multiplier,
+    0 disables). canReplicateNewEntry rejects appends when
+    commitIndex - snapshotIndex > maxSnapshotLag (only when the feature is
+    enabled). Failure mode = bounded append stall with client retry, never OOM.
+  - Worst-case memory during a long async window: roughly doubles (log entries
+    + overlay/delta copies of the same writes), bounded by the lag cap.
+
+================================================================================
+7. KEY INVARIANTS (the subtle parts a reviewer must verify)
+================================================================================
+  I1  Raft thread does no O(size) snapshot work: capture O(1), install bounded
+      (O(members)+O(logCapacity)), callbacks bounded.
+  I2  The async scan reads the FROZEN state at the CAPTURED commit index; the
+      snapshot must not contain ops beyond that index (the overlay redirect
+      guarantees this).
+  I3  Overlay finish runs on the single-writer (Raft) thread -> no update can
+      be lost (the F8-style invariant is trivially satisfied: capture and
+      finish are both on the same thread).
+  I4  Delta emission only with an active DeltaContext (apply); restore/install
+      never emits.
+  I5  durable S advances only after the delta log is fsync'd (group commit) —
+      the anchor of "truncate only after durable publish".
+  I6  Torn-tail tolerance: a crash mid-write leaves a partial trailing record
+      that is silently dropped on load (raft log and delta log).
+  I7  Per-member directory scoping (same-UUID members must not share store
+      files — this bug broke leader election in the smoke test and was fixed).
+  I8  Property OFF => behavior-neutral: the async branch is skipped (capture
+      returns null), the decorator is not wired, the lag cap is not checked,
+      the store is the enterprise one. Proven by LocalRaftTest 27/27 and
+      CPMapRegistrySnapshotTest 1/1.
+
+================================================================================
+8. VERIFICATION
+================================================================================
+  ALL 62 NEW/RUN TESTS GREEN (9 suites):
+    SnapshotOverlayTest 6/6, FileRaftStateStoreTest 7/7,
+    FileIncrementalSnapshotStoreTest 4/4, SnapshotPipelineTest 3/3,
+    DeltaEmittingCPMapStoreTest 7/7, SnapshotShadowTest 6/6,
+    LocalRaftTest 27/27 (apply-path neutrality), CPMapRegistrySnapshotTest 1/1
+    (cluster neutrality, property off), AsyncChunkedSnapshotTest 1/1
+    (property ON, 3-node cluster, several snapshot cycles, consistent on all
+    members).
+  Command used:
+    ./mvnw -pl hazelcast -am -Dtest='...' -DfailIfNoTests=false
+      -Dsurefire.failIfNoSpecifiedTests=false -Dcheckstyle.skip=true
+      -Dspotbugs.skip=true -Dpmd.skip=true -Denforcer.skip=true
+      -Dlicense.skip=true -Dmaven.javadoc.skip=true -Djacoco.skip=true
+      -Dspotless.check.skip=true -Dmaven.source.skip=true -q test
+  KNOWN PRE-EXISTING FAILURES (NOT caused by this work — proven by git-stash
+  baseline re-run with identical results):
+    ChunkedSnapshotInstallerTest: shouldNotResetServiceStateWhenSnapshotInstallFails,
+    shouldNotThrowWhenChunkTermIsInconsistent, shouldNotInstallSnapshotWithoutAnyDataChunk
+    (all touch untouched code ChunkedSnapshotInstaller.java:143/166/168).
+  IMPORTANT BUG FOUND AND FIXED BY THE SMOKE TEST:
+    All members initially shared ONE store directory (same-JVM members
+    corrupting each other's log -> leader election failed, NotLeaderException).
+    Fixed by scoping all store paths under the local member UUID.
+
+================================================================================
+9. REMAINING SCOPE (documented follow-ups, not omissions)
+================================================================================
+  R1  Incremental memory-tier truncation: evicting raft-log entries anchored
+      on the delta store's durable S needs membership metadata carried in the
+      incremental store; today the chunked snapshot still drives truncation.
+  R2  OSS restart-restore: no restore loop exists in OSS RaftService (the
+      enterprise CPPersistenceService owns it); FileRaftStateStore.load()
+      implements the RaftStateLoader contract and is ready for that hook.
+  R3  Purge timestamps through the overlay: purge-enabled maps (enterprise-
+      only) need the overlay to carry timestamps (finish currently applies
+      CPMapStore.NO_TIMESTAMP).
+  R4  Chunk-transfer pipelining (Option E's byte-budgeted RTT pipelining for
+      InstallSnapshot) — not implemented.
+  R5  Benchmark with p50/p95/p99/max acceptance metrics — not yet run.
+  R6  Review the SnapshotTransferState.java user change (pre-existing) for
+      interplay with the async install path.
+
+================================================================================
+10. HOW TO RUN / ENABLE
+================================================================================
+  Enable the whole redesign on a node:
+    -Dhazelcast.cp.snapshot.enabled=true
+    -Dhazelcast.cp.snapshot.dir=/path/to/root        (default tmp/hazelcast-cp-snapshot)
+    -Dhazelcast.cp.snapshot.lag.multiplier=4         (lag cap = cadence x N; 0 disables)
+  The raft cadence stays config-driven (RaftAlgorithmConfig.commitIndexAdvanceCountToSnapshot,
+  default 10000). With the property off, behavior is identical to stock.
+
+================================================================================
+11. REVIEW CHECKLIST (what to scrutinize)
+================================================================================
+  [ ] applyLogEntry context wrap is strictly additive (pipeline == null ->
+      original single call) — confirm byte-identical behavior.
+  [ ] Async generation: the snapshot is built from the state AT THE CAPTURED
+      index (overlay freeze), and the install uses the captured term/index,
+      not the current ones.
+  [ ] canReplicateNewEntry lag-cap check is skipped when the feature is off,
+      and cannot fire during normal operation (cap = 4x cadence).
+  [ ] SnapshotOverlay.finish on the Raft thread: no concurrent writes can
+      interleave -> the F8 no-lost-update invariant holds trivially.
+  [ ] Delta sink failure path re-queues drained records (never lost) and the
+      failure notifier runs on the Raft thread via submit.
+  [ ] Worker = the node-wide global task scheduler: check for contention with
+      raft timers/heartbeats under load (a dedicated bounded pool may be
+      preferable; documented as a tunable).
+  [ ] FileRaftStateStore crash semantics: atomic rename + fsync for metadata
+      and snapshot publication; torn-tail tolerance on both logs.
+  [ ] Per-member directory scoping is applied in BOTH RaftService (raft-state)
+      and NodeEngineRaftIntegration (delta).
+  [ ] The 3 pre-existing ChunkedSnapshotInstallerTest failures are baseline
+      (git-stash verified) and unrelated.
+  [ ] The property-on cluster test (AsyncChunkedSnapshotTest) exercises the
+      async path end-to-end; consider extending it to assert the lag-cap
+      rejection and follower-install after a full async cycle.
+
+================================================================================
+12. DESIGN DOCS AND GLOSSARY (in the workspace root)
+================================================================================
+  raft-versioned-state-design.txt          Option F (the synthesis; the
+                                           implemented architecture) — includes
+                                           the threading model section (3),
+                                           memory bounds (4.1), tests F1-F9
+  raft-incremental-snapshot-design.txt     Option B (delta SPI, block store)
+  raft-async-snapshot-design.txt           Option A (async full snapshot)
+  raft-snapshot-rqlite-informed-design.txt Option C
+  raft-sqlite-state-store-design.txt       Option D
+  raft-etcd-informed-design.txt            Option E
+  raft-chunked-snapshot-review.txt         pre-existing review of the current
+                                           chunk protocol
+  raft-snapshot-terminology.txt            shared glossary (all abbreviations)
+================================================================================
+END OF CONTEXT / REVIEW PROMPT
+================================================================================
