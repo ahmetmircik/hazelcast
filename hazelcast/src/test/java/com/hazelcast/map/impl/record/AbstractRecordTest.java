@@ -25,10 +25,13 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
+import static com.hazelcast.internal.util.TimeStripUtil.recomputeWithBaseTime;
+import static com.hazelcast.internal.util.TimeStripUtil.stripBaseTime;
 import static com.hazelcast.map.impl.record.Record.UNSET;
 import static com.hazelcast.test.HazelcastTestSupport.assumeDifferentHashCodes;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelJVMTest.class})
@@ -107,5 +110,32 @@ public class AbstractRecordTest {
         assertNotEquals(record.hashCode(), recordOtherHits.hashCode());
         assertNotEquals(record.hashCode(), recordOtherLastAccessTime.hashCode());
         assertNotEquals(record.hashCode(), recordOtherLastUpdateTime.hashCode());
+    }
+
+    @Test
+    public void testExpirationTimeMirrorDefaultsToUnset() {
+        assertEquals(UNSET, record.getRawExpirationTime());
+        assertEquals(UNSET, recordSameAttributes.getRawExpirationTime());
+    }
+
+    @Test
+    public void testExpirationTimeMirrorRoundTrip() {
+        long expirationTime = Clock.currentTimeMillis() + 60_000L;
+        int rawExpiration = stripBaseTime(expirationTime);
+        record.setRawExpirationTime(rawExpiration);
+        // mirror stores the future-dated deadline so it can be used as a negative filter
+        assertTrue(recomputeWithBaseTime(record.getRawExpirationTime()) > Clock.currentTimeMillis());
+        // raw round-trips exactly; the recomputed millis value is second-aligned (<= to the input)
+        assertEquals(rawExpiration, record.getRawExpirationTime());
+        assertTrue(recomputeWithBaseTime(record.getRawExpirationTime()) <= expirationTime);
+    }
+
+    @Test
+    public void testExpirationTimeMirrorClearToUnset() {
+        int rawExpiration = stripBaseTime(Clock.currentTimeMillis() + 60_000L);
+        record.setRawExpirationTime(rawExpiration);
+        assertEquals(rawExpiration, record.getRawExpirationTime());
+        record.setRawExpirationTime(UNSET);
+        assertEquals(UNSET, record.getRawExpirationTime());
     }
 }

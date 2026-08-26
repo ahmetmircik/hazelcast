@@ -85,6 +85,8 @@ import static com.hazelcast.core.EntryEventType.UPDATED;
 import static com.hazelcast.internal.util.ConcurrencyUtil.CALLER_RUNS;
 import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.MapUtil.createHashMap;
+import static com.hazelcast.internal.util.TimeStripUtil.recomputeWithBaseTime;
+import static com.hazelcast.internal.util.TimeStripUtil.stripBaseTime;
 import static com.hazelcast.internal.util.ToHeapDataConverter.toHeapData;
 import static com.hazelcast.map.impl.mapstore.MapDataStores.EMPTY_MAP_DATA_STORE;
 import static com.hazelcast.map.impl.record.Record.UNSET;
@@ -238,7 +240,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         }
 
         Records.copyMetadataFrom(replicatedRecord, newRecord);
-        expirySystem.add(dataKey, expiryMetadata, now);
+        long resultingExpirationTime = expirySystem.add(dataKey, expiryMetadata, now);
+        setExpirationTimeMirror(newRecord, resultingExpirationTime);
         mutationObserver.onReplicationPutRecord(dataKey, newRecord, indexesMustBePopulated);
 
         return newRecord;
@@ -1117,7 +1120,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                             long expiryTime, long now, EntryEventType entryEventType,
                             boolean backup) {
         storage.put(key, record);
-        expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
+        long resultingExpirationTime = expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
+        setExpirationTimeMirror(record, resultingExpirationTime);
 
         if (entryEventType == EntryEventType.LOADED) {
             mutationObserver.onLoadRecord(key, record, backup);
@@ -1126,6 +1130,19 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
         }
 
         return record;
+    }
+
+    /**
+     * Mirrors the authoritative expiration time onto the record so that the
+     * get/set fast path can skip consulting the separate expiry map when the
+     * record is provably not expired yet.
+     *
+     * @param record               the record to update (must not be {@code null})
+     * @param expirationTimeMillis the authoritative absolute expiration time,
+     *                             {@link Long#MAX_VALUE} when the record is not expirable
+     */
+    private void setExpirationTimeMirror(Record record, long expirationTimeMillis) {
+        record.setRawExpirationTime(stripBaseTime(expirationTimeMillis));
     }
 
     @SuppressWarnings("checkstyle:parameternumber")
@@ -1159,7 +1176,8 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
                                long expiryTime, long now, boolean backup) {
         Record latestRecordAfterUpdate = storage.updateRecordValue(key, record, newValue);
         if (changeExpiryOnUpdate) {
-            expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
+            long resultingExpirationTime = expirySystem.add(key, ttl, maxIdle, expiryTime, now, now);
+            setExpirationTimeMirror(latestRecordAfterUpdate, resultingExpirationTime);
         }
         mutationObserver.onUpdateRecord(key, latestRecordAfterUpdate, oldValue, newValue, backup);
         return oldValue;
@@ -1425,10 +1443,28 @@ public class DefaultRecordStore extends AbstractEvictableRecordStore {
     public Record getRecordOrNull(Data key, long now, boolean backup, boolean noCaching) {
         Record record = storage.get(key);
         if (record != null) {
+            if (definitelyNotExpired(record, now)) {
+                // Fast path: the record carries a future-dated expiration mirror,
+                // so it is provably not expired yet. Skip the authoritative (and
+                // more expensive) expiry-map lookup on the hot get/set path.
+                return record;
+            }
             return evictIfExpired(key, now, backup) ? null : record;
         }
 
         return null;
+    }
+
+    /**
+     * Returns {@code true} when the record is provably not expired at {@code now},
+     * based only on the expiration mirror carried by the record. The mirror is a
+     * <b>negative filter</b>: {@code true} means the record is definitely live;
+     * {@code false} is inconclusive and callers must fall back to the authoritative
+     * expiry system.
+     */
+    private boolean definitelyNotExpired(Record record, long now) {
+        int rawExpiration = record.getRawExpirationTime();
+        return rawExpiration != UNSET && recomputeWithBaseTime(rawExpiration) > now;
     }
 
     public void onStore(Record record) {

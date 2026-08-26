@@ -72,18 +72,18 @@ public interface ExpirySystem {
         }
 
         @Override
-        public void add(Data key, ExpiryMetadata expiryMetadata, long now) {
-            // no-op
+        public long add(Data key, ExpiryMetadata expiryMetadata, long now) {
+            return Long.MAX_VALUE;
         }
 
         @Override
-        public void add(Data key, long ttl, long maxIdle, long expiryTime, long lastUpdateTime, long now) {
-            // no-op
+        public long add(Data key, long ttl, long maxIdle, long expiryTime, long lastUpdateTime, long now) {
+            return Long.MAX_VALUE;
         }
 
         @Override
-        public void add(Data key, long lastUpdateTime, long now) {
-            // no-op
+        public long add(Data key, long lastUpdateTime, long now) {
+            return Long.MAX_VALUE;
         }
 
         @Override
@@ -121,16 +121,19 @@ public interface ExpirySystem {
 
     ExpiryMetadata getExpiryMetadata(Data key);
 
-    void add(Data key, ExpiryMetadata expiryMetadata, long now);
+    long add(Data key, ExpiryMetadata expiryMetadata, long now);
 
     /**
      * Adds key to expiry system.
      * <p>
-     * Expiry config will be got either from {@link
+     * Expiry config will be got either from the {@link
      * com.hazelcast.config.MapConfig} or api call like {@link
      * com.hazelcast.map.IMap#set(Object, Object, long, TimeUnit)}
+     *
+     * @return the resulting absolute expiration time in millis, or
+     * {@code Long.MAX_VALUE} when no expiry applies (so the key is not expirable)
      */
-    void add(Data key, long ttl, long maxIdle,
+    long add(Data key, long ttl, long maxIdle,
              long expiryTime, long lastUpdateTime, long now);
 
     /**
@@ -138,8 +141,11 @@ public interface ExpirySystem {
      * <p>
      * Expiry config will be
      * got from {@link com.hazelcast.config.MapConfig}
+     *
+     * @return the resulting absolute expiration time in millis, or
+     * {@code Long.MAX_VALUE} when no expiry applies (so the key is not expirable)
      */
-    void add(Data key, long lastUpdateTime, long now);
+    long add(Data key, long lastUpdateTime, long now);
 
     void removeKeyFromExpirySystem(Data key);
 

@@ -29,7 +29,7 @@ import static com.hazelcast.map.impl.record.RecordReaderWriter.DATA_RECORD_WITH_
 @SuppressWarnings({"checkstyle:methodcount", "VolatileLongOrDoubleField"})
 public abstract class AbstractRecord<V> implements Record<V> {
 
-    private static final int NUMBER_OF_INTS = 6;
+    private static final int NUMBER_OF_INTS = 7;
 
     protected int version;
 //    @SuppressFBWarnings(value = "VO_VOLATILE_INCREMENT",
@@ -37,6 +37,7 @@ public abstract class AbstractRecord<V> implements Record<V> {
     protected volatile int hits;
     private volatile int lastAccessTime = UNSET;
     private volatile int lastUpdateTime = UNSET;
+    private volatile int expirationTime = UNSET;
 
     private int creationTime = UNSET;
     private int lastStoredTime = UNSET;
@@ -117,6 +118,16 @@ public abstract class AbstractRecord<V> implements Record<V> {
     @Override
     public void setLastStoredTime(long lastStoredTime) {
         this.lastStoredTime = stripBaseTime(lastStoredTime);
+    }
+
+    @Override
+    public int getRawExpirationTime() {
+        return expirationTime;
+    }
+
+    @Override
+    public void setRawExpirationTime(int expirationTime) {
+        this.expirationTime = expirationTime;
     }
 
     @Override

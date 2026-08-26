@@ -189,4 +189,34 @@ public interface Record<V> {
 
     default void setRawLastStoredTime(int lastStoredTime) {
     }
+
+    /**
+     * Returns the raw (base-time stripped) absolute expiration time of this
+     * record, or {@link #UNSET} if expiry information is not mirrored on the
+     * record.
+     * <p>
+     * This field is a lightweight mirror of the authoritative expiry metadata
+     * maintained by the {@code ExpirySystem}. It is used only as a
+     * <b>negative filter</b> on the get/set fast path: when a future-dated
+     * expiration is available on the record, a lookup of the separate expiry
+     * map can be skipped entirely. It is set on the primary write path and may
+     * be {@code UNSET} for records that entered the store without one (e.g.
+     * backups, loads); callers must always fall back to the authoritative
+     * expiry system when this value is {@code UNSET} or not in the future.
+     *
+     * @return the raw expiration time, or {@link UNSET} when not mirrored
+     */
+    default int getRawExpirationTime() {
+        return UNSET;
+    }
+
+    /**
+     * Mirrors the absolute expiration time of this record in raw (base-time
+     * stripped) form, used only as a negative filter for the get/set fast
+     * path. Set {@link #UNSET} to clear the mirror.
+     *
+     * @param rawExpirationTime raw expiration time, or {@link UNSET} to clear
+     */
+    default void setRawExpirationTime(int rawExpirationTime) {
+    }
 }

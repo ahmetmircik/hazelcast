@@ -143,23 +143,25 @@ public class ExpirySystemImpl implements ExpirySystem {
      * Add expiryMetadata of key to this expiry system.
      */
     @Override
-    public final void add(Data key, ExpiryMetadata expiryMetadata, long now) {
+    public final long add(Data key, ExpiryMetadata expiryMetadata, long now) {
         if (expiryMetadata == ExpiryMetadata.NULL) {
             removeKeyFromExpirySystem(key);
-            return;
+            return Long.MAX_VALUE;
         }
 
-        add(key, expiryMetadata.getTtl(), expiryMetadata.getMaxIdle(),
+        return add(key, expiryMetadata.getTtl(), expiryMetadata.getMaxIdle(),
                 expiryMetadata.getExpirationTime(),
                 expiryMetadata.getLastUpdateTime(), now);
-
     }
 
     /**
      * Add expirable key to this expiry system.
+     *
+     * @return the resulting absolute expiration time in millis, or
+     * {@code Long.MAX_VALUE} when no expiry applies (so the key is not expirable)
      */
     @Override
-    public final void add(Data key, long ttl, long maxIdle,
+    public final long add(Data key, long ttl, long maxIdle,
                           long expiryTime, long lastUpdateTime, long now) {
         // If expiry-time <= 0, no expiry-time exists, this is update
         // or first put of the key, hence we need to calculate it.
@@ -173,11 +175,12 @@ public class ExpirySystemImpl implements ExpirySystem {
         }
 
         storeExpiryMetadata(key, ttl, maxIdle, expiryTime, lastUpdateTime);
+        return expiryTime;
     }
 
     @Override
-    public final void add(Data key, long lastUpdateTime, long now) {
-        add(key, UNSET, UNSET, UNSET, lastUpdateTime, now);
+    public final long add(Data key, long lastUpdateTime, long now) {
+        return add(key, UNSET, UNSET, UNSET, lastUpdateTime, now);
     }
 
     private void storeExpiryMetadata(Data key, long ttlMillis, long maxIdleMillis,
