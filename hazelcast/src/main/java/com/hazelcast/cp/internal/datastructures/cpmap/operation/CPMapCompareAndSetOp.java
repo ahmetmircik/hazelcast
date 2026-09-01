@@ -40,6 +40,19 @@ public class CPMapCompareAndSetOp extends CPMapRaftOp {
         this.newValue = newValue;
     }
 
+    public Data getKey() {
+        return key;
+    }
+
+    public Data getExpectedValue() {
+        return expectedValue;
+    }
+
+    public Data getNewValue() {
+        return newValue;
+    }
+
+
     @Override
     public Object run(CPGroupId groupId, long commitIndex) throws Exception {
         return getMap(groupId, objectName).compareAndSet(key, expectedValue, newValue, getLeaderTimestamp());

@@ -40,6 +40,11 @@ public abstract class CPMapRaftOp extends RaftOp implements IdentifiedDataSerial
         this.objectName = objectName;
     }
 
+    public String getObjectName() {
+        return objectName;
+    }
+
+
     @Override
     protected String getServiceName() {
         return CPMapService.SERVICE_NAME;

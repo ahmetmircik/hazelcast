@@ -36,6 +36,11 @@ public class CPMapRemoveOp extends CPMapRaftOp {
         this.key = key;
     }
 
+    public Data getKey() {
+        return key;
+    }
+
+
     @Override
     public Object run(CPGroupId groupId, long commitIndex) throws Exception {
         return getMap(groupId, objectName).remove(key);

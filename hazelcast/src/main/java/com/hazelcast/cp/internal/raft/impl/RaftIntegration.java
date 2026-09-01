@@ -189,6 +189,16 @@ public interface RaftIntegration {
     Object takeServiceSnapshots(long commitIndex);
 
     /**
+     * Takes a constant-time in-memory snapshot cut (v2) at the given coordinates.
+     */
+    default Object takeConstantTimeSnapshot(
+            long commitIndex, int snapshotTerm, long membershipLogIndex, java.util.Collection<RaftEndpoint> members) {
+        return takeServiceSnapshots(commitIndex);
+    }
+
+
+
+    /**
      * Restores the snapshot with the given operation for the given commit
      * index
      *
@@ -299,4 +309,12 @@ public interface RaftIntegration {
      * @return the operation to restore snapshot
      */
     Object newRestoreSnapshotOp(String serviceName, long commitIndex, Object chunk);
+
+    /**
+     * Returns true if the constant-time in-memory snapshotting subsystem (v2) is enabled.
+     */
+    default boolean isConstantTimeSnapshotEnabled() {
+        return false;
+    }
 }
+

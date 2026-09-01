@@ -38,6 +38,15 @@ public class CPMapPutIfAbsentOp extends CPMapRaftOp {
         this.value = value;
     }
 
+    public Data getKey() {
+        return key;
+    }
+
+    public Data getValue() {
+        return value;
+    }
+
+
     @Override
     public Object run(CPGroupId groupId, long commitIndex) throws Exception {
         return getMap(groupId, objectName).putIfAbsent(key, value, getLeaderTimestamp());

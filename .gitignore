@@ -34,3 +34,6 @@ reports/
 # Hadoop files
 *.crc
 **/node_modules/**
+origin_cp_os_moved/
+.reasonix/
+

@@ -143,6 +143,8 @@
     <!-- CP Subsystem -->
     <suppress checks="FileLength" files="com[\\/]hazelcast[\\/]cp[\\/]internal[\\/]RaftService"/>
     <suppress checks="FileLength" files="com[\\/]hazelcast[\\/]cp[\\/]internal[\\/]raft[\\/]impl[\\/]RaftNodeImpl"/>
+    <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="com[\\/]hazelcast[\\/]cp[\\/]internal[\\/]NodeEngineRaftIntegration"/>
+
 
     <!-- Spring -->
     <suppress checks="FileLength" files="com[\\/]hazelcast[\\/]spring[\\/]HazelcastConfigBeanDefinitionParser"/>

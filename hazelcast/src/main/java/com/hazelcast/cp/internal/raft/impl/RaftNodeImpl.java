@@ -22,6 +22,7 @@ import com.hazelcast.cp.CPGroupId;
 import com.hazelcast.cp.CPMember;
 import com.hazelcast.cp.exception.LeaderDemotedException;
 import com.hazelcast.cp.exception.StaleAppendRequestException;
+import com.hazelcast.cp.internal.datastructures.snapshot.v2.engine.SnapshotRepresentation;
 import com.hazelcast.cp.internal.raft.MembershipChangeMode;
 import com.hazelcast.cp.internal.raft.QueryPolicy;
 import com.hazelcast.cp.internal.raft.command.DestroyRaftGroupCmd;
@@ -1140,6 +1141,31 @@ public class RaftNodeImpl implements RaftNode {
 
         logger.fine("Taking chunked snapshot at commit index: %d", commitIndex);
 
+        RaftLog log = state.log();
+        int snapshotTerm = log.getLogEntry(commitIndex).term();
+        RaftGroupMembers members = state.committedGroupMembers();
+
+        if (raftIntegration.isConstantTimeSnapshotEnabled()) {
+            try {
+                Object snapshotCandidate = raftIntegration.takeConstantTimeSnapshot(
+                        commitIndex, snapshotTerm, members.index(), members.members());
+                if (snapshotCandidate instanceof SnapshotRepresentation snapshotRep) {
+                    logger.fine("Phase 1 constant-time snapshot cut taken at commit index: %d, term: %d",
+                            commitIndex, snapshotTerm);
+                    SnapshotEntry snapshotEntry = new SnapshotEntry(snapshotTerm, commitIndex,
+                            snapshotRep, members.index(), members.members());
+                    long highestLogIndexToTruncate = calculateHighestLogIndexToTruncate(commitIndex);
+                    int truncatedEntryCount = log.setSnapshot(snapshotEntry, highestLogIndexToTruncate, false);
+                    logger.fine("%s constant-time snapshot installed into Raft log, %d entries truncated.",
+                            snapshotEntry, truncatedEntryCount);
+                    return;
+                }
+            } catch (Throwable t) {
+                logger.severe("Could not take constant-time snapshot at commit index: " + commitIndex, t);
+                return;
+            }
+        }
+
         Object snapshot;
         try {
             snapshot = raftIntegration.takeServiceSnapshots(commitIndex);
@@ -1147,10 +1173,6 @@ public class RaftNodeImpl implements RaftNode {
             logger.severe("Could not take snapshot at commit index: " + commitIndex, t);
             return;
         }
-
-        RaftLog log = state.log();
-        int snapshotTerm = log.getLogEntry(commitIndex).term();
-        RaftGroupMembers members = state.committedGroupMembers();
 
         logger.fine("SnapshotChunk creation start: snapshotTerm=%d, commitIndex=%d, members=%s, memberIndex=%d",
                 snapshotTerm, commitIndex, members.members(), members.index());
@@ -1175,33 +1197,8 @@ public class RaftNodeImpl implements RaftNode {
 
         snapshot = chunksFromSnapshot;
 
-        long highestLogIndexToTruncate = commitIndex - maxNumberOfLogsToKeepAfterSnapshot;
-        LeaderState leaderState = state.leaderState();
-        if (leaderState != null) {
-            long[] matchIndices = leaderState.matchIndices();
-            // Last slot is reserved for leader index and always zero.
+        long highestLogIndexToTruncate = calculateHighestLogIndexToTruncate(commitIndex);
 
-            // If there is at least one follower with unknown match index,
-            // its log can be close to the leader's log so we are keeping the old log entries.
-            boolean allMatchIndicesKnown = Arrays.stream(matchIndices, 0, matchIndices.length - 1)
-                    .noneMatch(i -> i == 0);
-
-            if (allMatchIndicesKnown) {
-                // Otherwise, we will keep the log entries until the minimum match index
-                // that is bigger than (commitIndex - maxNumberOfLogsToKeepAfterSnapshot).
-                // If there is no such follower (all of the minority followers are far behind),
-                // then there is no need to keep the old log entries.
-                highestLogIndexToTruncate = Arrays.stream(matchIndices)
-                        // No need to keep any log entry if all followers are up to date
-                        .filter(i -> i < commitIndex)
-                        .filter(i -> i > commitIndex - maxNumberOfLogsToKeepAfterSnapshot)
-                        // We should not delete the smallest matchIndex
-                        .map(i -> i - 1)
-                        .sorted()
-                        .findFirst()
-                        .orElse(commitIndex);
-            }
-        }
 
         // we flushed the snapshot to the storage.
         // it is safe to modify the memory state now.
@@ -1232,6 +1229,28 @@ public class RaftNodeImpl implements RaftNode {
             throw new HazelcastException(format("Flush failed at snapshot index: %d", snapshotIndex), e);
         }
     }
+
+    private long calculateHighestLogIndexToTruncate(long commitIndex) {
+        long highestLogIndexToTruncate = commitIndex - maxNumberOfLogsToKeepAfterSnapshot;
+        LeaderState leaderState = state.leaderState();
+        if (leaderState == null) {
+            return highestLogIndexToTruncate;
+        }
+        long[] matchIndices = leaderState.matchIndices();
+        boolean allMatchIndicesKnown = Arrays.stream(matchIndices, 0, matchIndices.length - 1)
+                .noneMatch(i -> i == 0);
+        if (!allMatchIndicesKnown) {
+            return highestLogIndexToTruncate;
+        }
+        return Arrays.stream(matchIndices)
+                .filter(i -> i < commitIndex)
+                .filter(i -> i > commitIndex - maxNumberOfLogsToKeepAfterSnapshot)
+                .map(i -> i - 1)
+                .sorted()
+                .findFirst()
+                .orElse(commitIndex);
+    }
+
 
     /**
      * Restores the snapshot sent by the leader if it's not applied before.

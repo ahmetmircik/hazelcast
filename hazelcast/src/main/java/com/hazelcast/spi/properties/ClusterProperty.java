@@ -2079,6 +2079,13 @@ public final class ClusterProperty {
             "hazelcast.vector.maintenance.executor.maxParallelism",
         RuntimeAvailableProcessors.get() - 1);
 
+    /**
+     * Enables or disables the constant-time in-memory snapshotting subsystem (v2) for CP groups.
+     */
+    public static final HazelcastProperty CP_CONSTANT_TIME_SNAPSHOT_ENABLED
+            = new HazelcastProperty("hazelcast.cp.snapshot.v2.enabled", false);
+
     private ClusterProperty() {
     }
 }
+
